@@ -1,0 +1,598 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+enum UserType {
+    EMPLOYEE
+    MANAGER
+    ADMIN
+}
+
+enum UserStatus {
+    PENDING
+    ACTIVE
+    INACTIVE
+}
+
+enum OTPPurpose {
+    REGISTER
+    LOGIN
+    FORGOT_PASSWORD
+}
+
+enum LeaveStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+}
+
+enum DayOfWeek {
+    MONDAY
+    TUESDAY
+    WEDNESDAY
+    THURSDAY
+    FRIDAY
+    SATURDAY
+    SUNDAY
+}
+
+enum WeekNumber {
+    ALL
+    FIRST
+    SECOND
+    THIRD
+    FOURTH
+    FIFTH
+}
+
+enum Gender {
+    MALE
+    FEMALE
+    OTHER
+}
+
+enum MaritalStatus {
+    SINGLE
+    MARRIED
+    OTHER
+}
+
+enum TaxRegime {
+    OLD
+    NEW
+}
+
+model User {
+    id           Int     @id @default(autoincrement())
+    employeeCode String? @unique
+
+    firstName String
+    lastName  String
+
+    email    String  @unique
+    password String?
+
+    phone       String?
+    joiningDate DateTime?
+    birthDate   DateTime?
+    gender      Gender?
+
+    // Tracks the year the birthday email was last sent, so the daily job
+    // never double-sends if it happens to run more than once on the same day.
+    lastBirthdayEmailYear Int?
+
+    // HR/payroll fields - admin-managed only, employees can view but not edit.
+    pan               String?
+    panHolderName     String?
+    uan               String?
+    aadharNumber      String?
+    aadharHolderName  String?
+    bankAccountNumber String?
+    bankName          String?
+    ifscCode          String?
+    pfNumber          String?
+    salaryCtc         Float?
+
+    // Personal details - also admin-managed only.
+    fatherName    String?
+    spouseName    String?
+    maritalStatus MaritalStatus?
+    nationality   String?
+    qualification String?
+
+    // Employment details shown on payslips.
+    designation String?
+    location    String?
+    taxRegime   TaxRegime?
+
+    // Uploaded document filenames (stored on disk, same pattern as leave
+    // attachments) - admin-only to upload, view, and download.
+    panDocumentUrl    String?
+    aadharDocumentUrl String?
+    bankDocumentUrl   String?
+    photoUrl          String?
+
+    userType UserType
+    status   UserStatus @default(ACTIVE)
+
+    managerId Int?
+
+    isPasswordSet Boolean @default(false)
+
+    isRegistrationAllowed Boolean @default(true)
+
+    manager   User?  @relation("ManagerEmployees", fields: [managerId], references: [id])
+    employees User[] @relation("ManagerEmployees")
+
+    createdAt      DateTime       @default(now())
+    updatedAt      DateTime       @updatedAt
+    otps           OTP[]
+    refreshTokens  RefreshToken[]
+    leaveBalances  LeaveBalance[]
+    leaveRequests  LeaveRequest[] @relation("EmployeeLeaveRequests")
+    routedLeaveRequests LeaveRequest[] @relation("RoutedLeaveRequests")
+    approvedLeaves LeaveRequest[] @relation("ManagerApprovedLeaves")
+    holidays       Holiday[]
+    notifications  Notification[]
+
+    timesheetEntries              TimesheetEntry[]
+    timesheetSubmissions          TimesheetSubmission[] @relation("EmployeeTimesheetSubmissions")
+    routedTimesheetSubmissions    TimesheetSubmission[] @relation("RoutedTimesheetSubmissions")
+    approvedTimesheetSubmissions  TimesheetSubmission[] @relation("ApprovedTimesheetSubmissions")
+
+    payslips          Payslip[]
+    generatedPayslips Payslip[] @relation("PayslipsGenerated")
+
+    customFields EmployeeCustomField[]
+}
+
+// Admin-defined ad-hoc fields per employee (label + text value and/or an
+// uploaded document) - lets admin capture something new without a code change.
+model EmployeeCustomField {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    label String
+
+    value String?
+
+    documentUrl String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+}
+
+model OTP {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    otp String
+
+    purpose OTPPurpose
+
+    expiresAt DateTime
+
+    isVerified Boolean @default(false)
+
+    attempts Int @default(0)
+
+    usedAt DateTime?
+
+    createdAt DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+}
+
+model RefreshToken {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    token String @unique
+
+    expiresAt DateTime
+
+    isRevoked Boolean @default(false)
+
+    deviceInfo String?
+
+    ipAddress String?
+
+    createdAt DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+}
+
+model LeavePolicy {
+    id Int @id @default(autoincrement())
+
+    leaveName String @unique
+
+    allocatedLeaves Int
+
+    isUnlimited Boolean @default(false)
+
+    // Marks this as the Loss-of-Pay / unpaid leave type - approved requests
+    // under this policy deduct salary in payroll instead of being paid time off.
+    isUnpaid Boolean @default(false)
+
+    allowHalfDay Boolean @default(true)
+
+    maxLeavesPerRequest Int
+
+    // How many days ahead of today this leave type can be booked (0 = today
+    // only, 1 = today or tomorrow, etc). Null means no policy-specific limit -
+    // falls back to the company-wide future-leave settings.
+    maxAdvanceBookingDays Int?
+
+    // Minimum-notice rule for long requests: if a request's totalDays exceeds
+    // longRequestThresholdDays, its start date must be at least
+    // longRequestMinNoticeDays days after today. Both null means no such rule.
+    longRequestThresholdDays Int?
+    longRequestMinNoticeDays Int?
+
+    // Attachment override: once totalDays exceeds attachmentRequiredAboveDays,
+    // a supporting document becomes mandatory to submit at all. Providing one
+    // raises the per-request cap to maxLeavesPerRequestWithAttachment and lifts
+    // the maxAdvanceBookingDays window for that request. Null means no such rule.
+    attachmentRequiredAboveDays Int?
+    maxLeavesPerRequestWithAttachment Int?
+
+    description String?
+
+    isActive Boolean @default(true)
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+
+    leaveBalances LeaveBalance[]
+
+    leaveRequests LeaveRequest[]
+}
+
+model LeaveBalance {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    leavePolicyId Int
+
+    allocatedLeaves Int
+
+    usedLeaves Int @default(0)
+
+    remainingLeaves Int
+
+    year Int
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    leavePolicy LeavePolicy @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, leavePolicyId, year])
+    @@index([userId])
+    @@index([leavePolicyId])
+}
+
+model LeaveRequest {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    leavePolicyId Int
+
+    routedToId Int?
+
+    approvedById Int?
+
+    startDate DateTime
+
+    endDate DateTime
+
+    totalDays Float
+
+    reason String
+
+    status LeaveStatus @default(PENDING)
+
+    managerRemarks String?
+
+    approvedAt DateTime?
+
+    rejectedAt DateTime?
+
+    cancelledAt DateTime?
+
+    attachmentUrl String?
+
+    // True when a manager logged this leave directly on the employee's behalf
+    // (auto-approved at creation) rather than the employee submitting it
+    // themselves for approval.
+    createdByManager Boolean @default(false)
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+
+    user User @relation("EmployeeLeaveRequests", fields: [userId], references: [id], onDelete: Cascade)
+
+    routedTo User? @relation("RoutedLeaveRequests", fields: [routedToId], references: [id])
+
+    approvedBy User? @relation("ManagerApprovedLeaves", fields: [approvedById], references: [id])
+
+    leavePolicy LeavePolicy @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@index([leavePolicyId])
+    @@index([routedToId])
+    @@index([approvedById])
+    @@index([status])
+}
+
+model CompanySettings {
+    id Int @id @default(autoincrement())
+
+    companyName String
+
+    // Which calendar month the leave/fiscal year starts in (1 = January, 4 =
+    // April, etc). Leave-balance year buckets and payroll YTD both reset on
+    // the 1st of this month, instead of a fixed manually-tracked year number.
+    fiscalYearStartMonth Int @default(4)
+
+    timezone String @default("Asia/Kolkata")
+
+    allowPastLeave Boolean @default(false)
+
+    allowFutureLeave Boolean @default(true)
+
+    maxFutureDays Int @default(90)
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+}
+
+// Company-wide payroll formula, admin-configurable - a single row (like
+// CompanySettings). Every employee's monthly earnings breakdown is derived
+// from their salaryCtc using these percentages at payslip generation time.
+model SalaryStructureConfig {
+    id Int @id @default(autoincrement())
+
+    basicPercentOfCtc Float @default(40)
+
+    hraPercentOfBasic Float @default(50)
+
+    ltaPercentOfBasic Float @default(8.33)
+
+    guaranteedAllowancePercentOfBasic Float @default(10)
+
+    conveyanceMonthly Float @default(1600)
+
+    // Fixed monthly amount, same for every employee regardless of their
+    // actual Basic (matches the common practice of capping PF contribution
+    // at the EPFO statutory wage ceiling) - applies to both the employee's
+    // deduction and the employer's (informational, CTC-only) contribution.
+    pfMonthlyAmount Float @default(1800)
+
+    // Professional Tax only applies once an employee's gross monthly pay
+    // reaches this threshold - below it, PT is zero.
+    professionalTax          Float @default(200)
+    professionalTaxThreshold Float @default(25000)
+
+    updatedAt DateTime @updatedAt
+}
+
+// One immutable snapshot per employee per month. Once generated it's a
+// historical record - admin can regenerate (overwrite) it if a correction is
+// needed, but nothing recalculates it automatically after the fact.
+model Payslip {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    month Int
+    year  Int
+
+    basic               Float
+    hra                 Float
+    lta                 Float
+    conveyance          Float
+    guaranteedAllowance Float
+    specialAllowance    Float
+    annualBonusPay      Float @default(0)
+
+    pfEmployee      Float
+    pfEmployer      Float
+    professionalTax Float
+    tds             Float @default(0)
+
+    lopDays   Float @default(0)
+    lopAmount Float @default(0)
+
+    standardDays Float @default(0)
+    daysWorked   Float @default(0)
+
+    grossPay         Float
+    grossDeductions  Float
+    netPay           Float
+
+    generatedById Int
+
+    generatedAt DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    generatedBy User @relation("PayslipsGenerated", fields: [generatedById], references: [id])
+
+    @@unique([userId, month, year])
+    @@index([userId])
+}
+
+model WeekendPolicy {
+    id Int @id @default(autoincrement())
+
+    dayOfWeek DayOfWeek
+
+    weekNumber WeekNumber @default(ALL)
+
+    isHoliday Boolean @default(true)
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+
+    @@unique([dayOfWeek, weekNumber])
+}
+
+model Holiday {
+    id Int @id @default(autoincrement())
+
+    holidayName String
+
+    holidayDate DateTime
+
+    description String?
+
+    isOptional Boolean @default(false)
+
+    isActive Boolean @default(true)
+
+    createdById Int
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+
+    createdBy User @relation(fields: [createdById], references: [id])
+
+    @@unique([holidayDate])
+    @@index([holidayDate])
+    @@index([createdById])
+}
+
+model Notification {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    title String
+
+    message String
+
+    type String
+
+    isRead Boolean @default(false)
+
+    readAt DateTime?
+
+    createdAt DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+    @@index([isRead])
+}
+
+// One task-level record. Multiple entries can share the same date (different
+// tasks worked the same day). Freely add/edit/delete while unsubmitted
+// (timesheetSubmissionId is null); once the week is submitted, entries are
+// locked to that submission and become read-only history.
+model TimesheetEntry {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    date DateTime
+
+    hoursWorked Float
+
+    description String?
+
+    // Monday of the week `date` falls in - stamped at creation, used to group
+    // entries together when the employee submits the week.
+    weekStartDate DateTime
+
+    timesheetSubmissionId Int?
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    timesheetSubmission TimesheetSubmission? @relation(fields: [timesheetSubmissionId], references: [id], onDelete: SetNull)
+
+    // At most one entry per user per calendar day - the weekly grid UI edits
+    // a day's entry in place rather than allowing several per day.
+    @@unique([userId, date])
+    @@index([userId])
+    @@index([weekStartDate])
+    @@index([timesheetSubmissionId])
+}
+
+// The weekly bundle an employee submits for their manager's approval - same
+// shape as LeaveRequest (routedTo/approvedBy/status/remarks) so it reuses a
+// pattern already trusted elsewhere in this app.
+model TimesheetSubmission {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    weekStartDate DateTime
+
+    weekEndDate DateTime
+
+    totalHours Float
+
+    routedToId Int?
+
+    approvedById Int?
+
+    status LeaveStatus @default(PENDING)
+
+    managerRemarks String?
+
+    submittedAt DateTime @default(now())
+
+    approvedAt DateTime?
+
+    rejectedAt DateTime?
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+
+    user User @relation("EmployeeTimesheetSubmissions", fields: [userId], references: [id], onDelete: Cascade)
+
+    routedTo User? @relation("RoutedTimesheetSubmissions", fields: [routedToId], references: [id])
+
+    approvedBy User? @relation("ApprovedTimesheetSubmissions", fields: [approvedById], references: [id])
+
+    entries TimesheetEntry[]
+
+    @@unique([userId, weekStartDate])
+    @@index([userId])
+    @@index([routedToId])
+    @@index([status])
+}

@@ -1,0 +1,148 @@
+const { z } = require("zod");
+const { USER_TYPE, GENDER, MARITAL_STATUS, TAX_REGIME } = require("../utils/constants");
+
+const createUserSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required.").max(100),
+  lastName: z.string().trim().min(1, "Last name is required.").max(100),
+  email: z.string().trim().toLowerCase().email("Please enter a valid email address."),
+  userType: z.enum([USER_TYPE.MANAGER, USER_TYPE.ADMIN]),
+});
+
+const updateManagerSchema = z.object({
+  managerId: z.union([z.coerce.number().int().positive(), z.null()]),
+});
+
+const nullableInt = (min = 0) => z.coerce.number().int().min(min).nullable().optional();
+
+const createLeavePolicySchema = z.object({
+  leaveName: z.string().trim().min(1, "Leave name is required.").max(100),
+  allocatedLeaves: z.coerce.number().int().min(0),
+  isUnlimited: z.boolean().optional(),
+  isUnpaid: z.boolean().optional(),
+  allowHalfDay: z.boolean().optional(),
+  maxLeavesPerRequest: z.coerce.number().int().min(1),
+  maxAdvanceBookingDays: nullableInt(),
+  longRequestThresholdDays: nullableInt(),
+  longRequestMinNoticeDays: nullableInt(),
+  attachmentRequiredAboveDays: nullableInt(),
+  maxLeavesPerRequestWithAttachment: nullableInt(),
+  description: z.string().trim().max(500).nullable().optional(),
+});
+
+const updateLeavePolicySchema = createLeavePolicySchema.partial();
+
+const createHolidaySchema = z.object({
+  holidayName: z.string().trim().min(1, "Holiday name is required.").max(150),
+  holidayDate: z.coerce.date({ errorMap: () => ({ message: "Please provide a valid date." }) }),
+  description: z.string().trim().max(500).nullable().optional(),
+  isOptional: z.boolean().optional(),
+});
+
+const updateHolidaySchema = createHolidaySchema.partial();
+
+// Empty-string form fields become null rather than an empty value, so
+// clearing a field in the UI actually clears it in the database.
+const nullableString = (max) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((value) => (value ? value : null));
+
+// Same as nullableString, but an empty/absent value is left as null while a
+// provided value must match the given format.
+const nullablePattern = (regex, message, max, { uppercase = false } = {}) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((value) => {
+      if (!value) return null;
+      return uppercase ? value.toUpperCase() : value;
+    })
+    .refine((value) => value === null || regex.test(value), { message });
+
+const EMPLOYEE_CODE_REGEX = /^[A-Za-z0-9_-]+$/;
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const UAN_REGEX = /^\d{12}$/;
+const AADHAR_REGEX = /^\d{12}$/;
+const BANK_ACCOUNT_REGEX = /^\d{9,18}$/;
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const PF_NUMBER_REGEX = /^[A-Za-z0-9/]+$/;
+
+const updateUserDetailsSchema = z.object({
+  employeeCode: nullablePattern(
+    EMPLOYEE_CODE_REGEX,
+    "Employee code can only contain letters, numbers, hyphens, and underscores.",
+    50
+  ),
+  birthDate: z.coerce.date().max(new Date(), "Date of birth can't be in the future.").nullable().optional(),
+  joiningDate: z.coerce.date().nullable().optional(),
+  gender: z.enum([GENDER.MALE, GENDER.FEMALE, GENDER.OTHER]).nullable().optional(),
+  pan: nullablePattern(PAN_REGEX, "PAN must be in the format ABCDE1234F.", 10, { uppercase: true }),
+  panHolderName: nullableString(150),
+  uan: nullablePattern(UAN_REGEX, "UAN must be exactly 12 digits.", 12),
+  aadharNumber: nullablePattern(AADHAR_REGEX, "Aadhaar number must be exactly 12 digits.", 12),
+  aadharHolderName: nullableString(150),
+  bankAccountNumber: nullablePattern(BANK_ACCOUNT_REGEX, "Bank account number must be 9 to 18 digits.", 18),
+  bankName: nullableString(150),
+  ifscCode: nullablePattern(IFSC_REGEX, "IFSC code must be in the format ABCD0123456.", 11, { uppercase: true }),
+  pfNumber: nullablePattern(PF_NUMBER_REGEX, "PF number can only contain letters, numbers, and slashes.", 30),
+  salaryCtc: z.coerce.number().min(0, "Salary/CTC can't be negative.").nullable().optional(),
+  fatherName: nullableString(150),
+  spouseName: nullableString(150),
+  maritalStatus: z.enum([MARITAL_STATUS.SINGLE, MARITAL_STATUS.MARRIED, MARITAL_STATUS.OTHER]).nullable().optional(),
+  nationality: nullableString(100),
+  qualification: nullableString(150),
+  phone: nullableString(20),
+  designation: nullableString(100),
+  location: nullableString(100),
+  taxRegime: z.enum([TAX_REGIME.OLD, TAX_REGIME.NEW]).nullable().optional(),
+});
+
+const updateSalaryStructureSchema = z.object({
+  basicPercentOfCtc: z.coerce.number().min(0).max(100),
+  hraPercentOfBasic: z.coerce.number().min(0).max(200),
+  ltaPercentOfBasic: z.coerce.number().min(0).max(200),
+  guaranteedAllowancePercentOfBasic: z.coerce.number().min(0).max(200),
+  conveyanceMonthly: z.coerce.number().min(0),
+  pfMonthlyAmount: z.coerce.number().min(0),
+  professionalTax: z.coerce.number().min(0),
+  professionalTaxThreshold: z.coerce.number().min(0),
+});
+
+const generatePayslipSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  tds: z.coerce.number().min(0).optional().default(0),
+  annualBonusPay: z.coerce.number().min(0).optional().default(0),
+});
+
+const updateCompanySettingsSchema = z.object({
+  fiscalYearStartMonth: z.coerce.number().int().min(1).max(12),
+});
+
+// Multipart form fields always arrive as strings, so value/label are plain
+// strings here even though the request may also carry an uploaded file.
+const customFieldSchema = z.object({
+  label: z.string().trim().min(1, "Please enter a label for this field.").max(100),
+  value: z.string().trim().max(500).nullable().optional(),
+});
+
+module.exports = {
+  createUserSchema,
+  updateManagerSchema,
+  createLeavePolicySchema,
+  updateLeavePolicySchema,
+  createHolidaySchema,
+  updateHolidaySchema,
+  updateUserDetailsSchema,
+  customFieldSchema,
+  updateSalaryStructureSchema,
+  generatePayslipSchema,
+  updateCompanySettingsSchema,
+};

@@ -1,0 +1,46 @@
+const REFRESH_TOKEN_COOKIE = "refreshToken";
+
+const OTP_PURPOSE = {
+  REGISTER: "REGISTER",
+  LOGIN: "LOGIN",
+  FORGOT_PASSWORD: "FORGOT_PASSWORD",
+};
+
+const USER_TYPE = {
+  EMPLOYEE: "EMPLOYEE",
+  MANAGER: "MANAGER",
+  ADMIN: "ADMIN",
+};
+
+const USER_STATUS = {
+  PENDING: "PENDING",
+  ACTIVE: "ACTIVE",
+  INACTIVE: "INACTIVE",
+};
+
+const GENDER = {
+  MALE: "MALE",
+  FEMALE: "FEMALE",
+  OTHER: "OTHER",
+};
+
+const MARITAL_STATUS = {
+  SINGLE: "SINGLE",
+  MARRIED: "MARRIED",
+  OTHER: "OTHER",
+};
+
+const TAX_REGIME = {
+  OLD: "OLD",
+  NEW: "NEW",
+};
+
+module.exports = {
+  REFRESH_TOKEN_COOKIE,
+  OTP_PURPOSE,
+  USER_TYPE,
+  USER_STATUS,
+  GENDER,
+  MARITAL_STATUS,
+  TAX_REGIME,
+};

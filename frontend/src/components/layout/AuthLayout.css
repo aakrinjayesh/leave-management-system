@@ -1,0 +1,133 @@
+.auth-layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 960px) {
+  .auth-layout {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.auth-layout-brand {
+  display: none;
+  position: relative;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px;
+  background: linear-gradient(150deg, var(--color-primary-700) 0%, var(--color-primary-900) 100%);
+  color: var(--color-white);
+  overflow: hidden;
+}
+
+@media (min-width: 960px) {
+  .auth-layout-brand {
+    display: flex;
+  }
+}
+
+.auth-layout-brand::before {
+  content: "";
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.08), transparent 70%);
+  top: -120px;
+  right: -160px;
+}
+
+.auth-brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  z-index: 1;
+}
+
+.auth-brand-mark-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 0.15);
+}
+
+.auth-brand-copy {
+  z-index: 1;
+  max-width: 420px;
+}
+
+.auth-brand-copy h1 {
+  font-size: 2rem;
+  line-height: 1.25;
+  margin-bottom: 14px;
+}
+
+.auth-brand-copy p {
+  color: var(--color-primary-100);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.auth-brand-footer {
+  z-index: 1;
+  color: var(--color-primary-200);
+  font-size: 0.82rem;
+}
+
+.auth-layout-form {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-card-mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-primary-700);
+  margin-bottom: 28px;
+}
+
+@media (min-width: 960px) {
+  .auth-card-mobile-brand {
+    display: none;
+  }
+}
+
+.auth-card-header {
+  margin-bottom: 28px;
+}
+
+.auth-card-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.auth-card-header p {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.auth-card-footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}

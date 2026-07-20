@@ -1,0 +1,79 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-gray-700);
+}
+
+.field-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.field-icon {
+  position: absolute;
+  left: 12px;
+  display: flex;
+  color: var(--color-gray-400);
+}
+
+.field-input {
+  width: 100%;
+  padding: 11px 14px;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  background-color: var(--color-white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.field-input.has-icon {
+  padding-left: 38px;
+}
+
+.field-input.has-toggle {
+  padding-right: 40px;
+}
+
+.field-input:focus {
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px var(--color-primary-100);
+}
+
+.field-input.has-error {
+  border-color: var(--color-danger-border);
+}
+
+.field-input.has-error:focus {
+  box-shadow: 0 0 0 3px var(--color-danger-bg);
+}
+
+.field-toggle {
+  position: absolute;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--color-gray-400);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.field-toggle:hover {
+  color: var(--color-gray-600);
+}
+
+.field-error {
+  font-size: 0.8rem;
+  color: var(--color-danger-text);
+}
