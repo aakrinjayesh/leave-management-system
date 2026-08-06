@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users } from "lucide-react";
+import { Clock, Users } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
 import * as managerLeaveApi from "../../api/managerLeave.api";
@@ -45,6 +45,7 @@ export default function EmployeesListPage() {
                     <th>Days used</th>
                     <th>Days remaining</th>
                     <th>Pending requests</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -60,6 +61,18 @@ export default function EmployeesListPage() {
                       <td>{employee.totalUsed}</td>
                       <td>{employee.totalRemaining}</td>
                       <td>{employee.pendingRequestsCount}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <div className="row-actions">
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            onClick={() => navigate(`/manager/timesheets/employees/${employee.id}`)}
+                          >
+                            <Clock size={14} />
+                            Timesheet
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

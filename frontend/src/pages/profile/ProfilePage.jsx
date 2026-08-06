@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
-import { UserCog } from "lucide-react";
+import { UserCog, PartyPopper } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import FormSelect from "../../components/common/FormSelect";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
+import StatCard from "../../components/common/StatCard";
+import AnniversaryCelebration from "../../components/common/AnniversaryCelebration";
+// Hidden for employees - admin-only feature for now. Uncomment to re-enable.
+// import MyIncomeTaxComputation from "./MyIncomeTaxComputation";
+// import MyIncomeTaxComputationHistory from "./MyIncomeTaxComputationHistory";
 import { useAuth } from "../../context/AuthContext";
 import * as profileApi from "../../api/profile.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -18,6 +23,41 @@ const TAX_REGIME_LABELS = { OLD: "Old Tax Regime", NEW: "New Tax Regime" };
 const formatCtc = (value) =>
   value == null ? "Not set" : new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
 
+const formatMonth = (date) => new Date(date).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
+
+// Calendar-aware years/months/days completed since joining.
+const getTenureParts = (joiningDateValue) => {
+  const start = new Date(joiningDateValue);
+  const now = new Date();
+
+  let years = now.getFullYear() - start.getFullYear();
+  let months = now.getMonth() - start.getMonth();
+  let days = now.getDate() - start.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  return { years, months, days };
+};
+
+// e.g. "1 year, 4 months, 20 days" - matches how tenure is normally described.
+const formatTenure = (joiningDateValue) => {
+  const { years, months, days } = getTenureParts(joiningDateValue);
+
+  const parts = [];
+  if (years > 0) parts.push(`${years} year${years !== 1 ? "s" : ""}`);
+  if (months > 0) parts.push(`${months} month${months !== 1 ? "s" : ""}`);
+  if (days > 0 || parts.length === 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
+
+  return parts.join(", ");
+};
+
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const [options, setOptions] = useState(null);
@@ -25,6 +65,8 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationYears, setCelebrationYears] = useState(null);
 
   const isAdmin = user?.userType === "ADMIN";
 
@@ -36,6 +78,28 @@ export default function ProfilePage() {
       .catch(() => setError("Couldn't load the list of people to choose from. Please try again."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Plays once per new anniversary - the first profile visit after crossing
+  // 1 year, then again after crossing 2 years, and so on. Refreshes the local
+  // user data as soon as "seen" is saved (not after the 10s animation ends),
+  // so navigating away and back mid-celebration can't retrigger it.
+  useEffect(() => {
+    if (!user?.joiningDate) return;
+    const { years } = getTenureParts(user.joiningDate);
+    if (years < 1) return;
+    if (user.lastAnniversaryCelebratedYears != null && years <= user.lastAnniversaryCelebratedYears) return;
+
+    setCelebrationYears(years);
+    setShowCelebration(true);
+    profileApi
+      .markAnniversaryCelebrationSeen()
+      .then(() => refreshUser())
+      .catch(() => {});
+  }, [user?.joiningDate, user?.lastAnniversaryCelebratedYears]);
+
+  const handleCelebrationDone = () => {
+    setShowCelebration(false);
+  };
 
   // getManagerOptions only lists active users - if the current manager was
   // deactivated since being picked, they won't be in that list. Surface them
@@ -69,11 +133,18 @@ export default function ProfilePage() {
 
   return (
     <DashboardLayout title="Profile">
+      {showCelebration && (
+        <AnniversaryCelebration firstName={user?.firstName} years={celebrationYears} onDone={handleCelebrationDone} />
+      )}
+
       <div className="page-header">
         <div>
           <h1>Profile</h1>
           <p>Your account details and reporting line.</p>
         </div>
+        {user?.joiningDate && (
+          <StatCard icon={<PartyPopper size={20} />} label="With Aakrin for" value={formatTenure(user.joiningDate)} />
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -225,6 +296,119 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {user?.salaryStructure && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-section">
+            <span className="card-section-title">Salary structure</span>
+            <p className="card-section-subtitle">
+              How your CTC breaks down, as fixed by admin - effective from{" "}
+              <strong>{formatMonth(user.salaryStructure.effectiveFrom)}</strong> onward.
+            </p>
+
+            <div className="profile-detail-grid">
+              <div>
+                <div className="profile-detail-label">Basic</div>
+                <div className="profile-detail-value">{user.salaryStructure.basicPercentOfCtc}% of monthly CTC</div>
+              </div>
+              <div>
+                <div className="profile-detail-label">HRA</div>
+                <div className="profile-detail-value">{user.salaryStructure.hraPercentOfBasic}% of Basic</div>
+              </div>
+              <div>
+                <div className="profile-detail-label">LTA</div>
+                <div className="profile-detail-value">{user.salaryStructure.ltaPercentOfBasic}% of Basic</div>
+              </div>
+              <div>
+                <div className="profile-detail-label">Guaranteed Allowance</div>
+                <div className="profile-detail-value">
+                  {user.salaryStructure.guaranteedAllowancePercentOfBasic}% of Basic
+                </div>
+              </div>
+              <div>
+                <div className="profile-detail-label">Conveyance</div>
+                <div className="profile-detail-value">{formatCtc(user.salaryStructure.conveyanceMonthly)}/month</div>
+              </div>
+              <div>
+                <div className="profile-detail-label">Provident Fund</div>
+                <div className="profile-detail-value">{formatCtc(user.salaryStructure.pfMonthlyAmount)}/month</div>
+              </div>
+              <div>
+                <div className="profile-detail-label">Professional Tax</div>
+                <div className="profile-detail-value">{formatCtc(user.salaryStructure.professionalTax)}/month</div>
+              </div>
+              <div>
+                <div className="profile-detail-label">PT applies once gross pay reaches</div>
+                <div className="profile-detail-value">{formatCtc(user.salaryStructure.professionalTaxThreshold)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {user?.pastSalaryStructures?.length > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-section">
+            <span className="card-section-title">Past salary structures</span>
+            <p className="card-section-subtitle">Earlier entries, most recent first - each was effective until the next one started.</p>
+
+            {user.pastSalaryStructures.map((entry, index) => (
+              <div
+                key={entry.id}
+                style={{
+                  marginTop: index === 0 ? 0 : 24,
+                  paddingTop: index === 0 ? 0 : 24,
+                  borderTop: index === 0 ? "none" : "1px solid var(--border-color, #e5e7eb)",
+                }}
+              >
+                <p className="card-section-subtitle">
+                  Effective from <strong>{formatMonth(entry.effectiveFrom)}</strong> · CTC (annual):{" "}
+                  <strong>{formatCtc(entry.ctc)}</strong>
+                </p>
+
+                <div className="profile-detail-grid">
+                  <div>
+                    <div className="profile-detail-label">Basic</div>
+                    <div className="profile-detail-value">{entry.basicPercentOfCtc}% of monthly CTC</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">HRA</div>
+                    <div className="profile-detail-value">{entry.hraPercentOfBasic}% of Basic</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">LTA</div>
+                    <div className="profile-detail-value">{entry.ltaPercentOfBasic}% of Basic</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Guaranteed Allowance</div>
+                    <div className="profile-detail-value">{entry.guaranteedAllowancePercentOfBasic}% of Basic</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Conveyance</div>
+                    <div className="profile-detail-value">{formatCtc(entry.conveyanceMonthly)}/month</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Provident Fund</div>
+                    <div className="profile-detail-value">{formatCtc(entry.pfMonthlyAmount)}/month</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Professional Tax</div>
+                    <div className="profile-detail-value">{formatCtc(entry.professionalTax)}/month</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">PT applies once gross pay reaches</div>
+                    <div className="profile-detail-value">{formatCtc(entry.professionalTaxThreshold)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Hidden for employees - admin-only feature for now. Uncomment to re-enable.
+      <MyIncomeTaxComputation />
+      <MyIncomeTaxComputationHistory /> */}
 
       {user?.customFields?.length > 0 && (
         <div className="card" style={{ marginBottom: 20 }}>

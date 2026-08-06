@@ -27,9 +27,11 @@ import ManagerEmployeeTimesheetPage from "../pages/manager/EmployeeTimesheetPage
 import AdminEmployeeTimesheetPage from "../pages/admin/EmployeeTimesheetPage";
 import EmployeeLeaveDetailPage from "../pages/admin/EmployeeLeaveDetailPage";
 import EmployeeDetailsPage from "../pages/admin/EmployeeDetailsPage";
+import OfferLetterPage from "../pages/admin/OfferLetterPage";
 import ManageLeavesPage from "../pages/admin/ManageLeavesPage";
 import PayslipsPage from "../pages/admin/PayslipsPage";
 import EmployeePayslipsPage from "../pages/admin/EmployeePayslipsPage";
+import ReportPage from "../pages/admin/ReportPage";
 
 import ProfilePage from "../pages/profile/ProfilePage";
 import MyTimesheetPage from "../pages/timesheet/MyTimesheetPage";
@@ -86,10 +88,12 @@ export default function AppRoutes() {
 
       <Route element={<ProtectedRoute check={isAdmin} />}>
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/reports" element={<ReportPage />} />
         <Route path="/admin/manage-leaves" element={<ManageLeavesPage />} />
         <Route path="/admin/users/:id/timesheet" element={<AdminEmployeeTimesheetPage />} />
         <Route path="/admin/users/:id/leaves" element={<EmployeeLeaveDetailPage />} />
         <Route path="/admin/users/:id/details" element={<EmployeeDetailsPage />} />
+        <Route path="/admin/users/:id/offer-letter" element={<OfferLetterPage />} />
         <Route path="/admin/payslips" element={<PayslipsPage />} />
         <Route path="/admin/users/:id/payslips" element={<EmployeePayslipsPage />} />
       </Route>

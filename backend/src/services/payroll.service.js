@@ -22,7 +22,11 @@ const PAYSLIP_LINE_FIELDS = [
   "netPay",
 ];
 
-const DEFAULT_CONFIG = {
+// Safety net only, no longer admin-editable - used solely for employees who
+// have a live CTC but predate this per-employee structure feature (no
+// SalaryStructureHistory rows at all yet). Once any entry is recorded for
+// them, this is never consulted again.
+const FALLBACK_STRUCTURE = {
   basicPercentOfCtc: 40,
   hraPercentOfBasic: 50,
   ltaPercentOfBasic: 8.33,
@@ -31,19 +35,6 @@ const DEFAULT_CONFIG = {
   pfMonthlyAmount: 1800,
   professionalTax: 200,
   professionalTaxThreshold: 25000,
-};
-
-const getSalaryStructureConfig = async () => {
-  const config = await prisma.salaryStructureConfig.findFirst();
-  return config || DEFAULT_CONFIG;
-};
-
-const updateSalaryStructureConfig = async (data) => {
-  const existing = await prisma.salaryStructureConfig.findFirst();
-  if (existing) {
-    return prisma.salaryStructureConfig.update({ where: { id: existing.id }, data });
-  }
-  return prisma.salaryStructureConfig.create({ data });
 };
 
 // Derives the monthly earnings breakdown from annual CTC using the
@@ -116,6 +107,33 @@ const countLopDaysInMonth = async (lopRequests, year, month) => {
   return total;
 };
 
+// Counts working days (excluding weekends/holidays) from the 1st of the
+// month up to the day before joining - only relevant for the employee's
+// joining month itself, where those days shouldn't be paid for. Returns 0
+// for any other month.
+const countPreJoiningDaysInMonth = async (joiningDate, year, month) => {
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const dayBeforeJoining = startOfUtcDay(new Date(joiningDate));
+  dayBeforeJoining.setUTCDate(dayBeforeJoining.getUTCDate() - 1);
+
+  if (dayBeforeJoining < monthStart) {
+    return 0;
+  }
+
+  const { weekendDates, holidays } = await leaveCalendarService.getMonthCalendarData(year, month);
+  const excludedDates = new Set([...weekendDates, ...holidays.map((h) => h.date)]);
+
+  let total = 0;
+  const cursor = new Date(monthStart);
+  while (cursor <= dayBeforeJoining) {
+    if (!excludedDates.has(toDateKey(cursor))) {
+      total += 1;
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return total;
+};
+
 // Loss-of-Pay deduction for the month: (earnings excluding one-time bonus) /
 // working days in the month * LOP days taken. Takes the month's working-day
 // count (Standard Days) as a parameter so it's only computed once per payslip.
@@ -148,10 +166,33 @@ const computeLopDeduction = async (userId, year, month, monthlyEarningsExcluding
   return { lopDays, lopAmount };
 };
 
+// Looks up the CTC + salary structure that was actually in effect for the
+// given month, from SalaryStructureHistory (the latest entry on or before
+// that month) - returns the whole row (ctc, basicPercentOfCtc, ...), or null
+// if this employee has no history rows at all yet.
+const getEffectiveSalaryConfig = async (userId, year, month) => {
+  const targetSeq = year * 12 + month;
+  const history = await prisma.salaryStructureHistory.findMany({
+    where: { userId },
+    orderBy: { effectiveFrom: "desc" },
+  });
+
+  const record = history.find((entry) => {
+    const effective = new Date(entry.effectiveFrom);
+    const effectiveSeq = effective.getUTCFullYear() * 12 + (effective.getUTCMonth() + 1);
+    return effectiveSeq <= targetSeq;
+  });
+
+  return record || null;
+};
+
 // Computes a payslip's full figures without saving - used for the admin's
 // preview before they fill in TDS/bonus and confirm.
 const computePayslip = async (user, year, month, { tds = 0, annualBonusPay = 0 } = {}) => {
-  if (!user.salaryCtc) {
+  const effectiveConfig =
+    (await getEffectiveSalaryConfig(user.id, year, month)) ??
+    (user.salaryCtc ? { ctc: user.salaryCtc, ...FALLBACK_STRUCTURE } : null);
+  if (!effectiveConfig) {
     throw ApiError.badRequest("This employee doesn't have a Salary/CTC set yet - add it from their profile details first.");
   }
 
@@ -167,8 +208,7 @@ const computePayslip = async (user, year, month, { tds = 0, annualBonusPay = 0 }
     }
   }
 
-  const config = await getSalaryStructureConfig();
-  const breakdown = computeSalaryBreakdown(user.salaryCtc, config);
+  const breakdown = computeSalaryBreakdown(effectiveConfig.ctc, effectiveConfig);
   const earningsExcludingBonus =
     breakdown.basic + breakdown.hra + breakdown.lta + breakdown.conveyance + breakdown.guaranteedAllowance + breakdown.specialAllowance;
 
@@ -176,7 +216,14 @@ const computePayslip = async (user, year, month, { tds = 0, annualBonusPay = 0 }
   // (weekends/holidays excluded) - the "expected" days. Days Worked is that
   // same figure minus any approved Loss-of-Pay days - the "actual" days.
   const standardDays = await leaveCalendarService.getWorkingDaysInMonth(year, month);
-  const { lopDays, lopAmount } = await computeLopDeduction(user.id, year, month, earningsExcludingBonus, standardDays);
+  const { lopDays: leaveLopDays } = await computeLopDeduction(user.id, year, month, earningsExcludingBonus, standardDays);
+
+  // In the employee's joining month, days before they actually joined are
+  // unpaid the same way LOP days are - folding them into lopDays reuses the
+  // existing per-day rate math below instead of a separate proration formula.
+  const preJoiningDays = user.joiningDate ? await countPreJoiningDaysInMonth(user.joiningDate, year, month) : 0;
+  const lopDays = leaveLopDays + preJoiningDays;
+  const lopAmount = standardDays > 0 ? (earningsExcludingBonus / standardDays) * lopDays : 0;
   const daysWorked = standardDays - lopDays;
 
   const grossPay = earningsExcludingBonus + annualBonusPay;
@@ -212,6 +259,39 @@ const generatePayslip = async (userId, year, month, { tds = 0, annualBonusPay = 
   });
 };
 
+// Records a CTC + salary structure change effective from a given month. Also
+// updates the live User.salaryCtc field, but only when this new entry is the
+// most recent one on file - a backdated correction (e.g. filling in what
+// applied a year ago) shouldn't overwrite the employee's current CTC.
+const recordSalaryStructure = async (userId, data, recordedById) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw ApiError.notFound("Account not found.");
+  }
+
+  const created = await prisma.salaryStructureHistory.create({
+    data: { userId, recordedById, ...data },
+  });
+
+  const latest = await prisma.salaryStructureHistory.findFirst({
+    where: { userId },
+    orderBy: { effectiveFrom: "desc" },
+  });
+
+  if (latest.id === created.id) {
+    await prisma.user.update({ where: { id: userId }, data: { salaryCtc: data.ctc } });
+  }
+
+  return getSalaryStructureHistory(userId);
+};
+
+const getSalaryStructureHistory = (userId) =>
+  prisma.salaryStructureHistory.findMany({
+    where: { userId },
+    orderBy: { effectiveFrom: "desc" },
+    include: { recordedBy: { select: { id: true, firstName: true, lastName: true } } },
+  });
+
 // Sums every stored payslip line from the start of the company's fiscal
 // year through and including the target month, for the YTD columns on the PDF.
 const getYtdTotals = async (userId, year, month) => {
@@ -238,11 +318,11 @@ const addToYtdTotals = (ytd, computed) =>
   }, {});
 
 module.exports = {
-  getSalaryStructureConfig,
-  updateSalaryStructureConfig,
   computePayslip,
   generatePayslip,
   getYtdTotals,
   addToYtdTotals,
-  DEFAULT_CONFIG,
+  getEffectiveSalaryConfig,
+  recordSalaryStructure,
+  getSalaryStructureHistory,
 };

@@ -195,7 +195,10 @@ const applyLeave = asyncHandler(async (req, res) => {
     include: { leavePolicy: true, routedTo: { select: { firstName: true, lastName: true } } },
   });
 
-  // Notify the manager - failures here shouldn't fail the leave request itself.
+  new ApiResponse(201, "Leave request submitted.", { leaveRequest }).send(res);
+
+  // Notify the manager - sent after the response so the employee doesn't wait
+  // on the email round-trip; failures here shouldn't fail the leave request itself.
   try {
     await sendLeaveSubmittedEmail({
       to: recipient.email,
@@ -246,8 +249,6 @@ const applyLeave = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send manager-on-leave backup notice email:", err);
   }
-
-  new ApiResponse(201, "Leave request submitted.", { leaveRequest }).send(res);
 });
 
 // Uploaded ahead of submission, so the employee can review it before the
@@ -302,6 +303,9 @@ const cancelLeaveRequest = asyncHandler(async (req, res) => {
     data: { status: "CANCELLED", cancelledAt: new Date() },
   });
 
+  new ApiResponse(200, "Leave request cancelled.", { leaveRequest: updated }).send(res);
+
+  // Sent after the response so the employee doesn't wait on the email round-trip.
   if (leaveRequest.routedTo) {
     try {
       await sendLeaveCancelledEmail({
@@ -316,8 +320,6 @@ const cancelLeaveRequest = asyncHandler(async (req, res) => {
       console.error("Failed to send leave cancelled email:", err);
     }
   }
-
-  new ApiResponse(200, "Leave request cancelled.", { leaveRequest: updated }).send(res);
 });
 
 const getMyCalendar = asyncHandler(async (req, res) => {

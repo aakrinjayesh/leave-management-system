@@ -3,6 +3,7 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
+const projectService = require("../services/project.service");
 const { sendTimesheetSubmittedEmail } = require("../utils/email.util");
 
 const getMyEntries = asyncHandler(async (req, res) => {
@@ -10,14 +11,17 @@ const getMyEntries = asyncHandler(async (req, res) => {
   const weekStartDate = timesheetService.getWeekStart(anchor);
   const weekEndDate = timesheetService.getWeekEnd(weekStartDate);
 
-  const [entries, submission] = await Promise.all([
+  const [entries, submission, lastProjectAssigned, lastProjectId] = await Promise.all([
     prisma.timesheetEntry.findMany({
       where: { userId: req.user.id, date: { gte: weekStartDate, lte: weekEndDate } },
       orderBy: [{ date: "asc" }, { id: "asc" }],
     }),
     prisma.timesheetSubmission.findUnique({
       where: { userId_weekStartDate: { userId: req.user.id, weekStartDate } },
+      include: { project: true },
     }),
+    timesheetService.getLastProjectAssigned(req.user.id),
+    projectService.getLastProjectId(req.user.id),
   ]);
 
   new ApiResponse(200, "OK", {
@@ -25,8 +29,16 @@ const getMyEntries = asyncHandler(async (req, res) => {
     weekEndDate,
     entries,
     submission,
+    lastProjectAssigned,
+    lastProjectId,
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
+});
+
+const listProjects = asyncHandler(async (req, res) => {
+  const projects = await projectService.listActiveProjects();
+
+  new ApiResponse(200, "OK", { projects }).send(res);
 });
 
 // One entry per user per date - saving a day creates it if it doesn't exist
@@ -83,8 +95,23 @@ const deleteEntry = asyncHandler(async (req, res) => {
   new ApiResponse(200, "Entry deleted.").send(res);
 });
 
+// Uploaded ahead of submission, so the employee can review it before the
+// actual submission exists - the returned names get passed back in as
+// attachmentStoredName/attachmentOriginalName when they call submitWeek.
+const uploadAttachment = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw ApiError.badRequest("Please choose a file to upload.");
+  }
+
+  new ApiResponse(201, "File uploaded.", {
+    attachmentStoredName: req.file.filename,
+    attachmentOriginalName: req.file.originalname,
+  }).send(res);
+});
+
 const submitWeek = asyncHandler(async (req, res) => {
-  const { weekStartDate: rawWeekStart } = req.body;
+  const { weekStartDate: rawWeekStart, attachmentOriginalName, attachmentStoredName, projectAssigned, projectId } =
+    req.body;
   const weekStartDate = timesheetService.getWeekStart(rawWeekStart);
   const weekEndDate = timesheetService.getWeekEnd(weekStartDate);
 
@@ -128,6 +155,10 @@ const submitWeek = asyncHandler(async (req, res) => {
           approvedAt: null,
           rejectedAt: null,
           submittedAt: new Date(),
+          attachmentOriginalName,
+          attachmentStoredName,
+          projectAssigned,
+          projectId,
         },
       })
     : await prisma.timesheetSubmission.create({
@@ -138,6 +169,10 @@ const submitWeek = asyncHandler(async (req, res) => {
           totalHours,
           routedToId: recipient.id,
           status: "PENDING",
+          attachmentOriginalName,
+          attachmentStoredName,
+          projectAssigned,
+          projectId,
         },
       });
 
@@ -146,8 +181,11 @@ const submitWeek = asyncHandler(async (req, res) => {
     data: { timesheetSubmissionId: submission.id },
   });
 
-  // Notify the manager and every active admin - failures here shouldn't fail
-  // the submission itself.
+  new ApiResponse(201, "Timesheet submitted.", { submission }).send(res);
+
+  // Notify the manager and every active admin - sent after the response so
+  // the employee doesn't wait on the email round-trips; failures here
+  // shouldn't fail the submission itself.
   try {
     const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
     const recipients = [recipient, ...admins.filter((a) => a.id !== recipient.id)];
@@ -165,8 +203,6 @@ const submitWeek = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send timesheet submitted email:", err);
   }
-
-  new ApiResponse(201, "Timesheet submitted.", { submission }).send(res);
 });
 
 const listMySubmissions = asyncHandler(async (req, res) => {
@@ -177,6 +213,7 @@ const listMySubmissions = asyncHandler(async (req, res) => {
     include: {
       routedTo: { select: { firstName: true, lastName: true } },
       entries: { orderBy: { date: "asc" } },
+      project: { select: { name: true } },
     },
     orderBy: { weekStartDate: "desc" },
   });
@@ -186,8 +223,10 @@ const listMySubmissions = asyncHandler(async (req, res) => {
 
 module.exports = {
   getMyEntries,
+  listProjects,
   saveEntry,
   deleteEntry,
+  uploadAttachment,
   submitWeek,
   listMySubmissions,
 };

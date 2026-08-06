@@ -9,7 +9,13 @@ const ApiError = require("../utils/ApiError");
 const EMPLOYEE_DOCUMENT_DIR = path.join(__dirname, "..", "..", "uploads", "employee-documents");
 fs.mkdirSync(EMPLOYEE_DOCUMENT_DIR, { recursive: true });
 
-const ALLOWED_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+const ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
 const storage = multer.diskStorage({
@@ -22,7 +28,7 @@ const storage = multer.diskStorage({
 
 const fileFilter = (req, file, cb) => {
   if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-    return cb(new Error("Only PDF, JPEG, or PNG files are allowed."));
+    return cb(new Error("Only PDF, Word, JPEG, or PNG files are allowed."));
   }
   cb(null, true);
 };

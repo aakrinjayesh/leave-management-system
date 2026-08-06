@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, Plus, Trash2 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextInput from "../../components/common/TextInput";
 import FormSelect from "../../components/common/FormSelect";
@@ -8,6 +8,8 @@ import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
 import DocumentUploadField from "./DocumentUploadField";
+import UpdateSalaryStructureModal from "./UpdateSalaryStructureModal";
+import TaxComputationSection from "./TaxComputationSection";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { openBlobInNewTab } from "../../utils/openBlob";
@@ -16,28 +18,7 @@ import "../../styles/dashboardShared.css";
 const toDateInputValue = (value) => (value ? value.slice(0, 10) : "");
 const todayDateInputValue = () => new Date().toISOString().slice(0, 10);
 const money = (value) => `₹${(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-// Lightweight preview of the same PF/PT math payroll uses at payslip time -
-// gives admin an immediate sense of the numbers right where CTC is entered,
-// without waiting until they generate an actual payslip.
-const estimateMonthlyPfPt = (ctc, config) => {
-  if (!ctc || !config) return null;
-
-  const monthlyCtc = ctc / 12;
-  const basic = monthlyCtc * (config.basicPercentOfCtc / 100);
-  const hra = basic * (config.hraPercentOfBasic / 100);
-  const lta = basic * (config.ltaPercentOfBasic / 100);
-  const guaranteedAllowance = basic * (config.guaranteedAllowancePercentOfBasic / 100);
-  const conveyance = config.conveyanceMonthly;
-  const pf = config.pfMonthlyAmount;
-  const specialAllowance = monthlyCtc - (basic + hra + lta + guaranteedAllowance + conveyance + pf);
-  if (specialAllowance < 0) return null;
-
-  const grossMonthlyPay = basic + hra + lta + conveyance + specialAllowance + guaranteedAllowance;
-  const pt = grossMonthlyPay >= config.professionalTaxThreshold ? config.professionalTax : 0;
-
-  return { pf, pt };
-};
+const formatMonth = (date) => new Date(date).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
 
 const EMPLOYEE_CODE_REGEX = /^[A-Za-z0-9_-]+$/;
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
@@ -76,9 +57,6 @@ const validateForm = (form) => {
   if (form.pfNumber && !PF_NUMBER_REGEX.test(form.pfNumber.trim())) {
     errors.pfNumber = "Only letters, numbers, and slashes are allowed.";
   }
-  if (form.salaryCtc !== "" && Number(form.salaryCtc) < 0) {
-    errors.salaryCtc = "Can't be negative.";
-  }
 
   return errors;
 };
@@ -97,6 +75,10 @@ const toForm = (user) => ({
   designation: user.designation ?? "",
   location: user.location ?? "",
   taxRegime: user.taxRegime ?? "",
+  residentialAddress: user.residentialAddress ?? "",
+  wardNo: user.wardNo ?? "",
+  micrCode: user.micrCode ?? "",
+  residentialStatus: user.residentialStatus ?? "",
   pan: user.pan ?? "",
   panHolderName: user.panHolderName ?? "",
   uan: user.uan ?? "",
@@ -106,7 +88,6 @@ const toForm = (user) => ({
   bankName: user.bankName ?? "",
   ifscCode: user.ifscCode ?? "",
   pfNumber: user.pfNumber ?? "",
-  salaryCtc: user.salaryCtc ?? "",
 });
 
 export default function EmployeeDetailsPage() {
@@ -123,7 +104,8 @@ function EmployeeDetailsContent({ id }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [busyDocType, setBusyDocType] = useState(null);
-  const [salaryConfig, setSalaryConfig] = useState(null);
+  const [structureHistory, setStructureHistory] = useState(null);
+  const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
 
   const [customFields, setCustomFields] = useState(null);
   const [newField, setNewField] = useState({ label: "", value: "", file: null });
@@ -138,14 +120,18 @@ function EmployeeDetailsContent({ id }) {
 
   const loadCustomFields = () => adminApi.listCustomFields(id).then((data) => setCustomFields(data.customFields));
 
+  const loadStructureHistory = () =>
+    adminApi.getSalaryStructureHistory(id).then((data) => setStructureHistory(data.history));
+
   useEffect(() => {
     loadUser();
     loadCustomFields();
-    adminApi.getSalaryStructure().then((data) => setSalaryConfig(data.config));
+    loadStructureHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const pfPtEstimate = form ? estimateMonthlyPfPt(Number(form.salaryCtc), salaryConfig) : null;
+  const latestStructure = structureHistory && structureHistory.length > 0 ? structureHistory[0] : null;
+  const pastStructures = structureHistory ? structureHistory.slice(1) : [];
 
   const handleChange = (field) => (e) => {
     setSuccess("");
@@ -181,6 +167,10 @@ function EmployeeDetailsContent({ id }) {
         designation: form.designation.trim() || null,
         location: form.location.trim() || null,
         taxRegime: form.taxRegime || null,
+        residentialAddress: form.residentialAddress.trim() || null,
+        wardNo: form.wardNo.trim() || null,
+        micrCode: form.micrCode.trim() || null,
+        residentialStatus: form.residentialStatus || null,
         pan: form.pan.trim().toUpperCase() || null,
         panHolderName: form.panHolderName.trim() || null,
         uan: form.uan.trim() || null,
@@ -190,7 +180,6 @@ function EmployeeDetailsContent({ id }) {
         bankName: form.bankName.trim() || null,
         ifscCode: form.ifscCode.trim().toUpperCase() || null,
         pfNumber: form.pfNumber.trim() || null,
-        salaryCtc: form.salaryCtc === "" ? null : Number(form.salaryCtc),
       };
       const data = await adminApi.updateUserDetails(id, payload);
       setUser((prev) => ({ ...prev, ...data.user }));
@@ -307,6 +296,14 @@ function EmployeeDetailsContent({ id }) {
           </h1>
           <p>{user.email}</p>
         </div>
+        <Button
+          variant="secondary"
+          className="page-header-btn"
+          onClick={() => navigate(`/admin/users/${id}/offer-letter`)}
+        >
+          <FileText size={16} />
+          Offer Letter
+        </Button>
       </div>
 
       <Alert type="error">{error}</Alert>
@@ -383,6 +380,28 @@ function EmployeeDetailsContent({ id }) {
               <option value="">Not set</option>
               <option value="OLD">Old Tax Regime</option>
               <option value="NEW">New Tax Regime</option>
+            </FormSelect>
+
+            <p className="card-section-subtitle" style={{ marginTop: 16 }}>
+              Used only for the annual Income Tax Computation Statement.
+            </p>
+
+            <TextInput
+              label="Residential address"
+              value={form.residentialAddress}
+              onChange={handleChange("residentialAddress")}
+            />
+
+            <div className="form-two-col">
+              <TextInput label="Ward No" value={form.wardNo} onChange={handleChange("wardNo")} />
+              <TextInput label="MICR code" value={form.micrCode} onChange={handleChange("micrCode")} />
+            </div>
+
+            <FormSelect label="Residential status" value={form.residentialStatus} onChange={handleChange("residentialStatus")}>
+              <option value="">Not set</option>
+              <option value="RESIDENT">Resident</option>
+              <option value="NON_RESIDENT">Non-Resident</option>
+              <option value="RESIDENT_NOT_ORDINARILY_RESIDENT">Resident but Not Ordinarily Resident (RNOR)</option>
             </FormSelect>
           </div>
         </div>
@@ -499,34 +518,141 @@ function EmployeeDetailsContent({ id }) {
           </div>
         </div>
 
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-section">
-            <span className="card-section-title">Salary</span>
-
-            <TextInput
-              label="Salary / CTC (annual)"
-              type="number"
-              min="0"
-              value={form.salaryCtc}
-              onChange={handleChange("salaryCtc")}
-              error={fieldErrors.salaryCtc}
-            />
-
-            {pfPtEstimate && (
-              <p className="card-section-subtitle">
-                Estimated monthly PF: <strong>{money(pfPtEstimate.pf)}</strong> &nbsp;·&nbsp; Estimated monthly PT:{" "}
-                <strong>{money(pfPtEstimate.pt)}</strong> (based on current Salary Structure settings)
-              </p>
-            )}
-          </div>
-        </div>
-
         <div className="modal-actions" style={{ justifyContent: "flex-start", marginBottom: 20 }}>
           <Button type="submit" isLoading={isSaving}>
-            Save details
+            Update details
           </Button>
         </div>
       </form>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-section">
+          <span className="card-section-title">Salary</span>
+          <p className="card-section-subtitle">
+            Current CTC (annual): <strong>{user.salaryCtc ? money(user.salaryCtc) : "Not set"}</strong>
+          </p>
+
+          {latestStructure ? (
+            <>
+              <p className="card-section-subtitle">
+                Effective from <strong>{formatMonth(latestStructure.effectiveFrom)}</strong> onward
+              </p>
+
+              <div className="profile-detail-grid">
+                <div>
+                  <div className="profile-detail-label">Basic</div>
+                  <div className="profile-detail-value">{latestStructure.basicPercentOfCtc}% of monthly CTC</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">HRA</div>
+                  <div className="profile-detail-value">{latestStructure.hraPercentOfBasic}% of Basic</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">LTA</div>
+                  <div className="profile-detail-value">{latestStructure.ltaPercentOfBasic}% of Basic</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Guaranteed Allowance</div>
+                  <div className="profile-detail-value">
+                    {latestStructure.guaranteedAllowancePercentOfBasic}% of Basic
+                  </div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Conveyance</div>
+                  <div className="profile-detail-value">{money(latestStructure.conveyanceMonthly)}/month</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Provident Fund</div>
+                  <div className="profile-detail-value">{money(latestStructure.pfMonthlyAmount)}/month</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Professional Tax</div>
+                  <div className="profile-detail-value">{money(latestStructure.professionalTax)}/month</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">PT applies once gross pay reaches</div>
+                  <div className="profile-detail-value">{money(latestStructure.professionalTaxThreshold)}</div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="card-section-subtitle">No salary structure recorded yet for this employee.</p>
+          )}
+
+          <div className="modal-actions" style={{ justifyContent: "flex-start" }}>
+            <Button type="button" variant="secondary" onClick={() => setIsStructureModalOpen(true)}>
+              Update Salary Structure
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {pastStructures.length > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-section">
+            <span className="card-section-title">Past salary structures</span>
+            <p className="card-section-subtitle">Earlier entries, most recent first - each was effective until the next one started.</p>
+
+            {pastStructures.map((entry, index) => (
+              <div key={entry.id} style={{ marginTop: index === 0 ? 0 : 24, paddingTop: index === 0 ? 0 : 24, borderTop: index === 0 ? "none" : "1px solid var(--border-color, #e5e7eb)" }}>
+                <p className="card-section-subtitle">
+                  Effective from <strong>{formatMonth(entry.effectiveFrom)}</strong> · CTC (annual): <strong>{money(entry.ctc)}</strong>
+                </p>
+
+                <div className="profile-detail-grid">
+                  <div>
+                    <div className="profile-detail-label">Basic</div>
+                    <div className="profile-detail-value">{entry.basicPercentOfCtc}% of monthly CTC</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">HRA</div>
+                    <div className="profile-detail-value">{entry.hraPercentOfBasic}% of Basic</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">LTA</div>
+                    <div className="profile-detail-value">{entry.ltaPercentOfBasic}% of Basic</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Guaranteed Allowance</div>
+                    <div className="profile-detail-value">{entry.guaranteedAllowancePercentOfBasic}% of Basic</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Conveyance</div>
+                    <div className="profile-detail-value">{money(entry.conveyanceMonthly)}/month</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Provident Fund</div>
+                    <div className="profile-detail-value">{money(entry.pfMonthlyAmount)}/month</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Professional Tax</div>
+                    <div className="profile-detail-value">{money(entry.professionalTax)}/month</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">PT applies once gross pay reaches</div>
+                    <div className="profile-detail-value">{money(entry.professionalTaxThreshold)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isStructureModalOpen && (
+        <UpdateSalaryStructureModal
+          userId={id}
+          onClose={() => setIsStructureModalOpen(false)}
+          onSuccess={() => {
+            setIsStructureModalOpen(false);
+            setSuccess("Salary structure updated.");
+            loadUser();
+            loadStructureHistory();
+          }}
+        />
+      )}
+
+      <TaxComputationSection userId={id} taxRegime={user.taxRegime} joiningDate={user.joiningDate} />
 
       <div className="card">
         <div className="card-section">

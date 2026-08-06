@@ -3,8 +3,8 @@ import "./Modal.css";
 
 export default function Modal({ title, onClose, children }) {
   return (
-    <div className="modal-overlay" onMouseDown={onClose}>
-      <div className="modal-panel" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal-panel">
         <div className="modal-header">
           <span className="modal-title">{title}</span>
           <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Close">

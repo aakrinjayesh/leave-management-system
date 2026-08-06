@@ -11,6 +11,7 @@ const DOCUMENT_FIELD_BY_TYPE = {
   aadhar: "aadharDocumentUrl",
   bank: "bankDocumentUrl",
   photo: "photoUrl",
+  document: "documentUrl",
 };
 
 const documentPath = (filename) => path.join(EMPLOYEE_DOCUMENT_DIR, path.basename(filename));

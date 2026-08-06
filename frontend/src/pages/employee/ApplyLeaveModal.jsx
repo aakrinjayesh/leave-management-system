@@ -153,7 +153,7 @@ export default function ApplyLeaveModal({ onClose, onSuccess }) {
           </p>
 
           <FormSelect label="Leave type" value={form.leavePolicyId} onChange={handleChange("leavePolicyId")}>
-            <option value="">Select a leave type</option>
+            <option value="" hidden></option>
             {policies.map((policy) => (
               <option key={policy.id} value={policy.id}>
                 {policy.leaveName}

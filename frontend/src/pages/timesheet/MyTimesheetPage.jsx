@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, ListChecks, Save, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileCheck, ListChecks, Paperclip, Save, Trash2 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextInput from "../../components/common/TextInput";
 import FormSelect from "../../components/common/FormSelect";
@@ -11,6 +11,7 @@ import * as timesheetApi from "../../api/employeeTimesheet.api";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
 import { combineHoursMinutes, formatHoursMinutes, splitHoursMinutes } from "../../utils/formatDuration";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { formatProjectAssigned } from "../../utils/formatProjectAssigned";
 import "../../styles/dashboardShared.css";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
@@ -37,6 +38,12 @@ export default function MyTimesheetPage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [savingDate, setSavingDate] = useState(null);
+  const [attachment, setAttachment] = useState(null);
+  const [attachmentError, setAttachmentError] = useState("");
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [projectAssigned, setProjectAssigned] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [projects, setProjects] = useState([]);
 
   const loadWeek = (param) =>
     timesheetApi.getMyEntries(param || undefined).then((res) => {
@@ -57,12 +64,41 @@ export default function MyTimesheetPage() {
         };
       });
       setRowState(nextRowState);
+      // Sticky default: pre-fill from this week's own submission if it has
+      // one already (e.g. a rejected week being edited again), otherwise
+      // fall back to whatever the employee picked most recently.
+      setProjectAssigned(res.submission?.projectAssigned ?? res.lastProjectAssigned ?? "");
+      setProjectId(res.submission?.projectId ?? res.lastProjectId ?? "");
     });
   const loadSubmissions = () => timesheetApi.getMySubmissions().then((res) => setSubmissions(res.submissions));
 
   useEffect(() => {
     loadWeek(weekParam);
+    setAttachment(null);
+    setAttachmentError("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekParam]);
+
+  useEffect(() => {
+    timesheetApi.listProjects().then((res) => setProjects(res.projects));
+  }, []);
+
+  const handleAttachmentChange = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setAttachmentError("");
+    setIsUploadingAttachment(true);
+    try {
+      const uploaded = await timesheetApi.uploadAttachment(file);
+      setAttachment(uploaded);
+    } catch (err) {
+      setAttachmentError(getErrorMessage(err, "Couldn't upload this file. Please try again."));
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
 
   useEffect(() => {
     loadSubmissions();
@@ -149,10 +185,31 @@ export default function MyTimesheetPage() {
   const handleSubmitWeek = async () => {
     setError("");
     setSuccessMessage("");
+
+    if (!attachment) {
+      setError("Please upload this week's Excel sheet before submitting.");
+      return;
+    }
+    if (!projectAssigned) {
+      setError("Please select a project type before submitting.");
+      return;
+    }
+    if (!projectId) {
+      setError("Please select a project before submitting.");
+      return;
+    }
+
     setSavingDate("__submit__");
     try {
-      await timesheetApi.submitWeek(toDateInputValue(data.weekStartDate));
+      await timesheetApi.submitWeek(
+        toDateInputValue(data.weekStartDate),
+        attachment.attachmentOriginalName,
+        attachment.attachmentStoredName,
+        projectAssigned,
+        projectId
+      );
       setSuccessMessage("Timesheet submitted for approval.");
+      setAttachment(null);
       await loadWeek(weekParam);
       await loadSubmissions();
     } catch (err) {
@@ -197,6 +254,10 @@ export default function MyTimesheetPage() {
               {data.submission && (
                 <div className="remarks-note">
                   <StatusBadge status={data.submission.status} /> Submitted {formatDate(data.submission.submittedAt)}.
+                  {" Project Type: "}
+                  {formatProjectAssigned(data.submission.projectAssigned)}.
+                  {" Project Name: "}
+                  {data.submission.project?.name || "—"}.
                   {data.submission.managerRemarks ? ` Remarks: ${data.submission.managerRemarks}` : ""}
                   {data.submission.status === "REJECTED" && " You can edit the entries below and submit this week again."}
                 </div>
@@ -207,6 +268,61 @@ export default function MyTimesheetPage() {
           <div className="card" style={{ marginBottom: 20 }}>
             <div className="card-section">
               <span className="card-section-title">This week</span>
+
+              {(!data.submission || data.submission.status === "REJECTED") && (
+                <div className="form-three-col" style={{ marginBottom: 20 }}>
+                  <div className="field">
+                    <label className="field-label">Project Type</label>
+                    <FormSelect value={projectAssigned} onChange={(e) => setProjectAssigned(e.target.value)}>
+                      <option value="">Select…</option>
+                      <option value="ASSIGNED">Client Project</option>
+                      <option value="NOT_ASSIGNED">Internal Project</option>
+                    </FormSelect>
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Project Name</label>
+                    <FormSelect value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                      <option value="">Select…</option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </FormSelect>
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">This week's Excel sheet</label>
+
+                    {attachment ? (
+                      <div className="attachment-uploaded-row">
+                        <FileCheck size={16} />
+                        <span>{attachment.attachmentOriginalName}</span>
+                        <button type="button" className="link-btn" onClick={() => setAttachment(null)}>
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        type="file"
+                        className="field-input"
+                        accept=".xls,.xlsx"
+                        onChange={handleAttachmentChange}
+                        disabled={isUploadingAttachment}
+                      />
+                    )}
+
+                    {isUploadingAttachment && <p className="helper-text">Uploading…</p>}
+                    {attachmentError && <Alert type="error">{attachmentError}</Alert>}
+
+                    <p className="helper-text">
+                      <Paperclip size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                      Required before submitting.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="data-table-wrap">
                 <table className="data-table">
@@ -327,6 +443,8 @@ export default function MyTimesheetPage() {
                         <th>Total hours</th>
                         <th>Sent to</th>
                         <th>Status</th>
+                        <th>Project Type</th>
+                        <th>Project Name</th>
                         <th>Remarks</th>
                       </tr>
                     </thead>
@@ -341,6 +459,8 @@ export default function MyTimesheetPage() {
                           <td>
                             <StatusBadge status={sub.status} />
                           </td>
+                          <td className="table-cell-secondary">{formatProjectAssigned(sub.projectAssigned)}</td>
+                          <td className="table-cell-secondary">{sub.project?.name || "—"}</td>
                           <td className="table-cell-secondary">{sub.managerRemarks || "—"}</td>
                         </tr>
                       ))}

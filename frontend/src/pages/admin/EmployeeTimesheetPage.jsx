@@ -34,6 +34,7 @@ export default function AdminEmployeeTimesheetPage() {
         key={id}
         fetchTimesheet={(view, date) => adminApi.getUserTimesheet(id, view, date)}
         exportTimesheet={(view, date) => adminApi.exportUserTimesheet(id, view, date)}
+        downloadAttachment={(submissionId) => adminApi.downloadTimesheetSubmissionAttachment(submissionId)}
         onDataLoad={setEmployee}
       />
     </DashboardLayout>

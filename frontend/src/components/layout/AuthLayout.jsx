@@ -1,4 +1,5 @@
 import { CalendarCheck2 } from "lucide-react";
+import aakrinLogo from "../../assets/aakrin-logo.png";
 import "./AuthLayout.css";
 
 function BrandMark({ variant = "light" }) {
@@ -7,7 +8,7 @@ function BrandMark({ variant = "light" }) {
       <span className="auth-brand-mark-icon">
         <CalendarCheck2 size={20} />
       </span>
-      Aakrin Leave
+      Aakrin Workspace
     </div>
   );
 }
@@ -15,6 +16,9 @@ function BrandMark({ variant = "light" }) {
 export default function AuthLayout({ title, subtitle, children }) {
   return (
     <div className="auth-layout">
+      <div className="app-watermark" aria-hidden="true">
+        <img src={aakrinLogo} alt="" />
+      </div>
       <aside className="auth-layout-brand">
         <BrandMark />
         <div className="auth-brand-copy">

@@ -1,18 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Settings2 } from "lucide-react";
+import { FileText } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import Button from "../../components/common/Button";
 import Spinner from "../../components/common/Spinner";
 import StatusBadge from "../../components/common/StatusBadge";
-import SalaryStructureModal from "./SalaryStructureModal";
 import * as adminApi from "../../api/admin.api";
 import "../../styles/dashboardShared.css";
 
 export default function PayslipsPage() {
   const navigate = useNavigate();
   const [users, setUsers] = useState(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const loadUsers = () =>
     adminApi.listUsers().then((data) => setUsers(data.users.filter((u) => u.userType !== "ADMIN")));
@@ -28,10 +25,6 @@ export default function PayslipsPage() {
           <h1>Payslips</h1>
           <p>Generate and download a monthly payslip for any employee.</p>
         </div>
-        <Button variant="secondary" onClick={() => setIsSettingsOpen(true)} className="page-header-btn">
-          <Settings2 size={16} />
-          Salary structure settings
-        </Button>
       </div>
 
       <div className="card">
@@ -87,8 +80,6 @@ export default function PayslipsPage() {
           )}
         </div>
       </div>
-
-      {isSettingsOpen && <SalaryStructureModal onClose={() => setIsSettingsOpen(false)} onSuccess={() => setIsSettingsOpen(false)} />}
     </DashboardLayout>
   );
 }

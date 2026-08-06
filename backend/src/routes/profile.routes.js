@@ -10,5 +10,9 @@ router.use(authenticate);
 
 router.get("/manager-options", controller.getManagerOptions);
 router.put("/manager", validate(updateManagerSchema), controller.updateMyManager);
+router.put("/anniversary-celebration-seen", controller.markAnniversaryCelebrationSeen);
+router.get("/tax-computation", controller.getMyIncomeTaxComputation);
+router.get("/tax-computation-generations", controller.listMyIncomeTaxComputationGenerations);
+router.get("/tax-computation-generations/:id/pdf", controller.downloadMyIncomeTaxComputationPdf);
 
 module.exports = router;

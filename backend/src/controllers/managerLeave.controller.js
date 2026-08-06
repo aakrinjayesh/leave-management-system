@@ -189,6 +189,9 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
     include: { leavePolicy: true },
   });
 
+  new ApiResponse(201, "Leave logged and approved.", { leaveRequest }).send(res);
+
+  // Sent after the response so the manager doesn't wait on the email round-trip.
   try {
     await sendLeaveDecisionEmail({
       to: employee.email,
@@ -204,8 +207,6 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send manager-logged leave email:", err);
   }
-
-  new ApiResponse(201, "Leave logged and approved.", { leaveRequest }).send(res);
 });
 
 const listTeamLeaveRequests = asyncHandler(async (req, res) => {
@@ -295,6 +296,9 @@ const approveLeaveRequest = asyncHandler(async (req, res) => {
     },
   });
 
+  new ApiResponse(200, "Leave request approved.", { leaveRequest: updated }).send(res);
+
+  // Sent after the response so the manager doesn't wait on the email round-trip.
   try {
     await sendLeaveDecisionEmail({
       to: leaveRequest.user.email,
@@ -310,8 +314,6 @@ const approveLeaveRequest = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send leave approved email:", err);
   }
-
-  new ApiResponse(200, "Leave request approved.", { leaveRequest: updated }).send(res);
 });
 
 const rejectLeaveRequest = asyncHandler(async (req, res) => {
@@ -333,6 +335,9 @@ const rejectLeaveRequest = asyncHandler(async (req, res) => {
     },
   });
 
+  new ApiResponse(200, "Leave request rejected.", { leaveRequest: updated }).send(res);
+
+  // Sent after the response so the manager doesn't wait on the email round-trip.
   try {
     await sendLeaveDecisionEmail({
       to: leaveRequest.user.email,
@@ -348,8 +353,6 @@ const rejectLeaveRequest = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send leave rejected email:", err);
   }
-
-  new ApiResponse(200, "Leave request rejected.", { leaveRequest: updated }).send(res);
 });
 
 const getTeamCalendar = asyncHandler(async (req, res) => {

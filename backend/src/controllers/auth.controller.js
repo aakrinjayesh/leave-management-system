@@ -8,6 +8,7 @@ const { REFRESH_TOKEN_COOKIE, OTP_PURPOSE, USER_TYPE, USER_STATUS } = require(".
 const { isEmployeeDomainEmail } = require("../utils/emailDomain.util");
 const otpService = require("../services/otp.service");
 const tokenService = require("../services/token.service");
+const payrollService = require("../services/payroll.service");
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -28,7 +29,8 @@ const maskTail = (value) => {
 // isManager and manager are derived at read time rather than stored, so they
 // always reflect the current org chart even as managerId assignments change.
 const toSafeUser = async (user) => {
-  const [manager, directReportsCount, customFields] = await Promise.all([
+  const now = new Date();
+  const [manager, directReportsCount, customFields, salaryStructure, salaryStructureHistory] = await Promise.all([
     user.managerId
       ? prisma.user.findUnique({
           where: { id: user.managerId },
@@ -41,6 +43,11 @@ const toSafeUser = async (user) => {
       select: { id: true, label: true, value: true },
       orderBy: { createdAt: "asc" },
     }),
+    // Whatever salary structure is currently in effect for this employee -
+    // lets their own Profile page show exactly what admin has fixed for them.
+    payrollService.getEffectiveSalaryConfig(user.id, now.getFullYear(), now.getMonth() + 1),
+    // Every past entry too, so the employee can see how their structure changed over time.
+    payrollService.getSalaryStructureHistory(user.id),
   ]);
 
   return {
@@ -52,6 +59,7 @@ const toSafeUser = async (user) => {
     phone: user.phone,
     birthDate: user.birthDate,
     joiningDate: user.joiningDate,
+    lastAnniversaryCelebratedYears: user.lastAnniversaryCelebratedYears,
     gender: user.gender,
     fatherName: user.fatherName,
     spouseName: user.spouseName,
@@ -71,6 +79,38 @@ const toSafeUser = async (user) => {
     ifscCode: user.ifscCode,
     pfNumber: user.pfNumber,
     salaryCtc: user.salaryCtc,
+    salaryStructure: salaryStructure
+      ? {
+          id: salaryStructure.id,
+          ctc: salaryStructure.ctc,
+          effectiveFrom: salaryStructure.effectiveFrom,
+          basicPercentOfCtc: salaryStructure.basicPercentOfCtc,
+          hraPercentOfBasic: salaryStructure.hraPercentOfBasic,
+          ltaPercentOfBasic: salaryStructure.ltaPercentOfBasic,
+          guaranteedAllowancePercentOfBasic: salaryStructure.guaranteedAllowancePercentOfBasic,
+          conveyanceMonthly: salaryStructure.conveyanceMonthly,
+          pfMonthlyAmount: salaryStructure.pfMonthlyAmount,
+          professionalTax: salaryStructure.professionalTax,
+          professionalTaxThreshold: salaryStructure.professionalTaxThreshold,
+        }
+      : null,
+    // Every earlier entry, excluding whichever one is "current" above - lets
+    // the employee's Profile page show how their structure changed over time.
+    pastSalaryStructures: salaryStructureHistory
+      .filter((entry) => entry.id !== salaryStructure?.id)
+      .map((entry) => ({
+        id: entry.id,
+        ctc: entry.ctc,
+        effectiveFrom: entry.effectiveFrom,
+        basicPercentOfCtc: entry.basicPercentOfCtc,
+        hraPercentOfBasic: entry.hraPercentOfBasic,
+        ltaPercentOfBasic: entry.ltaPercentOfBasic,
+        guaranteedAllowancePercentOfBasic: entry.guaranteedAllowancePercentOfBasic,
+        conveyanceMonthly: entry.conveyanceMonthly,
+        pfMonthlyAmount: entry.pfMonthlyAmount,
+        professionalTax: entry.professionalTax,
+        professionalTaxThreshold: entry.professionalTaxThreshold,
+      })),
     customFields,
     userType: user.userType,
     status: user.status,

@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Calculator, Download, Eye, FileCheck2 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextInput from "../../components/common/TextInput";
+import MonthPicker from "../../components/common/MonthPicker";
+import FormSelect from "../../components/common/FormSelect";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
@@ -13,6 +15,32 @@ import "../../styles/dashboardShared.css";
 
 const currentMonthValue = () => new Date().toISOString().slice(0, 7);
 const money = (value) => `₹${(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// India's Income Tax financial year is always April-March, fixed by law -
+// independent of the company's own configurable fiscal year setting.
+const getCurrentFinancialYear = () => {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  return month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+};
+const fyLabel = (year) => `FY ${year}-${String(year + 1).slice(-2)}`;
+const REGIME_LABELS = { NEW: "New Regime", OLD: "Old Regime" };
+
+const getFinancialYear = (date) => {
+  const d = new Date(date);
+  const month = d.getMonth() + 1;
+  return month >= 4 ? d.getFullYear() : d.getFullYear() - 1;
+};
+
+// Every financial year from when this employee joined through the current
+// one, newest first - so admin can go back to their very first year on file.
+const getFinancialYearOptions = (joiningDate) => {
+  const current = getCurrentFinancialYear();
+  const earliest = joiningDate ? Math.min(getFinancialYear(joiningDate), current) : current - 2;
+  const options = [];
+  for (let year = current; year >= earliest; year--) options.push(year);
+  return options;
+};
 const MONTH_LABELS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -55,11 +83,22 @@ function EmployeePayslipsContent({ id }) {
   const [downloadingId, setDownloadingId] = useState(null);
   const [previewingId, setPreviewingId] = useState(null);
 
+  const [taxFinancialYear, setTaxFinancialYear] = useState(getCurrentFinancialYear());
+  const [taxPreview, setTaxPreview] = useState(null);
+  const [taxGenerations, setTaxGenerations] = useState(null);
+  const [isCalculatingTax, setIsCalculatingTax] = useState(false);
+  const [isGeneratingTax, setIsGeneratingTax] = useState(false);
+  const [taxDownloadingId, setTaxDownloadingId] = useState(null);
+  const [taxPreviewingId, setTaxPreviewingId] = useState(null);
+
   const loadHistory = () => adminApi.listPayslips(id).then((data) => setHistory(data.payslips));
+  const loadTaxGenerations = () =>
+    adminApi.listIncomeTaxComputationGenerations(id).then((data) => setTaxGenerations(data.generations));
 
   useEffect(() => {
     adminApi.getUserDetails(id).then((data) => setUser(data.user));
     loadHistory();
+    loadTaxGenerations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -122,6 +161,64 @@ function EmployeePayslipsContent({ id }) {
     }
   };
 
+  const handleCalculateTax = async () => {
+    setError("");
+    setSuccess("");
+    setIsCalculatingTax(true);
+    try {
+      const data = await adminApi.getIncomeTaxComputation(id, taxFinancialYear);
+      setTaxPreview(data.statement);
+    } catch (err) {
+      setTaxPreview(null);
+      setError(getErrorMessage(err, "Couldn't calculate this income tax computation. Please try again."));
+    } finally {
+      setIsCalculatingTax(false);
+    }
+  };
+
+  const handleGenerateTax = async () => {
+    setError("");
+    setSuccess("");
+    setIsGeneratingTax(true);
+    try {
+      await adminApi.generateIncomeTaxComputation(id, taxFinancialYear);
+      setSuccess(`Income tax computation generated for ${fyLabel(taxFinancialYear)}.`);
+      setTaxPreview(null);
+      loadTaxGenerations();
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't generate this income tax computation. Please try again."));
+    } finally {
+      setIsGeneratingTax(false);
+    }
+  };
+
+  const handleDownloadTax = async (generation) => {
+    setTaxDownloadingId(generation.id);
+    try {
+      const response = await adminApi.downloadIncomeTaxComputationPdf(generation.id);
+      downloadBlobAsFile(
+        response.data,
+        getFilenameFromResponse(response, `income-tax-computation-FY${generation.financialYear}.pdf`)
+      );
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't download this income tax computation."));
+    } finally {
+      setTaxDownloadingId(null);
+    }
+  };
+
+  const handlePreviewTax = async (generation) => {
+    setTaxPreviewingId(generation.id);
+    try {
+      const response = await adminApi.downloadIncomeTaxComputationPdf(generation.id);
+      openBlobInNewTab(response.data);
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't preview this income tax computation."));
+    } finally {
+      setTaxPreviewingId(null);
+    }
+  };
+
   if (!user) {
     return (
       <DashboardLayout title="Admin">
@@ -161,13 +258,11 @@ function EmployeePayslipsContent({ id }) {
                 Month
               </label>
               <div className="field-input-wrap">
-                <input
+                <MonthPicker
                   id="payslip-month"
-                  type="month"
-                  className="field-input"
                   value={monthValue}
-                  onChange={(e) => {
-                    setMonthValue(e.target.value);
+                  onChange={(newValue) => {
+                    setMonthValue(newValue);
                     setPreview(null);
                   }}
                 />
@@ -340,6 +435,184 @@ function EmployeePayslipsContent({ id }) {
                             className="row-action-btn"
                             disabled={downloadingId === payslip.id}
                             onClick={() => handleDownload(payslip)}
+                          >
+                            <Download size={14} />
+                            Download
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-section">
+          <span className="card-section-title">Income Tax Computation</span>
+          <p className="card-section-subtitle">
+            Generate a dated Income Tax Computation Statement for a financial year - each generation is saved
+            permanently and can be downloaded again later, even after new payslips are added.
+          </p>
+
+          <div className="form-two-col">
+            <FormSelect
+              label="Financial year"
+              value={taxFinancialYear}
+              onChange={(e) => {
+                setTaxFinancialYear(Number(e.target.value));
+                setTaxPreview(null);
+              }}
+            >
+              {getFinancialYearOptions(user.joiningDate).map((year) => (
+                <option key={year} value={year}>
+                  {fyLabel(year)}
+                </option>
+              ))}
+            </FormSelect>
+          </div>
+
+          <div className="modal-actions" style={{ justifyContent: "flex-start" }}>
+            <Button variant="secondary" onClick={handleCalculateTax} isLoading={isCalculatingTax}>
+              <Calculator size={16} />
+              Calculate
+            </Button>
+            {taxPreview && (
+              <Button onClick={handleGenerateTax} isLoading={isGeneratingTax}>
+                <FileCheck2 size={16} />
+                Generate &amp; save
+              </Button>
+            )}
+          </div>
+
+          {taxPreview && (
+            <div style={{ marginTop: 8, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <span
+                  className={`status-badge ${taxPreview.mode === "FINAL" ? "status-badge-active" : "status-badge-pending"}`}
+                >
+                  {taxPreview.mode === "FINAL" ? "Final" : "Projected"}
+                </span>
+                <span className="card-section-subtitle" style={{ margin: 0 }}>
+                  Based on {taxPreview.monthsElapsed} of 12 months' payslips generated this financial year.
+                </span>
+              </div>
+
+              <div className="profile-detail-grid">
+                <div>
+                  <div className="profile-detail-label">Gross Salary</div>
+                  <div className="profile-detail-value">{money(taxPreview.grossSalary)}</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Standard Deduction</div>
+                  <div className="profile-detail-value">{money(taxPreview.deductions.standardDeduction)}</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Taxable Salary</div>
+                  <div className="profile-detail-value">{money(taxPreview.taxableSalary)}</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Total Income (rounded)</div>
+                  <div className="profile-detail-value">{money(taxPreview.totalIncomeRounded)}</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Tax on Total Income</div>
+                  <div className="profile-detail-value">{money(taxPreview.slabTax)}</div>
+                </div>
+                {taxPreview.rebate87A > 0 && (
+                  <div>
+                    <div className="profile-detail-label">Rebate u/s 87A</div>
+                    <div className="profile-detail-value">-{money(taxPreview.rebate87A)}</div>
+                  </div>
+                )}
+                <div>
+                  <div className="profile-detail-label">Cess (4%)</div>
+                  <div className="profile-detail-value">{money(taxPreview.cess)}</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Total Tax Liability</div>
+                  <div className="profile-detail-value">{money(taxPreview.totalTaxLiability)}</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">TDS Deducted So Far</div>
+                  <div className="profile-detail-value">{money(taxPreview.tdsDeductedSoFar)}</div>
+                </div>
+                <div>
+                  <div className="profile-detail-label">Tax Payable / Refundable</div>
+                  <div className="profile-detail-value">
+                    {taxPreview.taxPayable > 0
+                      ? `${money(taxPreview.taxPayable)} payable`
+                      : taxPreview.taxRefundable > 0
+                        ? `${money(taxPreview.taxRefundable)} refundable`
+                        : "None"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!taxGenerations ? (
+            <div style={{ display: "flex", justifyContent: "center", padding: "24px 0" }}>
+              <Spinner size={24} />
+            </div>
+          ) : taxGenerations.length === 0 ? (
+            <div className="empty-state">
+              <p>No income tax computations generated yet.</p>
+            </div>
+          ) : (
+            <div className="data-table-wrap" style={{ marginTop: 20 }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Financial year</th>
+                    <th>Regime</th>
+                    <th>Status</th>
+                    <th>Tax Payable/Refundable</th>
+                    <th>Generated</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taxGenerations.map((generation) => (
+                    <tr key={generation.id}>
+                      <td className="table-cell-primary">{fyLabel(generation.financialYear)}</td>
+                      <td className="table-cell-secondary">{REGIME_LABELS[generation.regime] || generation.regime}</td>
+                      <td className="table-cell-secondary">{generation.mode === "FINAL" ? "Final" : "Projected"}</td>
+                      <td className="table-cell-secondary">
+                        {generation.taxPayable > 0
+                          ? `${money(generation.taxPayable)} payable`
+                          : generation.taxRefundable > 0
+                            ? `${money(generation.taxRefundable)} refundable`
+                            : "None"}
+                      </td>
+                      <td className="table-cell-secondary">
+                        {new Date(generation.generatedAt).toLocaleString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            disabled={taxPreviewingId === generation.id}
+                            onClick={() => handlePreviewTax(generation)}
+                          >
+                            <Eye size={14} />
+                            Preview
+                          </button>
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            disabled={taxDownloadingId === generation.id}
+                            onClick={() => handleDownloadTax(generation)}
                           >
                             <Download size={14} />
                             Download

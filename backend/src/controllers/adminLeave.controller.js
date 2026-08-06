@@ -59,6 +59,61 @@ const reactivateLeavePolicy = asyncHandler(async (req, res) => {
   new ApiResponse(200, "Leave type reactivated.", { policy }).send(res);
 });
 
+// Distinct fiscal years that have any leave-balance data on file, newest
+// first - used to populate the "view a past year" dropdown. A year only
+// shows up once at least one employee's balance has been created for it.
+const getLeavePolicyHistoryYears = asyncHandler(async (req, res) => {
+  const rows = await prisma.leaveBalance.findMany({
+    distinct: ["year"],
+    select: { year: true },
+    orderBy: { year: "desc" },
+  });
+  new ApiResponse(200, "OK", { years: rows.map((r) => r.year) }).send(res);
+});
+
+// Read-only snapshot of what each leave type's allocation actually was for a
+// past fiscal year - reconstructed from employees' LeaveBalance rows (which
+// froze the allocation at the time each was created), since LeavePolicy
+// itself only ever holds the current live value.
+const getLeavePolicyHistory = asyncHandler(async (req, res) => {
+  const year = Number(req.query.year);
+  if (!year) {
+    throw ApiError.badRequest("Please provide a year.");
+  }
+
+  const policies = await prisma.leavePolicy.findMany({ orderBy: { leaveName: "asc" } });
+
+  const history = await Promise.all(
+    policies.map(async (policy) => {
+      if (policy.isUnlimited) {
+        return {
+          id: policy.id,
+          leaveName: policy.leaveName,
+          isUnlimited: true,
+          isUnpaid: policy.isUnpaid,
+          allocatedLeaves: null,
+          hasData: true,
+        };
+      }
+
+      const sample = await prisma.leaveBalance.findFirst({
+        where: { leavePolicyId: policy.id, year },
+      });
+
+      return {
+        id: policy.id,
+        leaveName: policy.leaveName,
+        isUnlimited: false,
+        isUnpaid: policy.isUnpaid,
+        allocatedLeaves: sample ? sample.allocatedLeaves : null,
+        hasData: Boolean(sample),
+      };
+    })
+  );
+
+  new ApiResponse(200, "OK", { year, policies: history }).send(res);
+});
+
 // ---------- Holidays ----------
 // Only today-or-future dates can be added/edited/removed - past holidays are
 // locked because leave requests may already have been computed against them.
@@ -151,6 +206,8 @@ module.exports = {
   updateLeavePolicy,
   deactivateLeavePolicy,
   reactivateLeavePolicy,
+  getLeavePolicyHistoryYears,
+  getLeavePolicyHistory,
   listHolidays,
   createHoliday,
   updateHoliday,

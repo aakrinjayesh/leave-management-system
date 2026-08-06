@@ -32,6 +32,11 @@ enum LeaveStatus {
     CANCELLED
 }
 
+enum ProjectAssignmentStatus {
+    ASSIGNED
+    NOT_ASSIGNED
+}
+
 enum DayOfWeek {
     MONDAY
     TUESDAY
@@ -68,6 +73,17 @@ enum TaxRegime {
     NEW
 }
 
+enum ResidentialStatus {
+    RESIDENT
+    NON_RESIDENT
+    RESIDENT_NOT_ORDINARILY_RESIDENT
+}
+
+enum IncomeTaxComputationMode {
+    PROJECTED
+    FINAL
+}
+
 model User {
     id           Int     @id @default(autoincrement())
     employeeCode String? @unique
@@ -82,6 +98,11 @@ model User {
     joiningDate DateTime?
     birthDate   DateTime?
     gender      Gender?
+
+    // The highest completed-years count this employee has already been shown
+    // an anniversary celebration for - lets it fire again at each new
+    // anniversary (1, then 2, then 3...) without repeating within the same year.
+    lastAnniversaryCelebratedYears Int?
 
     // Tracks the year the birthday email was last sent, so the daily job
     // never double-sends if it happens to run more than once on the same day.
@@ -111,15 +132,27 @@ model User {
     location    String?
     taxRegime   TaxRegime?
 
+    // Extra identity fields only needed for the annual Income Tax Computation
+    // Statement - admin-managed only, same as the other HR/payroll fields.
+    residentialAddress String?
+    wardNo             String?
+    micrCode           String?
+    residentialStatus  ResidentialStatus?
+
     // Uploaded document filenames (stored on disk, same pattern as leave
     // attachments) - admin-only to upload, view, and download.
     panDocumentUrl    String?
     aadharDocumentUrl String?
     bankDocumentUrl   String?
     photoUrl          String?
+    documentUrl       String?
 
     userType UserType
     status   UserStatus @default(ACTIVE)
+
+    // Latest exit date, shown on the Accounts table - cleared on reactivate.
+    // Full history of every exit/rehire cycle lives in ExitRecord below.
+    exitDate DateTime?
 
     managerId Int?
 
@@ -145,11 +178,197 @@ model User {
     timesheetSubmissions          TimesheetSubmission[] @relation("EmployeeTimesheetSubmissions")
     routedTimesheetSubmissions    TimesheetSubmission[] @relation("RoutedTimesheetSubmissions")
     approvedTimesheetSubmissions  TimesheetSubmission[] @relation("ApprovedTimesheetSubmissions")
+    projects                      Project[]
 
     payslips          Payslip[]
     generatedPayslips Payslip[] @relation("PayslipsGenerated")
 
     customFields EmployeeCustomField[]
+
+    salaryStructureHistory        SalaryStructureHistory[]
+    recordedSalaryStructureEntries SalaryStructureHistory[] @relation("SalaryStructureHistoryRecordedBy")
+
+    exitRecords         ExitRecord[]
+    recordedExitRecords ExitRecord[] @relation("ExitRecordsRecordedBy")
+
+    offerLetters          OfferLetter[]
+    generatedOfferLetters OfferLetter[] @relation("OfferLettersGeneratedBy")
+
+    taxDeclarations         TaxDeclaration[]
+    recordedTaxDeclarations TaxDeclaration[] @relation("TaxDeclarationRecordedBy")
+
+    incomeTaxComputationGenerations         IncomeTaxComputationGeneration[]
+    generatedIncomeTaxComputationGenerations IncomeTaxComputationGeneration[] @relation("IncomeTaxComputationGenerationsGeneratedBy")
+}
+
+// One row per exit event - kept permanently even across reactivate/rehire
+// cycles, so the full history (and each exit's relieving letter text) is
+// never lost, unlike User.exitDate which only reflects the latest one.
+model ExitRecord {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    exitDate            DateTime
+    relievingLetterText String   @db.Text
+
+    recordedById Int
+
+    createdAt DateTime @default(now())
+
+    user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    recordedBy User @relation("ExitRecordsRecordedBy", fields: [recordedById], references: [id])
+
+    @@index([userId])
+}
+
+// One row per generated offer letter - never overwritten, so admin can
+// regenerate later (e.g. after a CTC negotiation) without losing the earlier
+// version. The PDF itself isn't stored - it's re-rendered from letterText on
+// download, same pattern as ExitRecord.relievingLetterText.
+model OfferLetter {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    offerDate  DateTime
+    letterText String   @db.Text
+
+    generatedById Int
+
+    createdAt DateTime @default(now())
+
+    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    generatedBy User @relation("OfferLettersGeneratedBy", fields: [generatedById], references: [id])
+
+    @@index([userId])
+}
+
+// One row per CTC + salary-structure change, so payslips generated for a
+// past month use whatever CTC and structure percentages actually applied
+// then instead of whatever's live today. `effectiveFrom` is stored as the
+// 1st of the month it starts applying - "what applied during month X" is
+// just the latest row on/before X. Employees with no rows here yet fall back
+// to the live User.salaryCtc field plus a fixed default structure (see
+// getEffectiveSalaryConfig), so this only needs to be populated when a raise
+// or structure change actually happens, or retroactively for corrections.
+model SalaryStructureHistory {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    ctc           Float
+    effectiveFrom DateTime
+
+    // Same fields the old company-wide SalaryStructureConfig used to hold,
+    // now captured per employee per effective period instead of one global
+    // value shared by everyone.
+    basicPercentOfCtc                 Float
+    hraPercentOfBasic                 Float
+    ltaPercentOfBasic                 Float
+    guaranteedAllowancePercentOfBasic Float
+    conveyanceMonthly                 Float
+    pfMonthlyAmount                   Float
+    professionalTax                   Float
+    professionalTaxThreshold          Float
+
+    createdAt   DateTime @default(now())
+    recordedById Int?
+
+    user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+    recordedBy User? @relation("SalaryStructureHistoryRecordedBy", fields: [recordedById], references: [id])
+
+    @@index([userId, effectiveFrom])
+}
+
+// One row per employee per financial year - only meaningful for employees on
+// the Old Tax Regime, who need these declared to compute HRA exemption and
+// deductions (80C/80D/home loan interest) for the annual Income Tax
+// Computation Statement. New Regime employees don't need this at all (their
+// computation only needs Gross Salary + the flat Standard Deduction).
+// `financialYear` is stored as the starting year (e.g. 2025 means FY 2025-26).
+model TaxDeclaration {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    financialYear Int
+
+    rentPaidAnnual Float @default(0)
+    isMetroCity    Boolean @default(false)
+
+    section80C       Float @default(0)
+    section80D       Float @default(0)
+    homeLoanInterest Float @default(0)
+
+    otherIncomeSavingsInterest Float @default(0)
+    otherIncomeFDInterest      Float @default(0)
+
+    recordedById Int?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+    recordedBy User? @relation("TaxDeclarationRecordedBy", fields: [recordedById], references: [id])
+
+    @@unique([userId, financialYear])
+    @@index([userId])
+}
+
+// One row per "Generate" click - a frozen snapshot of the Income Tax
+// Computation Statement at that exact moment, so it can be looked back on
+// later exactly as it was, even if payslips or the employee's declaration
+// change afterward. Multiple generations can exist for the same employee +
+// financial year (e.g. one in April, another in August) - none get
+// overwritten, same as how Payslip keeps one immutable row per month.
+// Identity fields (name/PAN/address/etc.) aren't duplicated here - those are
+// read live from the employee's profile at PDF render time, since they
+// rarely change and don't need point-in-time freezing the way these figures do.
+model IncomeTaxComputationGeneration {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    financialYear Int
+
+    generatedAt   DateTime @default(now())
+    generatedById Int
+
+    regime TaxRegime
+
+    // Whether this generation was a running estimate or the confirmed final
+    // figure, at the moment it was generated.
+    mode          IncomeTaxComputationMode
+    monthsElapsed Int
+
+    grossSalary       Float
+    standardDeduction Float
+    hraExemption      Float @default(0)
+    section80C        Float @default(0)
+    section80D        Float @default(0)
+    homeLoanInterest  Float @default(0)
+    taxableSalary     Float
+
+    otherIncomeSavingsInterest Float @default(0)
+    otherIncomeFDInterest      Float @default(0)
+
+    totalIncome        Float
+    totalIncomeRounded Float
+
+    slabTax           Float
+    rebate87A         Float @default(0)
+    cess              Float
+    totalTaxLiability Float
+
+    tdsDeductedSoFar Float
+    taxPayable       Float @default(0)
+    taxRefundable    Float @default(0)
+
+    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    generatedBy User @relation("IncomeTaxComputationGenerationsGeneratedBy", fields: [generatedById], references: [id])
+
+    @@index([userId, financialYear])
 }
 
 // Admin-defined ad-hoc fields per employee (label + text value and/or an
@@ -376,32 +595,6 @@ model CompanySettings {
 // Company-wide payroll formula, admin-configurable - a single row (like
 // CompanySettings). Every employee's monthly earnings breakdown is derived
 // from their salaryCtc using these percentages at payslip generation time.
-model SalaryStructureConfig {
-    id Int @id @default(autoincrement())
-
-    basicPercentOfCtc Float @default(40)
-
-    hraPercentOfBasic Float @default(50)
-
-    ltaPercentOfBasic Float @default(8.33)
-
-    guaranteedAllowancePercentOfBasic Float @default(10)
-
-    conveyanceMonthly Float @default(1600)
-
-    // Fixed monthly amount, same for every employee regardless of their
-    // actual Basic (matches the common practice of capping PF contribution
-    // at the EPFO statutory wage ceiling) - applies to both the employee's
-    // deduction and the employer's (informational, CTC-only) contribution.
-    pfMonthlyAmount Float @default(1800)
-
-    // Professional Tax only applies once an employee's gross monthly pay
-    // reaches this threshold - below it, PT is zero.
-    professionalTax          Float @default(200)
-    professionalTaxThreshold Float @default(25000)
-
-    updatedAt DateTime @updatedAt
-}
 
 // One immutable snapshot per employee per month. Once generated it's a
 // historical record - admin can regenerate (overwrite) it if a correction is
@@ -573,6 +766,26 @@ model TimesheetSubmission {
 
     managerRemarks String?
 
+    // The Excel sheet the employee attaches when submitting this week -
+    // mandatory alongside the day-by-day entries. Stored name is the random
+    // on-disk filename; original name is kept so managers/admins download it
+    // under a recognizable name instead of a UUID.
+    attachmentOriginalName String?
+
+    attachmentStoredName String?
+
+    // Whether the employee has a project assigned this week - mandatory to
+    // submit, but "sticky": the frontend pre-fills each new week with the
+    // employee's last choice so they only need to change it when it changes.
+    projectAssigned ProjectAssignmentStatus?
+
+    // Which project this week's hours are against - independent of
+    // projectAssigned above (always required regardless of that choice).
+    // Same "sticky" pre-fill behavior. Relational (not free text) so renaming
+    // a project in the admin-managed list instantly reflects everywhere it's
+    // referenced instead of leaving stale duplicate spellings behind.
+    projectId Int?
+
     submittedAt DateTime @default(now())
 
     approvedAt DateTime?
@@ -589,10 +802,36 @@ model TimesheetSubmission {
 
     approvedBy User? @relation("ApprovedTimesheetSubmissions", fields: [approvedById], references: [id])
 
+    project Project? @relation(fields: [projectId], references: [id])
+
     entries TimesheetEntry[]
 
     @@unique([userId, weekStartDate])
     @@index([userId])
     @@index([routedToId])
     @@index([status])
+    @@index([projectId])
+}
+
+// Admin-managed master list of projects employees pick from when filling
+// their timesheet - keeps names consistent instead of employees free-typing
+// slightly different spellings of the same project. "Deleting" a project
+// deactivates it (isActive = false) rather than removing the row, so past
+// timesheets that already referenced it keep showing its name correctly.
+model Project {
+    id Int @id @default(autoincrement())
+
+    name String @unique
+
+    isActive Boolean @default(true)
+
+    createdById Int
+
+    createdAt DateTime @default(now())
+
+    updatedAt DateTime @updatedAt
+
+    createdBy User @relation(fields: [createdById], references: [id])
+
+    timesheetSubmissions TimesheetSubmission[]
 }

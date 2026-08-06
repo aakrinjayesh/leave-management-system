@@ -13,6 +13,7 @@ router.use(authenticate, authorizeManager);
 router.get("/", controller.listTeamSubmissions);
 router.get("/employees/:id", controller.getEmployeeTimesheet);
 router.get("/employees/:id/export", controller.exportEmployeeTimesheet);
+router.get("/submissions/:id/attachment", controller.getEmployeeTimesheetAttachment);
 router.patch("/:id/approve", validate(approveTimesheetSchema), controller.approveSubmission);
 router.patch("/:id/reject", validate(rejectTimesheetSchema), controller.rejectSubmission);
 

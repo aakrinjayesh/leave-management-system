@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { USER_TYPE, GENDER, MARITAL_STATUS, TAX_REGIME } = require("../utils/constants");
+const { USER_TYPE, GENDER, MARITAL_STATUS, TAX_REGIME, RESIDENTIAL_STATUS } = require("../utils/constants");
 
 const createUserSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required.").max(100),
@@ -92,7 +92,6 @@ const updateUserDetailsSchema = z.object({
   bankName: nullableString(150),
   ifscCode: nullablePattern(IFSC_REGEX, "IFSC code must be in the format ABCD0123456.", 11, { uppercase: true }),
   pfNumber: nullablePattern(PF_NUMBER_REGEX, "PF number can only contain letters, numbers, and slashes.", 30),
-  salaryCtc: z.coerce.number().min(0, "Salary/CTC can't be negative.").nullable().optional(),
   fatherName: nullableString(150),
   spouseName: nullableString(150),
   maritalStatus: z.enum([MARITAL_STATUS.SINGLE, MARITAL_STATUS.MARRIED, MARITAL_STATUS.OTHER]).nullable().optional(),
@@ -102,9 +101,31 @@ const updateUserDetailsSchema = z.object({
   designation: nullableString(100),
   location: nullableString(100),
   taxRegime: z.enum([TAX_REGIME.OLD, TAX_REGIME.NEW]).nullable().optional(),
+  residentialAddress: nullableString(500),
+  wardNo: nullableString(50),
+  micrCode: nullableString(20),
+  residentialStatus: z
+    .enum([
+      RESIDENTIAL_STATUS.RESIDENT,
+      RESIDENTIAL_STATUS.NON_RESIDENT,
+      RESIDENTIAL_STATUS.RESIDENT_NOT_ORDINARILY_RESIDENT,
+    ])
+    .nullable()
+    .optional(),
 });
 
-const updateSalaryStructureSchema = z.object({
+// effectiveFrom arrives as "YYYY-MM" (from the frontend's month picker) and
+// is stored as the 1st of that month. Percent/amount fields mirror what used
+// to be one company-wide SalaryStructureConfig, now captured per employee.
+const recordSalaryStructureSchema = z.object({
+  ctc: z.coerce.number().min(0, "CTC can't be negative."),
+  effectiveFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "Please choose a valid month.")
+    .transform((value) => {
+      const [year, month] = value.split("-").map(Number);
+      return new Date(Date.UTC(year, month - 1, 1));
+    }),
   basicPercentOfCtc: z.coerce.number().min(0).max(100),
   hraPercentOfBasic: z.coerce.number().min(0).max(200),
   ltaPercentOfBasic: z.coerce.number().min(0).max(200),
@@ -126,11 +147,51 @@ const updateCompanySettingsSchema = z.object({
   fiscalYearStartMonth: z.coerce.number().int().min(1).max(12),
 });
 
+// Declared once per employee per financial year - only meaningful for Old
+// Regime employees (see incomeTax.service.js), but harmless to store for
+// anyone. financialYear is the starting calendar year, e.g. 2025 = FY 2025-26.
+const taxDeclarationSchema = z.object({
+  financialYear: z.coerce.number().int().min(2000).max(2100),
+  rentPaidAnnual: z.coerce.number().min(0).optional().default(0),
+  isMetroCity: z.boolean().optional().default(false),
+  section80C: z.coerce.number().min(0).optional().default(0),
+  section80D: z.coerce.number().min(0).optional().default(0),
+  homeLoanInterest: z.coerce.number().min(0).optional().default(0),
+  otherIncomeSavingsInterest: z.coerce.number().min(0).optional().default(0),
+  otherIncomeFDInterest: z.coerce.number().min(0).optional().default(0),
+});
+
+const generateIncomeTaxComputationSchema = z.object({
+  financialYear: z.coerce.number().int().min(2000).max(2100),
+});
+
+const recordExitSchema = z.object({
+  exitDate: z.coerce.date({ errorMap: () => ({ message: "Please choose a valid exit date." }) }),
+  relievingLetterText: z.string().trim().min(1, "Please provide the relieving letter text.").max(5000),
+});
+
+const createOfferLetterSchema = z.object({
+  offerDate: z.coerce.date({ errorMap: () => ({ message: "Please choose a valid offer date." }) }),
+  letterText: z.string().trim().min(1, "Please provide the offer letter text.").max(50000),
+});
+
+const previewOfferLetterSchema = z.object({
+  letterText: z.string().trim().min(1, "Please provide the offer letter text.").max(50000),
+});
+
 // Multipart form fields always arrive as strings, so value/label are plain
 // strings here even though the request may also carry an uploaded file.
 const customFieldSchema = z.object({
   label: z.string().trim().min(1, "Please enter a label for this field.").max(100),
   value: z.string().trim().max(500).nullable().optional(),
+});
+
+const createProjectSchema = z.object({
+  name: z.string().trim().min(1, "Please enter a project name.").max(120),
+});
+
+const renameProjectSchema = z.object({
+  name: z.string().trim().min(1, "Please enter a project name.").max(120),
 });
 
 module.exports = {
@@ -142,7 +203,14 @@ module.exports = {
   updateHolidaySchema,
   updateUserDetailsSchema,
   customFieldSchema,
-  updateSalaryStructureSchema,
   generatePayslipSchema,
   updateCompanySettingsSchema,
+  recordSalaryStructureSchema,
+  recordExitSchema,
+  taxDeclarationSchema,
+  generateIncomeTaxComputationSchema,
+  createProjectSchema,
+  renameProjectSchema,
+  createOfferLetterSchema,
+  previewOfferLetterSchema,
 };

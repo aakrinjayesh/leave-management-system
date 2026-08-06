@@ -1,9 +1,11 @@
+const path = require("path");
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
 const { sendTimesheetDecisionEmail } = require("../utils/email.util");
+const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const listTeamSubmissions = asyncHandler(async (req, res) => {
   const { status } = req.query;
@@ -32,7 +34,10 @@ const getEmployeeTimesheet = asyncHandler(async (req, res) => {
   }
 
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
-  const entries = await timesheetService.getSubmittedEntriesInRange(employeeId, start, end);
+  const [entries, submissions] = await Promise.all([
+    timesheetService.getSubmittedEntriesInRange(employeeId, start, end),
+    timesheetService.getSubmissionsOverlappingRange(employeeId, start, end),
+  ]);
 
   new ApiResponse(200, "OK", {
     employee: { id: employee.id, firstName: employee.firstName, lastName: employee.lastName, email: employee.email },
@@ -40,8 +45,27 @@ const getEmployeeTimesheet = asyncHandler(async (req, res) => {
     rangeStart: start,
     rangeEnd: end,
     entries,
+    submissions,
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
+});
+
+// The Excel sheet an employee attached to one of their weekly submissions -
+// scoped to the manager's own direct reports, same rule as getEmployeeTimesheet.
+const getEmployeeTimesheetAttachment = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+
+  const submission = await getRoutedSubmissionOr404(id, req.user.id);
+  if (!submission.attachmentStoredName) {
+    throw ApiError.notFound("No attachment found for this submission.");
+  }
+
+  const filePath = path.join(TIMESHEET_ATTACHMENT_DIR, path.basename(submission.attachmentStoredName));
+  res.download(filePath, submission.attachmentOriginalName || submission.attachmentStoredName, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ success: false, message: "Attachment file not found." });
+    }
+  });
 });
 
 // Same data as getEmployeeTimesheet, as a downloadable CSV instead of JSON.
@@ -101,6 +125,9 @@ const approveSubmission = asyncHandler(async (req, res) => {
     },
   });
 
+  new ApiResponse(200, "Timesheet approved.", { submission: updated }).send(res);
+
+  // Sent after the response so the manager doesn't wait on the email round-trip.
   try {
     await sendTimesheetDecisionEmail({
       to: submission.user.email,
@@ -115,8 +142,6 @@ const approveSubmission = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send timesheet approved email:", err);
   }
-
-  new ApiResponse(200, "Timesheet approved.", { submission: updated }).send(res);
 });
 
 const rejectSubmission = asyncHandler(async (req, res) => {
@@ -147,6 +172,9 @@ const rejectSubmission = asyncHandler(async (req, res) => {
     }),
   ]);
 
+  new ApiResponse(200, "Timesheet rejected.", { submission: updated }).send(res);
+
+  // Sent after the response so the manager doesn't wait on the email round-trip.
   try {
     await sendTimesheetDecisionEmail({
       to: submission.user.email,
@@ -161,13 +189,12 @@ const rejectSubmission = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send timesheet rejected email:", err);
   }
-
-  new ApiResponse(200, "Timesheet rejected.", { submission: updated }).send(res);
 });
 
 module.exports = {
   listTeamSubmissions,
   getEmployeeTimesheet,
+  getEmployeeTimesheetAttachment,
   exportEmployeeTimesheet,
   approveSubmission,
   rejectSubmission,

@@ -6,6 +6,7 @@ import { formatDate, formatDateRange } from "../../utils/formatDate";
 import { formatHoursMinutes } from "../../utils/formatDuration";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { formatProjectAssigned } from "../../utils/formatProjectAssigned";
 import "../../styles/dashboardShared.css";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
@@ -18,14 +19,17 @@ const VIEWS = [
 
 // Shared by the manager and admin "view one person's timesheet" pages - only
 // difference between them is which API calls fetch/export the data, passed
-// in as `fetchTimesheet(view, dateString) => Promise` and
-// `exportTimesheet(view, dateString) => Promise<AxiosResponse>` (optional).
-export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, onDataLoad }) {
+// in as `fetchTimesheet(view, dateString) => Promise`,
+// `exportTimesheet(view, dateString) => Promise<AxiosResponse>` (optional),
+// and `downloadAttachment(submissionId) => Promise<AxiosResponse>` (optional)
+// for the Excel sheet the employee attached to a given week's submission.
+export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, downloadAttachment, onDataLoad }) {
   const [view, setView] = useState("week");
   const [anchorDate, setAnchorDate] = useState(toDateInputValue(new Date()));
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [downloadingId, setDownloadingId] = useState(null);
 
   useEffect(() => {
     fetchTimesheet(view, anchorDate).then((res) => {
@@ -53,6 +57,19 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, o
       setError(getErrorMessage(err, "Couldn't export this timesheet."));
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleDownloadAttachment = async (submission) => {
+    setError("");
+    setDownloadingId(submission.id);
+    try {
+      const response = await downloadAttachment(submission.id);
+      downloadBlobAsFile(response.data, getFilenameFromResponse(response, submission.attachmentOriginalName));
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't download this attachment."));
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -141,6 +158,53 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, o
           )}
         </div>
       </div>
+
+      {downloadAttachment && data.submissions?.length > 0 && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-section">
+            <span className="card-section-title">Weekly submissions</span>
+
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Week</th>
+                    <th>Project Type</th>
+                    <th>Project Name</th>
+                    <th>Excel sheet</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.submissions.map((submission) => (
+                    <tr key={submission.id}>
+                      <td className="table-cell-primary">
+                        {formatDateRange(submission.weekStartDate, submission.weekEndDate)}
+                      </td>
+                      <td className="table-cell-secondary">{formatProjectAssigned(submission.projectAssigned)}</td>
+                      <td className="table-cell-secondary">{submission.project?.name || "—"}</td>
+                      <td className="table-cell-secondary">{submission.attachmentOriginalName || "—"}</td>
+                      <td>
+                        {submission.attachmentOriginalName && (
+                          <button
+                            type="button"
+                            className="link-btn"
+                            disabled={downloadingId === submission.id}
+                            onClick={() => handleDownloadAttachment(submission)}
+                          >
+                            <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                            {downloadingId === submission.id ? "Downloading…" : "Download"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

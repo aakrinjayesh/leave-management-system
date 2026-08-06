@@ -9,6 +9,7 @@ const timesheetService = require("../services/timesheet.service");
 const companySettingsService = require("../services/companySettings.service");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const { UPLOAD_DIR } = require("../config/upload");
+const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const toSafeUser = (user) => ({
   id: user.id,
@@ -17,10 +18,12 @@ const toSafeUser = (user) => ({
   email: user.email,
   userType: user.userType,
   status: user.status,
+  exitDate: user.exitDate,
   isPasswordSet: user.isPasswordSet,
   createdAt: user.createdAt,
   managerId: user.managerId,
   salaryCtc: user.salaryCtc,
+  hasDocument: Boolean(user.documentUrl),
 });
 
 const listUsers = asyncHandler(async (req, res) => {
@@ -58,27 +61,15 @@ const createUser = asyncHandler(async (req, res) => {
   }).send(res);
 });
 
-const deactivateUser = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-
-  if (id === req.user.id) {
-    throw ApiError.badRequest("You can't deactivate your own account.");
-  }
-
-  const user = await prisma.user.update({
-    where: { id },
-    data: { status: USER_STATUS.INACTIVE },
-  });
-
-  new ApiResponse(200, "Account deactivated.", { user: toSafeUser(user) }).send(res);
-});
-
+// Reactivating clears exitDate (the "current" convenience field) since
+// they're active again - the ExitRecord history from adminExit.controller.js
+// is untouched, so past relieving letters stay downloadable even after rehire.
 const reactivateUser = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
   const user = await prisma.user.update({
     where: { id },
-    data: { status: USER_STATUS.ACTIVE },
+    data: { status: USER_STATUS.ACTIVE, exitDate: null },
   });
 
   new ApiResponse(200, "Account reactivated.", { user: toSafeUser(user) }).send(res);
@@ -119,7 +110,10 @@ const getUserTimesheet = asyncHandler(async (req, res) => {
   }
 
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
-  const entries = await timesheetService.getSubmittedEntriesInRange(employeeId, start, end);
+  const [entries, submissions] = await Promise.all([
+    timesheetService.getSubmittedEntriesInRange(employeeId, start, end),
+    timesheetService.getSubmissionsOverlappingRange(employeeId, start, end),
+  ]);
 
   new ApiResponse(200, "OK", {
     employee: { id: employee.id, firstName: employee.firstName, lastName: employee.lastName, email: employee.email },
@@ -127,8 +121,28 @@ const getUserTimesheet = asyncHandler(async (req, res) => {
     rangeStart: start,
     rangeEnd: end,
     entries,
+    submissions,
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
+});
+
+// The Excel sheet an employee attached to one of their weekly submissions -
+// admin can download any employee's, unrestricted (unlike the manager
+// version, which is scoped to routedToId).
+const getTimesheetSubmissionAttachment = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+
+  const submission = await prisma.timesheetSubmission.findUnique({ where: { id } });
+  if (!submission || !submission.attachmentStoredName) {
+    throw ApiError.notFound("No attachment found for this submission.");
+  }
+
+  const filePath = path.join(TIMESHEET_ATTACHMENT_DIR, path.basename(submission.attachmentStoredName));
+  res.download(filePath, submission.attachmentOriginalName || submission.attachmentStoredName, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ success: false, message: "Attachment file not found." });
+    }
+  });
 });
 
 // Unrestricted version of the manager's employee-detail view (balances +
@@ -232,6 +246,7 @@ const toFullUserDetails = (user) => ({
   phone: user.phone,
   birthDate: user.birthDate,
   joiningDate: user.joiningDate,
+  exitDate: user.exitDate,
   gender: user.gender,
   fatherName: user.fatherName,
   spouseName: user.spouseName,
@@ -241,6 +256,10 @@ const toFullUserDetails = (user) => ({
   designation: user.designation,
   location: user.location,
   taxRegime: user.taxRegime,
+  residentialAddress: user.residentialAddress,
+  wardNo: user.wardNo,
+  micrCode: user.micrCode,
+  residentialStatus: user.residentialStatus,
   pan: user.pan,
   panHolderName: user.panHolderName,
   panDocumentUrl: user.panDocumentUrl,
@@ -350,10 +369,10 @@ const updateCompanySettings = asyncHandler(async (req, res) => {
 module.exports = {
   listUsers,
   createUser,
-  deactivateUser,
   reactivateUser,
   updateUserManager,
   getUserTimesheet,
+  getTimesheetSubmissionAttachment,
   exportUserTimesheet,
   exportPayrollTimesheet,
   getUserLeaveDetail,

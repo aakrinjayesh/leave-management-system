@@ -17,7 +17,11 @@ const INITIAL_FORM = {
   reason: "",
 };
 
-export default function LogLeaveForEmployeeModal({ employee, onClose, onSuccess }) {
+export default function LogLeaveForEmployeeModal({
+  employee,
+  onClose,
+  onSuccess,
+}) {
   const [policies, setPolicies] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [error, setError] = useState("");
@@ -28,15 +32,20 @@ export default function LogLeaveForEmployeeModal({ employee, onClose, onSuccess 
     commonApi
       .getLeavePolicies()
       .then((data) => setPolicies(data.policies))
-      .catch(() => setError("Couldn't load the form options. Please try again."))
+      .catch(() =>
+        setError("Couldn't load the form options. Please try again."),
+      )
       .finally(() => setIsLoadingOptions(false));
   }, []);
 
-  const selectedPolicy = policies.find((p) => String(p.id) === String(form.leavePolicyId));
+  const selectedPolicy = policies.find(
+    (p) => String(p.id) === String(form.leavePolicyId),
+  );
   const isSingleDay = form.startDate && form.startDate === form.endDate;
 
   const handleChange = (field) => (e) => {
-    const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    const value =
+      e.target.type === "checkbox" ? e.target.checked : e.target.value;
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -44,7 +53,12 @@ export default function LogLeaveForEmployeeModal({ employee, onClose, onSuccess 
     e.preventDefault();
     setError("");
 
-    if (!form.leavePolicyId || !form.startDate || !form.endDate || !form.reason.trim()) {
+    if (
+      !form.leavePolicyId ||
+      !form.startDate ||
+      !form.endDate ||
+      !form.reason.trim()
+    ) {
       setError("Please fill in all fields.");
       return;
     }
@@ -60,14 +74,19 @@ export default function LogLeaveForEmployeeModal({ employee, onClose, onSuccess 
       });
       onSuccess();
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't log this leave. Please try again."));
+      setError(
+        getErrorMessage(err, "Couldn't log this leave. Please try again."),
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Modal title={`Log leave for ${employee.firstName} ${employee.lastName}`} onClose={onClose}>
+    <Modal
+      title={`Log leave for ${employee.firstName} ${employee.lastName}`}
+      onClose={onClose}
+    >
       <Alert type="error">{error}</Alert>
 
       {isLoadingOptions ? (
@@ -75,12 +94,17 @@ export default function LogLeaveForEmployeeModal({ employee, onClose, onSuccess 
       ) : (
         <form onSubmit={handleSubmit} noValidate>
           <p className="helper-text" style={{ marginTop: 0 }}>
-            This is recorded and approved immediately - no separate approval step. Use it to log leave the employee
-            told you about directly (e.g. over phone, or backdating an already-taken day).
+            This is recorded and approved immediately - no separate approval
+            step. Use it to log leave the employee told you about directly (e.g.
+            over phone, or backdating an already-taken day).
           </p>
 
-          <FormSelect label="Leave type" value={form.leavePolicyId} onChange={handleChange("leavePolicyId")}>
-            <option value="">Select a leave type</option>
+          <FormSelect
+            label="Leave type"
+            value={form.leavePolicyId}
+            onChange={handleChange("leavePolicyId")}
+          >
+            <option value="" hidden></option>
             {policies.map((policy) => (
               <option key={policy.id} value={policy.id}>
                 {policy.leaveName}
@@ -89,7 +113,12 @@ export default function LogLeaveForEmployeeModal({ employee, onClose, onSuccess 
           </FormSelect>
 
           <div className="form-two-col">
-            <TextInput label="Start date" type="date" value={form.startDate} onChange={handleChange("startDate")} />
+            <TextInput
+              label="Start date"
+              type="date"
+              value={form.startDate}
+              onChange={handleChange("startDate")}
+            />
             <TextInput
               label="End date"
               type="date"
@@ -101,7 +130,11 @@ export default function LogLeaveForEmployeeModal({ employee, onClose, onSuccess 
 
           {isSingleDay && selectedPolicy?.allowHalfDay && (
             <label className="checkbox-row">
-              <input type="checkbox" checked={form.isHalfDay} onChange={handleChange("isHalfDay")} />
+              <input
+                type="checkbox"
+                checked={form.isHalfDay}
+                onChange={handleChange("isHalfDay")}
+              />
               Half-day leave
             </label>
           )}

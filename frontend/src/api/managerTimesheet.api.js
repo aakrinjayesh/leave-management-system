@@ -16,6 +16,11 @@ export const exportEmployeeTimesheet = (employeeId, view, date) =>
     responseType: "blob",
   });
 
+// Returns the raw response - caller needs the blob body and the
+// Content-Disposition header for the filename.
+export const downloadSubmissionAttachment = (submissionId) =>
+  axiosClient.get(`/manager/timesheets/submissions/${submissionId}/attachment`, { responseType: "blob" });
+
 export const approveSubmission = (id, remarks) =>
   unwrap(axiosClient.patch(`/manager/timesheets/${id}/approve`, { remarks }));
 

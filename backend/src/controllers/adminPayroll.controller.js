@@ -5,16 +5,6 @@ const asyncHandler = require("../utils/asyncHandler");
 const payrollService = require("../services/payroll.service");
 const { streamPayslipPdf } = require("../services/payslipPdf.service");
 
-const getSalaryStructure = asyncHandler(async (req, res) => {
-  const config = await payrollService.getSalaryStructureConfig();
-  new ApiResponse(200, "OK", { config }).send(res);
-});
-
-const updateSalaryStructure = asyncHandler(async (req, res) => {
-  const config = await payrollService.updateSalaryStructureConfig(req.body);
-  new ApiResponse(200, "Salary structure updated.", { config }).send(res);
-});
-
 // Computes what a payslip would look like without saving it, so admin can
 // see the numbers before confirming.
 const previewPayslip = asyncHandler(async (req, res) => {
@@ -56,6 +46,47 @@ const listPayslips = asyncHandler(async (req, res) => {
   new ApiResponse(200, "OK", { payslips }).send(res);
 });
 
+const getSalaryStructureHistory = asyncHandler(async (req, res) => {
+  const userId = Number(req.params.id);
+  const history = await payrollService.getSalaryStructureHistory(userId);
+  new ApiResponse(200, "OK", { history }).send(res);
+});
+
+const recordSalaryStructure = asyncHandler(async (req, res) => {
+  const userId = Number(req.params.id);
+  const {
+    ctc,
+    effectiveFrom,
+    basicPercentOfCtc,
+    hraPercentOfBasic,
+    ltaPercentOfBasic,
+    guaranteedAllowancePercentOfBasic,
+    conveyanceMonthly,
+    pfMonthlyAmount,
+    professionalTax,
+    professionalTaxThreshold,
+  } = req.body;
+
+  const history = await payrollService.recordSalaryStructure(
+    userId,
+    {
+      ctc,
+      effectiveFrom,
+      basicPercentOfCtc,
+      hraPercentOfBasic,
+      ltaPercentOfBasic,
+      guaranteedAllowancePercentOfBasic,
+      conveyanceMonthly,
+      pfMonthlyAmount,
+      professionalTax,
+      professionalTaxThreshold,
+    },
+    req.user.id
+  );
+
+  new ApiResponse(201, "Salary structure recorded.", { history }).send(res);
+});
+
 const downloadPayslipPdf = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
@@ -76,10 +107,10 @@ const downloadPayslipPdf = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  getSalaryStructure,
-  updateSalaryStructure,
   previewPayslip,
   generatePayslip,
   listPayslips,
   downloadPayslipPdf,
+  getSalaryStructureHistory,
+  recordSalaryStructure,
 };

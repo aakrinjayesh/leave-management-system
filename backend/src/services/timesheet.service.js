@@ -54,6 +54,35 @@ const getSubmittedEntriesInRange = (userId, start, end) =>
 
 const sumHours = (entries) => entries.reduce((sum, entry) => sum + entry.hoursWorked, 0);
 
+// Submissions (weekly bundles) whose week overlaps the viewed [start, end]
+// range at all - used to surface each week's uploaded attachment alongside
+// the day/week/month entries breakdown.
+const getSubmissionsOverlappingRange = (userId, start, end) =>
+  prisma.timesheetSubmission.findMany({
+    where: { userId, weekStartDate: { lte: end }, weekEndDate: { gte: start } },
+    select: {
+      id: true,
+      weekStartDate: true,
+      weekEndDate: true,
+      attachmentOriginalName: true,
+      projectAssigned: true,
+      project: { select: { name: true } },
+    },
+    orderBy: { weekStartDate: "asc" },
+  });
+
+// The employee's most recent submission that has a project-assignment
+// choice recorded - used to pre-fill a fresh week's dropdown with whatever
+// they picked last time, so they only need to change it when it changes.
+const getLastProjectAssigned = async (userId) => {
+  const submission = await prisma.timesheetSubmission.findFirst({
+    where: { userId, projectAssigned: { not: null } },
+    orderBy: { weekStartDate: "desc" },
+    select: { projectAssigned: true },
+  });
+  return submission?.projectAssigned ?? null;
+};
+
 const toDateKey = (date) => new Date(date).toISOString().slice(0, 10);
 
 // Detailed per-employee CSV: one row per entry plus a totals row - exactly
@@ -95,12 +124,70 @@ const buildPayrollCsv = async (monthStart, monthEnd) => {
   return { csv, filename };
 };
 
+// Census for the admin Report tab: every active Employee/Manager, split by
+// their latest recorded Project Assigned choice (same "sticky" value used to
+// pre-fill the timesheet dropdown) - anyone who's never made a choice yet
+// falls into notAssigned, since the point of the report is to surface who
+// still needs a look, not to track timesheet-submission completeness.
+const getProjectAssignmentReport = async () => {
+  const users = await prisma.user.findMany({
+    where: { status: "ACTIVE", userType: { in: ["EMPLOYEE", "MANAGER"] } },
+    orderBy: { firstName: "asc" },
+  });
+
+  const latestSubmissions = await prisma.timesheetSubmission.findMany({
+    where: { userId: { in: users.map((u) => u.id) }, projectAssigned: { not: null } },
+    orderBy: { weekStartDate: "desc" },
+    select: { userId: true, projectAssigned: true, project: { select: { name: true } } },
+  });
+
+  // Already ordered newest-first, so the first row seen per user is their latest.
+  const latestByUserId = new Map();
+  for (const submission of latestSubmissions) {
+    if (!latestByUserId.has(submission.userId)) {
+      latestByUserId.set(submission.userId, {
+        projectAssigned: submission.projectAssigned,
+        projectName: submission.project?.name ?? null,
+      });
+    }
+  }
+
+  const toReportEntry = (user, projectName) => ({
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    employeeCode: user.employeeCode,
+    email: user.email,
+    managerId: user.managerId,
+    projectName,
+  });
+
+  const assigned = [];
+  const notAssigned = [];
+  for (const user of users) {
+    const latest = latestByUserId.get(user.id);
+    const entry = toReportEntry(user, latest?.projectName ?? null);
+    (latest?.projectAssigned === "ASSIGNED" ? assigned : notAssigned).push(entry);
+  }
+
+  return {
+    totalEmployees: users.length,
+    assignedCount: assigned.length,
+    notAssignedCount: notAssigned.length,
+    assigned,
+    notAssigned,
+  };
+};
+
 module.exports = {
   startOfUtcDay,
   getWeekStart,
   getWeekEnd,
   getViewRange,
   getSubmittedEntriesInRange,
+  getSubmissionsOverlappingRange,
+  getLastProjectAssigned,
+  getProjectAssignmentReport,
   sumHours,
   buildEmployeeTimesheetCsv,
   buildPayrollCsv,

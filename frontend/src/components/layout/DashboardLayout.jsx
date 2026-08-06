@@ -1,5 +1,4 @@
 import {
-  CalendarCheck2,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -10,12 +9,18 @@ import {
   Clock,
   CalendarRange,
   FileText,
+  BarChart3,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import aakrinLogo from "../../assets/aakrin-logo.png";
 import "./DashboardLayout.css";
 
-const ROLE_LABELS = { MANAGER: "Manager", ADMIN: "Admin", EMPLOYEE: "Employee" };
+const ROLE_LABELS = {
+  MANAGER: "Manager",
+  ADMIN: "Admin",
+  EMPLOYEE: "Employee",
+};
 
 // Nav is driven by isManager (derived: does anyone currently report to this
 // account) rather than userType, so it stays correct as employees pick and
@@ -31,21 +36,54 @@ const buildNavItems = (user) => {
   });
 
   if (!isAdmin) {
-    items.push({ to: "/employee/leave-requests", label: "My Requests", icon: ListChecks });
-    items.push({ to: "/employee/calendar", label: "My Calendar", icon: CalendarDays });
+    items.push({
+      to: "/employee/leave-requests",
+      label: "My Leave Requests",
+      icon: ListChecks,
+    });
+    items.push({
+      to: "/employee/calendar",
+      label: "My Calendar",
+      icon: CalendarDays,
+    });
     items.push({ to: "/timesheet", label: "Timesheet", icon: Clock });
   }
 
   if (user?.isManager) {
     items.push({ to: "/manager/employees", label: "Employees", icon: Users });
-    items.push({ to: "/manager/leave-requests", label: "Leave Requests", icon: ListChecks });
-    items.push({ to: "/manager/calendar", label: "Team Calendar", icon: CalendarDays });
-    items.push({ to: "/manager/timesheets", label: "Team Timesheets", icon: Clock });
+    items.push({
+      to: "/manager/leave-requests",
+      label: "Leave Requests",
+      icon: ListChecks,
+    });
+    items.push({
+      to: "/manager/calendar",
+      label: "Team Calendar",
+      icon: CalendarDays,
+    });
+    items.push({
+      to: "/manager/timesheets",
+      label: "Team Timesheets",
+      icon: Clock,
+    });
   }
 
   if (isAdmin) {
-    items.push({ to: "/admin/dashboard", label: "Accounts", icon: ShieldCheck });
-    items.push({ to: "/admin/manage-leaves", label: "Manage Leaves", icon: CalendarRange });
+    items.push({
+      to: "/admin/dashboard",
+      label: "Manage Accounts",
+      icon: ShieldCheck,
+    });
+    items.push({
+      to: "/admin/reports",
+      label: "Report",
+      icon: BarChart3,
+    });
+    items.push({
+      to: "/admin/manage-leaves",
+      label: "Manage Leave Policy",
+      icon: CalendarRange,
+    });
     items.push({ to: "/admin/payslips", label: "Payslips", icon: FileText });
   }
   items.push({ to: "/profile", label: "Profile", icon: UserCog });
@@ -57,7 +95,8 @@ export default function DashboardLayout({ title, children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const initials = `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
+  const initials =
+    `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
   const roleLabel = ROLE_LABELS[user?.userType] || "Employee";
   const navItems = buildNavItems(user);
 
@@ -68,19 +107,26 @@ export default function DashboardLayout({ title, children }) {
 
   return (
     <div className="dashboard-shell">
+      <div className="app-watermark" aria-hidden="true">
+        <img src={aakrinLogo} alt="" />
+      </div>
       <aside className="dashboard-sidebar">
         <div className="dashboard-brand">
-          <span className="dashboard-brand-icon">
-            <CalendarCheck2 size={18} />
-          </span>
-          Aakrin Leave
+          <img
+            src={aakrinLogo}
+            alt="Aakrin"
+            style={{ width: 50, height: 50, objectFit: "contain" }}
+          />
+          Aakrin Workspace
         </div>
         <nav className="dashboard-nav">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
-              className={({ isActive }) => `dashboard-nav-item ${isActive ? "active" : ""}`.trim()}
+              className={({ isActive }) =>
+                `dashboard-nav-item ${isActive ? "active" : ""}`.trim()
+              }
             >
               <Icon size={17} />
               {label}
@@ -100,7 +146,11 @@ export default function DashboardLayout({ title, children }) {
               <div className="dashboard-user-role">{roleLabel}</div>
             </div>
             <span className="dashboard-avatar">{initials || "?"}</span>
-            <button className="dashboard-logout-btn" onClick={handleLogout} aria-label="Log out">
+            <button
+              className="dashboard-logout-btn"
+              onClick={handleLogout}
+              aria-label="Log out"
+            >
               <LogOut size={16} />
             </button>
           </div>

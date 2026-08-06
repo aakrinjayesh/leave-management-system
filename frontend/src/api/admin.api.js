@@ -9,9 +9,26 @@ export const createUser = (payload) => unwrap(axiosClient.post("/admin/users", p
 export const updateUserManager = (id, managerId) =>
   unwrap(axiosClient.patch(`/admin/users/${id}/manager`, { managerId }));
 
-export const deactivateUser = (id) => unwrap(axiosClient.patch(`/admin/users/${id}/deactivate`));
-
 export const reactivateUser = (id) => unwrap(axiosClient.patch(`/admin/users/${id}/reactivate`));
+
+export const recordExit = (id, payload) => unwrap(axiosClient.post(`/admin/users/${id}/exit`, payload));
+
+export const listExitRecords = (id) => unwrap(axiosClient.get(`/admin/users/${id}/exit-records`));
+
+export const downloadRelievingLetterPdf = (exitRecordId) =>
+  axiosClient.get(`/admin/exit-records/${exitRecordId}/pdf`, { responseType: "blob" });
+
+export const createOfferLetter = (id, payload) => unwrap(axiosClient.post(`/admin/users/${id}/offer-letters`, payload));
+
+export const listOfferLetters = (id) => unwrap(axiosClient.get(`/admin/users/${id}/offer-letters`));
+
+export const downloadOfferLetterPdf = (offerLetterId) =>
+  axiosClient.get(`/admin/offer-letters/${offerLetterId}/pdf`, { responseType: "blob" });
+
+export const previewOfferLetterPdf = (id, letterText) =>
+  axiosClient.post(`/admin/users/${id}/offer-letters/preview`, { letterText }, { responseType: "blob" });
+
+export const deleteOfferLetter = (offerLetterId) => unwrap(axiosClient.delete(`/admin/offer-letters/${offerLetterId}`));
 
 export const getUserTimesheet = (userId, view, date) =>
   unwrap(axiosClient.get(`/admin/users/${userId}/timesheet`, { params: { view, date } }));
@@ -24,7 +41,27 @@ export const exportUserTimesheet = (userId, view, date) =>
 export const exportPayrollTimesheet = (date) =>
   axiosClient.get("/admin/timesheets/export", { params: { date }, responseType: "blob" });
 
+export const downloadTimesheetSubmissionAttachment = (submissionId) =>
+  axiosClient.get(`/admin/timesheet-submissions/${submissionId}/attachment`, { responseType: "blob" });
+
+export const getProjectAssignmentReport = () => unwrap(axiosClient.get("/admin/reports/project-assignment"));
+
+export const listProjects = () => unwrap(axiosClient.get("/admin/projects"));
+
+export const createProject = (payload) => unwrap(axiosClient.post("/admin/projects", payload));
+
+export const renameProject = (id, payload) => unwrap(axiosClient.patch(`/admin/projects/${id}`, payload));
+
+export const deactivateProject = (id) => unwrap(axiosClient.patch(`/admin/projects/${id}/deactivate`));
+
+export const reactivateProject = (id) => unwrap(axiosClient.patch(`/admin/projects/${id}/reactivate`));
+
 export const listLeavePolicies = () => unwrap(axiosClient.get("/admin/leave-policies"));
+
+export const getLeavePolicyHistoryYears = () => unwrap(axiosClient.get("/admin/leave-policies/history/years"));
+
+export const getLeavePolicyHistory = (year) =>
+  unwrap(axiosClient.get("/admin/leave-policies/history", { params: { year } }));
 
 export const createLeavePolicy = (payload) => unwrap(axiosClient.post("/admin/leave-policies", payload));
 
@@ -56,9 +93,11 @@ export const getUserDetails = (id) => unwrap(axiosClient.get(`/admin/users/${id}
 
 export const updateUserDetails = (id, payload) => unwrap(axiosClient.patch(`/admin/users/${id}/details`, payload));
 
-export const getSalaryStructure = () => unwrap(axiosClient.get("/admin/salary-structure"));
+export const getSalaryStructureHistory = (userId) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/salary-structure-history`));
 
-export const updateSalaryStructure = (payload) => unwrap(axiosClient.put("/admin/salary-structure", payload));
+export const recordSalaryStructure = (userId, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/salary-structure-history`, payload));
 
 export const previewPayslip = (userId, year, month, tds, annualBonusPay) =>
   unwrap(axiosClient.get(`/admin/users/${userId}/payslips/preview`, { params: { year, month, tds, annualBonusPay } }));
@@ -71,6 +110,24 @@ export const downloadPayslipPdf = (payslipId) =>
   axiosClient.get(`/admin/payslips/${payslipId}/pdf`, { responseType: "blob" });
 
 export const getCompanySettings = () => unwrap(axiosClient.get("/admin/company-settings"));
+
+export const getTaxDeclaration = (userId, financialYear) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/tax-declaration`, { params: { financialYear } }));
+
+export const upsertTaxDeclaration = (userId, payload) =>
+  unwrap(axiosClient.put(`/admin/users/${userId}/tax-declaration`, payload));
+
+export const getIncomeTaxComputation = (userId, financialYear) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/tax-computation`, { params: { financialYear } }));
+
+export const listIncomeTaxComputationGenerations = (userId) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/tax-computation-generations`));
+
+export const generateIncomeTaxComputation = (userId, financialYear) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/tax-computation-generations`, { financialYear }));
+
+export const downloadIncomeTaxComputationPdf = (generationId) =>
+  axiosClient.get(`/admin/tax-computation-generations/${generationId}/pdf`, { responseType: "blob" });
 
 // ---------- Employee documents (PAN/Aadhaar/Bank/Photo) ----------
 

@@ -5,6 +5,7 @@ import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
 import Button from "../../components/common/Button";
 import StatusBadge from "../../components/common/StatusBadge";
+import FormSelect from "../../components/common/FormSelect";
 import LeavePolicyModal from "./LeavePolicyModal";
 import HolidayModal from "./HolidayModal";
 import CompanySettingsModal from "./CompanySettingsModal";
@@ -28,6 +29,20 @@ const isPastDate = (value) => {
   return date < today;
 };
 
+const MONTH_LABELS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const getFiscalYearForDate = (date, startMonth) => {
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+  return month >= startMonth ? year : year - 1;
+};
+
+const formatFiscalYearLabel = (year, startMonth) => {
+  const endMonth = startMonth === 1 ? 12 : startMonth - 1;
+  const endYear = startMonth === 1 ? year : year + 1;
+  return `FY ${year} (${MONTH_LABELS_SHORT[startMonth - 1]} ${year} – ${MONTH_LABELS_SHORT[endMonth - 1]} ${endYear})`;
+};
+
 export default function ManageLeavesPage() {
   const [activeTab, setActiveTab] = useState("policies");
   const [policies, setPolicies] = useState(null);
@@ -40,13 +55,55 @@ export default function ManageLeavesPage() {
   const [isAddingHoliday, setIsAddingHoliday] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState(4);
+  const [policyYears, setPolicyYears] = useState([]);
+  const [selectedPolicyYear, setSelectedPolicyYear] = useState("current");
+  const [policyHistory, setPolicyHistory] = useState(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [selectedHolidayYear, setSelectedHolidayYear] = useState("all");
+
   const loadPolicies = () => adminApi.listLeavePolicies().then((data) => setPolicies(data.policies));
   const loadHolidays = () => adminApi.listHolidays().then((data) => setHolidays(data.holidays));
 
   useEffect(() => {
     loadPolicies();
     loadHolidays();
+    adminApi.getCompanySettings().then((data) => setFiscalYearStartMonth(data.settings.fiscalYearStartMonth));
+    adminApi.getLeavePolicyHistoryYears().then((data) => setPolicyYears(data.years));
   }, []);
+
+  const currentFiscalYear = getFiscalYearForDate(new Date(), fiscalYearStartMonth);
+  const pastPolicyYears = policyYears.filter((year) => year !== currentFiscalYear);
+
+  const holidayYears = holidays
+    ? Array.from(new Set(holidays.map((h) => new Date(h.holidayDate).getFullYear()))).sort((a, b) => b - a)
+    : [];
+  const filteredHolidays = !holidays
+    ? null
+    : selectedHolidayYear === "all"
+      ? holidays
+      : holidays.filter((h) => new Date(h.holidayDate).getFullYear() === Number(selectedHolidayYear));
+
+  const handlePolicyYearChange = async (e) => {
+    const value = e.target.value;
+    setSelectedPolicyYear(value);
+    setError("");
+
+    if (value === "current") {
+      setPolicyHistory(null);
+      return;
+    }
+
+    setIsLoadingHistory(true);
+    try {
+      const data = await adminApi.getLeavePolicyHistory(Number(value));
+      setPolicyHistory(data.policies);
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't load leave history for this year."));
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   const handlePolicySuccess = () => {
     setIsAddingPolicy(false);
@@ -134,7 +191,57 @@ export default function ManageLeavesPage() {
       {activeTab === "policies" && (
         <div className="card">
           <div className="card-section">
-            {!policies ? (
+            <div style={{ maxWidth: 320, marginBottom: 16 }}>
+              <FormSelect label="Viewing" value={selectedPolicyYear} onChange={handlePolicyYearChange}>
+                <option value="current">Current (editable)</option>
+                {pastPolicyYears.map((year) => (
+                  <option key={year} value={year}>
+                    {formatFiscalYearLabel(year, fiscalYearStartMonth)}
+                  </option>
+                ))}
+              </FormSelect>
+            </div>
+
+            {selectedPolicyYear !== "current" ? (
+              isLoadingHistory || !policyHistory ? (
+                <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
+                  <Spinner size={26} />
+                </div>
+              ) : (
+                <>
+                  <p className="card-section-subtitle" style={{ marginBottom: 12 }}>
+                    Read-only - shows what each leave type's allocation actually was during{" "}
+                    {formatFiscalYearLabel(Number(selectedPolicyYear), fiscalYearStartMonth)}.
+                  </p>
+                  <div className="data-table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Days/year</th>
+                          <th>Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {policyHistory.map((policy) => (
+                          <tr key={policy.id}>
+                            <td className="table-cell-primary">{policy.leaveName}</td>
+                            <td className="table-cell-secondary">
+                              {policy.isUnlimited
+                                ? "Unlimited"
+                                : policy.hasData
+                                  ? policy.allocatedLeaves
+                                  : "No data for this year"}
+                            </td>
+                            <td className="table-cell-secondary">{policy.isUnpaid ? "Unpaid (LOP)" : "Paid"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )
+            ) : !policies ? (
               <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
                 <Spinner size={26} />
               </div>
@@ -195,7 +302,18 @@ export default function ManageLeavesPage() {
       {activeTab === "holidays" && (
         <div className="card">
           <div className="card-section">
-            {!holidays ? (
+            <div style={{ maxWidth: 320, marginBottom: 16 }}>
+              <FormSelect label="Year" value={selectedHolidayYear} onChange={(e) => setSelectedHolidayYear(e.target.value)}>
+                <option value="all">All years</option>
+                {holidayYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </FormSelect>
+            </div>
+
+            {!filteredHolidays ? (
               <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
                 <Spinner size={26} />
               </div>
@@ -212,7 +330,7 @@ export default function ManageLeavesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {holidays.map((holiday) => {
+                    {filteredHolidays.map((holiday) => {
                       const isPast = isPastDate(holiday.holidayDate);
                       return (
                         <tr key={holiday.id}>

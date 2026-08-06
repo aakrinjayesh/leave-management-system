@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Ban, CalendarDays, Clock, Download, IdCard, RotateCcw, UserPlus, Users, UserCog } from "lucide-react";
+import { CalendarDays, Clock, Download, Eye, FileDown, IdCard, LogOut, RotateCcw, Upload, UserPlus, Users, UserCog } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -9,10 +9,12 @@ import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
 import AddUserModal from "../admin/AddUserModal";
 import AssignManagerModal from "../admin/AssignManagerModal";
+import ExitModal from "../admin/ExitModal";
 import { useAuth } from "../../context/AuthContext";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
-import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
+import { downloadBlobAsFile, getFilenameFromResponse, openBlobInNewTab } from "../../utils/openBlob";
+import { formatDate } from "../../utils/formatDate";
 import "../../styles/dashboardShared.css";
 
 const currentMonthValue = () => new Date().toISOString().slice(0, 7);
@@ -22,11 +24,16 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [users, setUsers] = useState(null);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [managingUser, setManagingUser] = useState(null);
+  const [exitingUser, setExitingUser] = useState(null);
   const [actioningId, setActioningId] = useState(null);
   const [payrollMonth, setPayrollMonth] = useState(currentMonthValue());
   const [isExportingPayroll, setIsExportingPayroll] = useState(false);
+  const [uploadingId, setUploadingId] = useState(null);
+  const uploadTargetIdRef = useRef(null);
+  const documentFileInputRef = useRef(null);
 
   const managerNameById = (id) => {
     const manager = users?.find((u) => u.id === id);
@@ -49,20 +56,80 @@ export default function AdminDashboard() {
     loadUsers();
   };
 
-  const handleToggleActive = async (targetUser) => {
+  const handleReactivate = async (targetUser) => {
     setError("");
     setActioningId(targetUser.id);
     try {
-      if (targetUser.status === "INACTIVE") {
-        await adminApi.reactivateUser(targetUser.id);
-      } else {
-        await adminApi.deactivateUser(targetUser.id);
-      }
+      await adminApi.reactivateUser(targetUser.id);
       loadUsers();
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't update this account."));
+      setError(getErrorMessage(err, "Couldn't reactivate this account."));
     } finally {
       setActioningId(null);
+    }
+  };
+
+  const handleExitSuccess = () => {
+    setExitingUser(null);
+    loadUsers();
+  };
+
+  // Re-downloads the most recent relieving letter for an already-exited
+  // account - the exit-time download only happens once, right after exiting.
+  const handleDownloadLatestLetter = async (targetUser) => {
+    setError("");
+    setActioningId(targetUser.id);
+    try {
+      const data = await adminApi.listExitRecords(targetUser.id);
+      const latest = data.records[0];
+      if (!latest) {
+        setError("No relieving letter found for this account.");
+        return;
+      }
+      const response = await adminApi.downloadRelievingLetterPdf(latest.id);
+      downloadBlobAsFile(response.data, `relieving-letter-${targetUser.firstName}-${targetUser.lastName}.pdf`);
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't download the relieving letter."));
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleUploadClick = (targetUser) => {
+    uploadTargetIdRef.current = targetUser.id;
+    documentFileInputRef.current.click();
+  };
+
+  const handleDocumentFileSelected = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    const userId = uploadTargetIdRef.current;
+    if (!file || !userId) return;
+
+    const targetUser = users?.find((u) => u.id === userId);
+    const targetName = targetUser ? `${targetUser.firstName} ${targetUser.lastName}` : "this account";
+
+    setError("");
+    setSuccess("");
+    setUploadingId(userId);
+    try {
+      await adminApi.uploadUserDocument(userId, "document", file);
+      setSuccess(`Document uploaded successfully for ${targetName}.`);
+      loadUsers();
+    } catch (err) {
+      setError(`Upload failed - ${getErrorMessage(err, "couldn't upload this document.")}`);
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  const handleViewDocument = async (targetUser) => {
+    setError("");
+    try {
+      const blob = await adminApi.downloadUserDocument(targetUser.id, "document");
+      openBlobInNewTab(blob);
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't open this document."));
     }
   };
 
@@ -124,6 +191,7 @@ export default function AdminDashboard() {
       )}
 
       <Alert type="error">{error}</Alert>
+      <Alert type="success">{success}</Alert>
 
       <div className="card">
         <div className="card-section">
@@ -141,6 +209,7 @@ export default function AdminDashboard() {
                     <th>Type</th>
                     <th>Manager</th>
                     <th>Status</th>
+                    <th>Exit date</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -156,6 +225,7 @@ export default function AdminDashboard() {
                       <td>
                         <StatusBadge status={user.status} />
                       </td>
+                      <td className="table-cell-secondary">{user.exitDate ? formatDate(user.exitDate) : "—"}</td>
                       <td>
                         <div className="row-actions">
                           <button
@@ -192,17 +262,54 @@ export default function AdminDashboard() {
                             <IdCard size={14} />
                             View details
                           </button>
-                          {user.id !== currentUser.id && (
-                            <button
-                              type="button"
-                              className={`row-action-btn ${user.status === "INACTIVE" ? "approve" : "reject"}`}
-                              disabled={actioningId === user.id}
-                              onClick={() => handleToggleActive(user)}
-                            >
-                              {user.status === "INACTIVE" ? <RotateCcw size={14} /> : <Ban size={14} />}
-                              {user.status === "INACTIVE" ? "Reactivate" : "Deactivate"}
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            disabled={uploadingId === user.id}
+                            onClick={() => handleUploadClick(user)}
+                          >
+                            <Upload size={14} />
+                            {user.hasDocument ? "Replace" : "Upload"}
+                          </button>
+                          {user.hasDocument && (
+                            <button type="button" className="row-action-btn" onClick={() => handleViewDocument(user)}>
+                              <Eye size={14} />
+                              View
                             </button>
                           )}
+                          {user.status === "INACTIVE" && (
+                            <button
+                              type="button"
+                              className="row-action-btn"
+                              disabled={actioningId === user.id}
+                              onClick={() => handleDownloadLatestLetter(user)}
+                            >
+                              <FileDown size={14} />
+                              Download letter
+                            </button>
+                          )}
+                          {user.id !== currentUser.id &&
+                            (user.status === "INACTIVE" ? (
+                              <button
+                                type="button"
+                                className="row-action-btn approve"
+                                disabled={actioningId === user.id}
+                                onClick={() => handleReactivate(user)}
+                              >
+                                <RotateCcw size={14} />
+                                Reactivate
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="row-action-btn reject"
+                                disabled={actioningId === user.id}
+                                onClick={() => setExitingUser(user)}
+                              >
+                                <LogOut size={14} />
+                                Exit
+                              </button>
+                            ))}
                         </div>
                       </td>
                     </tr>
@@ -223,6 +330,16 @@ export default function AdminDashboard() {
           onSuccess={handleManagerSuccess}
         />
       )}
+      {exitingUser && (
+        <ExitModal user={exitingUser} onClose={() => setExitingUser(null)} onSuccess={handleExitSuccess} />
+      )}
+      <input
+        ref={documentFileInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx"
+        style={{ display: "none" }}
+        onChange={handleDocumentFileSelected}
+      />
     </DashboardLayout>
   );
 }
