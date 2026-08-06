@@ -46,3 +46,23 @@ a:hover {
 ::selection {
   background: var(--color-primary-200);
 }
+
+/* Shared background watermark - used by both DashboardLayout and AuthLayout.
+   Fixed + low z-index so it sits behind everything; opaque elements (cards,
+   sidebar, topbar) naturally paint over it wherever they overlap. */
+.app-watermark {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.app-watermark img {
+  width: 480px;
+  height: 480px;
+  object-fit: contain;
+  opacity: 0.05;
+}
