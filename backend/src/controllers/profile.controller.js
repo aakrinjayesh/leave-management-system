@@ -4,6 +4,7 @@ const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const userManagerService = require("../services/userManager.service");
 const incomeTaxService = require("../services/incomeTax.service");
+const resignationService = require("../services/resignation.service");
 const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.service");
 
 // Any active user can be picked as someone's manager - not just Manager/Admin
@@ -101,6 +102,28 @@ const downloadMyIncomeTaxComputationPdf = asyncHandler(async (req, res) => {
   streamIncomeTaxComputationPdf({ generation, employee: generation.user }, res);
 });
 
+const submitMyResignation = asyncHandler(async (req, res) => {
+  const { reason, proposedLastWorkingDate } = req.body;
+
+  const resignation = await resignationService.submitResignation(req.user.id, reason, proposedLastWorkingDate);
+
+  new ApiResponse(201, "Resignation submitted.", { resignation }).send(res);
+});
+
+const getMyResignation = asyncHandler(async (req, res) => {
+  const resignation = await resignationService.getMyResignation(req.user.id);
+
+  new ApiResponse(200, "OK", { resignation }).send(res);
+});
+
+const withdrawMyResignation = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+
+  const resignation = await resignationService.withdrawResignation(req.user.id, id);
+
+  new ApiResponse(200, "Resignation withdrawn.", { resignation }).send(res);
+});
+
 module.exports = {
   getManagerOptions,
   updateMyManager,
@@ -108,4 +131,7 @@ module.exports = {
   getMyIncomeTaxComputation,
   listMyIncomeTaxComputationGenerations,
   downloadMyIncomeTaxComputationPdf,
+  submitMyResignation,
+  getMyResignation,
+  withdrawMyResignation,
 };

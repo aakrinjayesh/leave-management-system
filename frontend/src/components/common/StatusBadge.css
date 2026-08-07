@@ -25,7 +25,8 @@
 }
 
 .status-badge-approved,
-.status-badge-active {
+.status-badge-active,
+.status-badge-accepted {
   background-color: var(--color-success-bg);
   color: var(--color-success-text);
 }
@@ -36,7 +37,8 @@
 }
 
 .status-badge-cancelled,
-.status-badge-inactive {
+.status-badge-inactive,
+.status-badge-withdrawn {
   background-color: var(--color-gray-100);
   color: var(--color-gray-500);
 }

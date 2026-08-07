@@ -29,6 +29,7 @@ const exitController = require("../controllers/adminExit.controller");
 const taxController = require("../controllers/adminTax.controller");
 const reportController = require("../controllers/adminReport.controller");
 const offerLetterController = require("../controllers/adminOfferLetter.controller");
+const resignationController = require("../controllers/adminResignation.controller");
 const { uploadSingleEmployeeDocument } = require("../config/employeeDocumentUpload");
 const { USER_TYPE } = require("../utils/constants");
 
@@ -131,5 +132,9 @@ router.patch(
 );
 router.delete("/custom-fields/:fieldId", employeeDocsController.deleteCustomField);
 router.get("/custom-fields/:fieldId/document", employeeDocsController.downloadCustomFieldDocument);
+
+router.get("/resignations", resignationController.listResignations);
+router.patch("/resignations/:id/accept", resignationController.acceptResignation);
+router.patch("/resignations/:id/reject", resignationController.rejectResignation);
 
 module.exports = router;

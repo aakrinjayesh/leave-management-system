@@ -6,7 +6,9 @@ import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
 import StatCard from "../../components/common/StatCard";
+import StatusBadge from "../../components/common/StatusBadge";
 import AnniversaryCelebration from "../../components/common/AnniversaryCelebration";
+import ResignationModal from "./ResignationModal";
 // Hidden for employees - admin-only feature for now. Uncomment to re-enable.
 // import MyIncomeTaxComputation from "./MyIncomeTaxComputation";
 // import MyIncomeTaxComputationHistory from "./MyIncomeTaxComputationHistory";
@@ -67,6 +69,10 @@ export default function ProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationYears, setCelebrationYears] = useState(null);
+  const [myResignation, setMyResignation] = useState(undefined);
+  const [showResignationModal, setShowResignationModal] = useState(false);
+  const [resignationError, setResignationError] = useState("");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   const isAdmin = user?.userType === "ADMIN";
 
@@ -78,6 +84,36 @@ export default function ProfilePage() {
       .catch(() => setError("Couldn't load the list of people to choose from. Please try again."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadMyResignation = () =>
+    profileApi
+      .getMyResignation()
+      .then((data) => setMyResignation(data.resignation))
+      .catch(() => setResignationError("Couldn't load your resignation status. Please try again."));
+
+  useEffect(() => {
+    if (isAdmin) return;
+    loadMyResignation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleWithdrawResignation = async () => {
+    setResignationError("");
+    setIsWithdrawing(true);
+    try {
+      await profileApi.withdrawResignation(myResignation.id);
+      await loadMyResignation();
+    } catch (err) {
+      setResignationError(getErrorMessage(err, "Couldn't withdraw your resignation. Please try again."));
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
+  // Days left in the 30-day notice period, counted down to lastWorkingDate -
+  // 0 once/if that date has passed, never negative.
+  const noticeDaysRemaining = (lastWorkingDate) =>
+    Math.max(0, Math.ceil((new Date(lastWorkingDate) - new Date()) / (1000 * 60 * 60 * 24)));
 
   // Plays once per new anniversary - the first profile visit after crossing
   // 1 year, then again after crossing 2 years, and so on. Refreshes the local
@@ -473,6 +509,89 @@ export default function ProfilePage() {
             )}
           </div>
         </div>
+      )}
+
+      {!isAdmin && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-section">
+            <span className="card-section-title">Resignation</span>
+
+            {resignationError && <Alert type="error">{resignationError}</Alert>}
+
+            {myResignation === undefined ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: "24px 0" }}>
+                <Spinner size={24} />
+              </div>
+            ) : !myResignation || ["REJECTED", "WITHDRAWN"].includes(myResignation.status) ? (
+              <>
+                <p className="card-section-subtitle">
+                  {myResignation?.status === "REJECTED" &&
+                    "Your previous resignation was rejected by admin. "}
+                  {myResignation?.status === "WITHDRAWN" && "You previously withdrew your resignation. "}
+                  If you wish to resign, submit a request below - it will be sent to your manager (view only) and
+                  admin for review.
+                </p>
+                <Button type="button" onClick={() => setShowResignationModal(true)}>
+                  Submit resignation
+                </Button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <StatusBadge status={myResignation.status} />
+                  <span className="card-section-subtitle" style={{ margin: 0 }}>
+                    Submitted on {formatDate(myResignation.createdAt)}
+                  </span>
+                </div>
+
+                <div className="profile-detail-grid">
+                  <div>
+                    <div className="profile-detail-label">Reason</div>
+                    <div className="profile-detail-value">{myResignation.reason}</div>
+                  </div>
+                  <div>
+                    <div className="profile-detail-label">Proposed last working day</div>
+                    <div className="profile-detail-value">{formatDate(myResignation.proposedLastWorkingDate)}</div>
+                  </div>
+                  {myResignation.status === "ACCEPTED" && (
+                    <>
+                      <div>
+                        <div className="profile-detail-label">Confirmed last working day</div>
+                        <div className="profile-detail-value">{formatDate(myResignation.lastWorkingDate)}</div>
+                      </div>
+                      <div>
+                        <div className="profile-detail-label">Notice period</div>
+                        <div className="profile-detail-value">
+                          {noticeDaysRemaining(myResignation.lastWorkingDate)} day
+                          {noticeDaysRemaining(myResignation.lastWorkingDate) !== 1 ? "s" : ""} remaining
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {myResignation.status === "PENDING" && (
+                  <div className="modal-actions" style={{ justifyContent: "flex-start", marginTop: 16 }}>
+                    <Button variant="secondary" isLoading={isWithdrawing} onClick={handleWithdrawResignation}>
+                      Withdraw resignation
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showResignationModal && (
+        <ResignationModal
+          user={user}
+          onClose={() => setShowResignationModal(false)}
+          onSubmitted={() => {
+            setShowResignationModal(false);
+            loadMyResignation();
+          }}
+        />
       )}
     </DashboardLayout>
   );

@@ -16,3 +16,10 @@ export const listMyIncomeTaxComputationGenerations = () =>
 
 export const downloadMyIncomeTaxComputationPdf = (generationId) =>
   axiosClient.get(`/profile/tax-computation-generations/${generationId}/pdf`, { responseType: "blob" });
+
+export const submitResignation = (reason, proposedLastWorkingDate) =>
+  unwrap(axiosClient.post("/profile/resignation", { reason, proposedLastWorkingDate }));
+
+export const getMyResignation = () => unwrap(axiosClient.get("/profile/resignation"));
+
+export const withdrawResignation = (id) => unwrap(axiosClient.patch(`/profile/resignation/${id}/withdraw`));

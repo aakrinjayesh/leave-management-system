@@ -25,3 +25,5 @@ export const rejectLeaveRequest = (id, remarks) =>
 
 export const getTeamCalendar = (year, month) =>
   unwrap(axiosClient.get("/manager/calendar", { params: { year, month } }));
+
+export const getTeamResignations = () => unwrap(axiosClient.get("/manager/resignations"));

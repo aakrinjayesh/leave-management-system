@@ -169,3 +169,9 @@ export const downloadCustomFieldDocument = (fieldId) =>
   axiosClient.get(`/admin/custom-fields/${fieldId}/document`, { responseType: "blob" }).then((res) => res.data);
 
 export const updateCompanySettings = (payload) => unwrap(axiosClient.put("/admin/company-settings", payload));
+
+export const listResignations = () => unwrap(axiosClient.get("/admin/resignations"));
+
+export const acceptResignation = (id) => unwrap(axiosClient.patch(`/admin/resignations/${id}/accept`));
+
+export const rejectResignation = (id) => unwrap(axiosClient.patch(`/admin/resignations/${id}/reject`));

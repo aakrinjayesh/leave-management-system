@@ -84,6 +84,13 @@ enum IncomeTaxComputationMode {
     FINAL
 }
 
+enum ResignationStatus {
+    PENDING
+    ACCEPTED
+    REJECTED
+    WITHDRAWN
+}
+
 model User {
     id           Int     @id @default(autoincrement())
     employeeCode String? @unique
@@ -199,6 +206,9 @@ model User {
 
     incomeTaxComputationGenerations         IncomeTaxComputationGeneration[]
     generatedIncomeTaxComputationGenerations IncomeTaxComputationGeneration[] @relation("IncomeTaxComputationGenerationsGeneratedBy")
+
+    resignations         Resignation[]
+    decidedResignations  Resignation[] @relation("ResignationsDecidedBy")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
@@ -220,6 +230,40 @@ model ExitRecord {
     recordedBy User @relation("ExitRecordsRecordedBy", fields: [recordedById], references: [id])
 
     @@index([userId])
+}
+
+// One row per resignation request, employee-initiated from their own
+// Profile page. Manager can only view it (routed by the employee's current
+// managerId, not stored on the row) - only admin can Accept/Reject.
+// proposedLastWorkingDate is whatever date the employee chose at submission
+// - not yet official. lastWorkingDate is the CONFIRMED date, only set once
+// admin accepts: proposedLastWorkingDate + noticePeriodDays (30 by default),
+// per the actual notice-period policy - the employee's chosen date is a
+// resignation/notice date, not their literal final day, so a full notice
+// period is added on top of it once accepted.
+model Resignation {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    reason String @db.Text
+
+    status                  ResignationStatus @default(PENDING)
+    noticePeriodDays        Int               @default(30)
+    proposedLastWorkingDate DateTime
+    lastWorkingDate         DateTime?
+
+    decidedById Int?
+    decidedAt   DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+    decidedBy User? @relation("ResignationsDecidedBy", fields: [decidedById], references: [id])
+
+    @@index([userId])
+    @@index([status])
 }
 
 // One row per generated offer letter - never overwritten, so admin can

@@ -10,6 +10,7 @@ import {
   CalendarRange,
   FileText,
   BarChart3,
+  FileWarning,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -66,6 +67,11 @@ const buildNavItems = (user) => {
       label: "Team Timesheets",
       icon: Clock,
     });
+    items.push({
+      to: "/manager/resignations",
+      label: "Resignations",
+      icon: FileWarning,
+    });
   }
 
   if (isAdmin) {
@@ -85,6 +91,11 @@ const buildNavItems = (user) => {
       icon: CalendarRange,
     });
     items.push({ to: "/admin/payslips", label: "Payslips", icon: FileText });
+    items.push({
+      to: "/admin/resignations",
+      label: "Resignations",
+      icon: FileWarning,
+    });
   }
   items.push({ to: "/profile", label: "Profile", icon: UserCog });
 
