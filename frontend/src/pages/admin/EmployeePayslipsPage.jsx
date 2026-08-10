@@ -221,7 +221,7 @@ function EmployeePayslipsContent({ id }) {
 
   if (!user) {
     return (
-      <DashboardLayout title="Admin">
+      <DashboardLayout title="Employee Payslips">
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
           <Spinner size={28} />
         </div>
@@ -230,7 +230,7 @@ function EmployeePayslipsContent({ id }) {
   }
 
   return (
-    <DashboardLayout title="Admin">
+    <DashboardLayout title="Employee Payslips">
       <button type="button" className="link-btn" style={{ marginBottom: 16 }} onClick={() => navigate("/admin/payslips")}>
         <ArrowLeft size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
         Back to payslips

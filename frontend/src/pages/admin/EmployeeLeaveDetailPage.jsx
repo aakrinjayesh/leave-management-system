@@ -83,7 +83,7 @@ function EmployeeLeaveDetailContent({ id }) {
 
   if (!data) {
     return (
-      <DashboardLayout title="Admin">
+      <DashboardLayout title="Employee Leave">
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
           <Spinner size={28} />
         </div>
@@ -94,7 +94,7 @@ function EmployeeLeaveDetailContent({ id }) {
   const { employee, balances, leaveRequests, ledgers } = data;
 
   return (
-    <DashboardLayout title="Admin">
+    <DashboardLayout title="Employee Leave">
       <button type="button" className="link-btn" style={{ marginBottom: 16 }} onClick={() => navigate("/admin/dashboard")}>
         <ArrowLeft size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
         Back to accounts

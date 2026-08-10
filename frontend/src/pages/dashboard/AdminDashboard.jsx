@@ -150,7 +150,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <DashboardLayout title="Admin">
+    <DashboardLayout title="Manage Accounts">
       <div className="page-header">
         <div>
           <h1>Accounts</h1>

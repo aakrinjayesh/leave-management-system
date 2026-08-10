@@ -152,7 +152,7 @@ export default function ManageLeavesPage() {
   };
 
   return (
-    <DashboardLayout title="Admin">
+    <DashboardLayout title="Manage Leave Policy">
       <div className="page-header">
         <div>
           <h1>Manage Leaves</h1>

@@ -19,7 +19,7 @@ export default function PayslipsPage() {
   }, []);
 
   return (
-    <DashboardLayout title="Admin">
+    <DashboardLayout title="Payslips">
       <div className="page-header">
         <div>
           <h1>Payslips</h1>
