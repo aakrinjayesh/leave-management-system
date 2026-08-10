@@ -580,7 +580,7 @@ function EmployeeDetailsContent({ id }) {
           )}
 
           <div className="modal-actions" style={{ justifyContent: "flex-start" }}>
-            <Button type="button" variant="secondary" onClick={() => setIsStructureModalOpen(true)}>
+            <Button type="button" onClick={() => setIsStructureModalOpen(true)}>
               Update Salary Structure
             </Button>
           </div>

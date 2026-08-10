@@ -53,6 +53,14 @@
   border-color: var(--color-danger-border);
 }
 
+select.field-input {
+  cursor: pointer;
+}
+
+select.field-input option {
+  cursor: pointer;
+}
+
 .field-input.has-error:focus {
   box-shadow: 0 0 0 3px var(--color-danger-bg);
 }
