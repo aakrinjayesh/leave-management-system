@@ -92,9 +92,40 @@
   border-image: linear-gradient(90deg, #581c87, #3b0764) 1;
 }
 
+.dashboard-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .dashboard-topbar-title {
   font-size: 1.05rem;
   font-weight: 700;
+}
+
+.dashboard-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--color-gray-600);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.dashboard-back-btn:hover:not(:disabled) {
+  background-color: var(--color-gray-100);
+  color: var(--text-primary);
+}
+
+.dashboard-back-btn:disabled {
+  color: var(--color-gray-300);
+  cursor: not-allowed;
 }
 
 .dashboard-user {

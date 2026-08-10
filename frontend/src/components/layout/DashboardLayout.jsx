@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useBackNavigation } from "../../hooks/useBackNavigation";
 import aakrinLogo from "../../assets/aakrin-logo.png";
 import { COPYRIGHT_TEXT } from "../../utils/copyright";
 import "./DashboardLayout.css";
@@ -106,6 +108,7 @@ const buildNavItems = (user) => {
 export default function DashboardLayout({ title, children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { canGoBack, goBack } = useBackNavigation();
 
   const initials =
     `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
@@ -153,7 +156,18 @@ export default function DashboardLayout({ title, children }) {
 
       <div className="dashboard-main">
         <header className="dashboard-topbar">
-          <span className="dashboard-topbar-title">{title}</span>
+          <div className="dashboard-topbar-left">
+            <button
+              type="button"
+              className="dashboard-back-btn"
+              onClick={goBack}
+              disabled={!canGoBack}
+              aria-label="Go back"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <span className="dashboard-topbar-title">{title}</span>
+          </div>
           <div className="dashboard-user">
             <div className="dashboard-user-info">
               <div className="dashboard-user-name">
