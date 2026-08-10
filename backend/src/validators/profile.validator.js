@@ -1,9 +1,5 @@
 const { z } = require("zod");
 
-const updateManagerSchema = z.object({
-  managerId: z.coerce.number().int().positive("Please choose your manager."),
-});
-
 // proposedLastWorkingDate is just the employee's own notice date, not yet
 // official - the real, confirmed lastWorkingDate only gets set once admin
 // accepts (proposedLastWorkingDate + noticePeriodDays). No minimum notice
@@ -25,4 +21,4 @@ const submitResignationSchema = z
     }
   );
 
-module.exports = { updateManagerSchema, submitResignationSchema };
+module.exports = { submitResignationSchema };

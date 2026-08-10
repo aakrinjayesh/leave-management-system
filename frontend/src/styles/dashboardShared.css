@@ -32,6 +32,12 @@
   font-size: 1.3rem;
   font-weight: 700;
   margin-bottom: 4px;
+  font-family: Georgia, "Times New Roman", Times, serif;
+  color: #3b0764;
+  letter-spacing: 0.3px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #d8b4fe;
+  display: inline-block;
 }
 
 .page-header p {
@@ -42,8 +48,9 @@
 .card {
   background-color: var(--color-white);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 4px;
   box-shadow: var(--shadow-sm);
+  border-top: 3px solid #6b21a8;
 }
 
 .card-section {
@@ -51,9 +58,22 @@
 }
 
 .card-section-title {
-  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 1.4px;
   font-weight: 700;
-  margin-bottom: 16px;
+  color: #6b21a8;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid #ede9fe;
+}
+
+.profile-title-icon {
+  flex-shrink: 0;
+  color: #6b21a8;
 }
 
 .card-section-subtitle {

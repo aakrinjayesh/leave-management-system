@@ -1,29 +1,61 @@
+/* Underline tabs (Password / Email OTP) instead of a filled pill switcher -
+   flat, no background fill, just a bottom-border indicator on the active
+   one. A calmer, more professional pattern than a colored segmented
+   control. */
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  background-color: var(--color-gray-100);
-  border-radius: var(--radius-md);
-  padding: 4px;
-  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 28px;
 }
 
 .tab-btn {
-  padding: 9px 0;
-  font-size: 0.9rem;
+  padding: 0 0 12px;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--text-secondary);
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
   cursor: pointer;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .tab-btn.active {
-  background-color: var(--color-white);
-  color: var(--color-primary-700);
-  box-shadow: var(--shadow-sm);
+  color: #3b0764;
+  border-bottom-color: #6b21a8;
+}
+
+/* Auth-card-only refresh - scoped to .auth-card so the shared
+   TextInput/Button styles everywhere else in the app are untouched. */
+.auth-card .field-label {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.8px;
+  color: #6b21a8;
+}
+
+.auth-card .field-input {
+  border-radius: 6px;
+}
+
+.auth-card .field-input:focus {
+  border-color: #6b21a8;
+  box-shadow: 0 0 0 3px rgba(107, 33, 168, 0.12);
+}
+
+.auth-card .btn-primary {
+  background-color: #3b0764;
+  border-radius: 6px;
+}
+
+.auth-card .btn-primary:hover:not(:disabled) {
+  background-color: #2e0550;
+}
+
+.auth-card .link-btn {
+  color: #6b21a8;
 }
 
 .field-row-between {

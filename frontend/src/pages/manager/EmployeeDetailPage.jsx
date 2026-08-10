@@ -7,8 +7,10 @@ import Spinner from "../../components/common/Spinner";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import LogLeaveForEmployeeModal from "./LogLeaveForEmployeeModal";
+import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
 import * as managerLeaveApi from "../../api/managerLeave.api";
 import { formatDateRange } from "../../utils/formatDate";
+import { formatLeaveDays } from "../../utils/formatLeaveDays";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { openBlobInNewTab } from "../../utils/openBlob";
 import "../../styles/dashboardShared.css";
@@ -58,7 +60,7 @@ function EmployeeDetailContent({ id }) {
     );
   }
 
-  const { employee, balances, leaveRequests } = data;
+  const { employee, balances, leaveRequests, ledgers } = data;
 
   return (
     <DashboardLayout title="Employee">
@@ -98,7 +100,7 @@ function EmployeeDetailContent({ id }) {
             <div className="balance-card-name">{balance.leaveName}</div>
             <div className="balance-card-numbers">
               <span className="balance-card-remaining">{balance.remainingLeaves}</span>
-              <span className="balance-card-total">of {balance.allocatedLeaves} days remaining</span>
+              <span className="balance-card-total">of {formatLeaveDays(balance.allocatedLeaves)} remaining</span>
             </div>
             <div className="balance-progress-track">
               <div
@@ -106,10 +108,12 @@ function EmployeeDetailContent({ id }) {
                 style={{ width: `${Math.min(100, Math.round((balance.usedLeaves / (balance.allocatedLeaves || 1)) * 100))}%` }}
               />
             </div>
-            <div className="balance-card-used">{balance.usedLeaves} day(s) used this year</div>
+            <div className="balance-card-used">{formatLeaveDays(balance.usedLeaves)} used this year</div>
           </div>
         ))}
       </div>
+
+      <LeaveLedgerCard ledgers={ledgers} />
 
       <div className="card">
         <div className="card-section">

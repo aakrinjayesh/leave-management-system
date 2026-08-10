@@ -15,6 +15,7 @@ import {
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import aakrinLogo from "../../assets/aakrin-logo.png";
+import { COPYRIGHT_TEXT } from "../../utils/copyright";
 import "./DashboardLayout.css";
 
 const ROLE_LABELS = {
@@ -118,7 +119,7 @@ export default function DashboardLayout({ title, children }) {
 
   return (
     <div className="dashboard-shell">
-      <div className="app-watermark" aria-hidden="true">
+      <div className="app-watermark dashboard-watermark" aria-hidden="true">
         <img src={aakrinLogo} alt="" />
       </div>
       <aside className="dashboard-sidebar">
@@ -126,9 +127,13 @@ export default function DashboardLayout({ title, children }) {
           <img
             src={aakrinLogo}
             alt="Aakrin"
-            style={{ width: 50, height: 50, objectFit: "contain" }}
+            style={{ width: 62, height: 62, objectFit: "contain" }}
           />
-          Aakrin Workspace
+          <span>
+            Employee
+            <br />
+            Portal
+          </span>
         </div>
         <nav className="dashboard-nav">
           {navItems.map(({ to, label, icon: Icon }) => (
@@ -167,6 +172,7 @@ export default function DashboardLayout({ title, children }) {
           </div>
         </header>
         <main className="dashboard-content">{children}</main>
+        <footer className="dashboard-footer">{COPYRIGHT_TEXT}</footer>
       </div>
     </div>
   );

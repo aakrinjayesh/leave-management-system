@@ -52,7 +52,7 @@ const getMyLeaveRequests = asyncHandler(async (req, res) => {
 
 const getDashboardSummary = asyncHandler(async (req, res) => {
   const fiscalYear = await companySettingsService.getCurrentFiscalYear();
-  const [balances, recentRequests, pendingCount] = await Promise.all([
+  const [balances, recentRequests, pendingCount, ledgers] = await Promise.all([
     getBalancesForYear(req.user.id, fiscalYear),
     prisma.leaveRequest.findMany({
       where: { userId: req.user.id },
@@ -61,9 +61,10 @@ const getDashboardSummary = asyncHandler(async (req, res) => {
       take: 5,
     }),
     prisma.leaveRequest.count({ where: { userId: req.user.id, status: "PENDING" } }),
+    leaveBalanceService.getAllLedgersForUser(req.user.id, fiscalYear),
   ]);
 
-  new ApiResponse(200, "OK", { balances, recentRequests, pendingCount }).send(res);
+  new ApiResponse(200, "OK", { balances, recentRequests, pendingCount, ledgers }).send(res);
 });
 
 const applyLeave = asyncHandler(async (req, res) => {
@@ -106,7 +107,7 @@ const applyLeave = asyncHandler(async (req, res) => {
     throw ApiError.badRequest("Future-dated leave requests aren't allowed.");
   }
 
-  const { totalDays } = await leaveCalendarService.computeWorkingDays({
+  const { totalDays, workingDates } = await leaveCalendarService.computeWorkingDays({
     startDate: requestStart,
     endDate: requestEnd,
     isHalfDay,
@@ -174,44 +175,85 @@ const applyLeave = asyncHandler(async (req, res) => {
 
   const requestFiscalYear = await companySettingsService.getFiscalYearForDate(requestStart);
   const balance = await leaveBalanceService.getOrCreateBalance(req.user.id, leavePolicy, requestFiscalYear);
+
+  // Default: the whole request under its own policy, unchanged. Only
+  // recomputed below if it doesn't fit the remaining balance.
+  let requestSpecs = [{ leavePolicyId: leavePolicy.id, startDate: requestStart, endDate: requestEnd, totalDays }];
+
   if (!leavePolicy.isUnlimited && totalDays > balance.remainingLeaves) {
-    throw ApiError.badRequest(
-      `Insufficient balance. You have ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining.`
-    );
+    // Non-accrual capped policies keep the old hard block - only Sick/
+    // Casual/Earned (accrual policies) auto-split the overage into Unpaid
+    // Leave instead of rejecting the request outright.
+    if (leavePolicy.monthlyAccrualDays == null) {
+      throw ApiError.badRequest(
+        `Insufficient balance. You have ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining.`
+      );
+    }
+
+    const unpaidPolicy = await prisma.leavePolicy.findFirst({ where: { isUnpaid: true, isActive: true } });
+    if (!unpaidPolicy) {
+      throw ApiError.badRequest(
+        `Insufficient balance. You have ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining, and no Unpaid Leave policy is set up to cover the rest.`
+      );
+    }
+
+    requestSpecs = leaveBalanceService.splitForOverage({
+      leavePolicy,
+      unpaidPolicyId: unpaidPolicy.id,
+      remainingLeaves: balance.remainingLeaves,
+      workingDates,
+      requestStart,
+      requestEnd,
+      isHalfDay,
+      totalDays,
+    });
   }
 
-  const leaveRequest = await prisma.leaveRequest.create({
-    data: {
-      userId: req.user.id,
-      leavePolicyId: leavePolicy.id,
-      routedToId: recipient.id,
-      startDate: requestStart,
-      endDate: requestEnd,
-      totalDays,
-      reason,
-      status: "PENDING",
-      attachmentUrl: attachmentUrl || null,
-    },
-    include: { leavePolicy: true, routedTo: { select: { firstName: true, lastName: true } } },
-  });
+  const leaveRequests = [];
+  for (const spec of requestSpecs) {
+    const created = await prisma.leaveRequest.create({
+      data: {
+        userId: req.user.id,
+        leavePolicyId: spec.leavePolicyId,
+        routedToId: recipient.id,
+        startDate: spec.startDate,
+        endDate: spec.endDate,
+        totalDays: spec.totalDays,
+        reason,
+        status: "PENDING",
+        attachmentUrl: attachmentUrl || null,
+      },
+      include: { leavePolicy: true, routedTo: { select: { firstName: true, lastName: true } } },
+    });
+    leaveRequests.push(created);
+  }
 
-  new ApiResponse(201, "Leave request submitted.", { leaveRequest }).send(res);
+  const wasSplit = leaveRequests.length > 1;
+  new ApiResponse(
+    201,
+    wasSplit
+      ? `Leave request submitted - only part of it was covered by your ${leavePolicy.leaveName} balance, so the rest was booked as Unpaid Leave.`
+      : "Leave request submitted.",
+    { leaveRequests }
+  ).send(res);
 
   // Notify the manager - sent after the response so the employee doesn't wait
   // on the email round-trip; failures here shouldn't fail the leave request itself.
-  try {
-    await sendLeaveSubmittedEmail({
-      to: recipient.email,
-      managerFirstName: recipient.firstName,
-      employeeName: `${req.user.firstName} ${req.user.lastName}`,
-      leaveName: leavePolicy.leaveName,
-      startDate: requestStart,
-      endDate: requestEnd,
-      totalDays,
-      reason,
-    });
-  } catch (err) {
-    console.error("Failed to send leave request submitted email:", err);
+  for (const leaveRequest of leaveRequests) {
+    try {
+      await sendLeaveSubmittedEmail({
+        to: recipient.email,
+        managerFirstName: recipient.firstName,
+        employeeName: `${req.user.firstName} ${req.user.lastName}`,
+        leaveName: leaveRequest.leavePolicy.leaveName,
+        startDate: leaveRequest.startDate,
+        endDate: leaveRequest.endDate,
+        totalDays: leaveRequest.totalDays,
+        reason,
+      });
+    } catch (err) {
+      console.error("Failed to send leave request submitted email:", err);
+    }
   }
 
   // If the recipient manager currently has an approved leave covering today,

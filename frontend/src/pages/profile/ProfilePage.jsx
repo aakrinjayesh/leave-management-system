@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
-import { UserCog, PartyPopper } from "lucide-react";
+import {
+  UserCog,
+  PartyPopper,
+  Briefcase,
+  Wallet,
+  History,
+  User,
+  CreditCard,
+  Landmark,
+  FileText,
+  LogOut,
+} from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import FormSelect from "../../components/common/FormSelect";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
@@ -62,11 +72,6 @@ const formatTenure = (joiningDateValue) => {
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
-  const [options, setOptions] = useState(null);
-  const [managerId, setManagerId] = useState(user?.managerId ? String(user.managerId) : "");
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationYears, setCelebrationYears] = useState(null);
   const [myResignation, setMyResignation] = useState(undefined);
@@ -75,15 +80,6 @@ export default function ProfilePage() {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   const isAdmin = user?.userType === "ADMIN";
-
-  useEffect(() => {
-    if (isAdmin) return;
-    profileApi
-      .getManagerOptions()
-      .then((data) => setOptions(data.options))
-      .catch(() => setError("Couldn't load the list of people to choose from. Please try again."));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const loadMyResignation = () =>
     profileApi
@@ -137,36 +133,6 @@ export default function ProfilePage() {
     setShowCelebration(false);
   };
 
-  // getManagerOptions only lists active users - if the current manager was
-  // deactivated since being picked, they won't be in that list. Surface them
-  // anyway (clearly marked) so the dropdown doesn't just look unselected.
-  const currentManagerIsInactive =
-    user?.managerId && user?.manager && options && !options.some((o) => o.id === user.managerId);
-  const displayOptions =
-    currentManagerIsInactive && options ? [{ ...user.manager, inactive: true }, ...options] : options;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccessMessage("");
-
-    if (!managerId) {
-      setError("Please choose your manager.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await profileApi.updateMyManager(Number(managerId));
-      await refreshUser();
-      setSuccessMessage("Your manager has been updated.");
-    } catch (err) {
-      setError(getErrorMessage(err, "Couldn't update your manager. Please try again."));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <DashboardLayout title="Profile">
       {showCelebration && (
@@ -185,75 +151,10 @@ export default function ProfilePage() {
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">
-          <span className="card-section-title">Personal information</span>
-          <p className="card-section-subtitle">
-            These fields are managed by your admin - contact them to update any of these.
-          </p>
-
-          <div className="profile-detail-grid">
-            <div>
-              <div className="profile-detail-label">Name</div>
-              <div className="profile-detail-value">
-                {user?.firstName} {user?.lastName}
-              </div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Email</div>
-              <div className="profile-detail-value">{user?.email}</div>
-            </div>
-            {user?.isManager && (
-              <div>
-                <div className="profile-detail-label">Manager status</div>
-                <div className="profile-detail-value">You currently have direct reports</div>
-              </div>
-            )}
-            <div>
-              <div className="profile-detail-label">Employee code</div>
-              <div className="profile-detail-value">{user?.employeeCode || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Mobile number</div>
-              <div className="profile-detail-value">{user?.phone || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Date of birth</div>
-              <div className="profile-detail-value">{user?.birthDate ? formatDate(user.birthDate) : "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Date of joining</div>
-              <div className="profile-detail-value">{user?.joiningDate ? formatDate(user.joiningDate) : "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Gender</div>
-              <div className="profile-detail-value">{GENDER_LABELS[user?.gender] || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Marital status</div>
-              <div className="profile-detail-value">{MARITAL_STATUS_LABELS[user?.maritalStatus] || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Father's name</div>
-              <div className="profile-detail-value">{user?.fatherName || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Spouse name</div>
-              <div className="profile-detail-value">{user?.spouseName || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Nationality</div>
-              <div className="profile-detail-value">{user?.nationality || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Qualification</div>
-              <div className="profile-detail-value">{user?.qualification || "Not set"}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-section">
-          <span className="card-section-title">Employment details</span>
+          <span className="card-section-title">
+            <Briefcase size={15} className="profile-title-icon" />
+            Employment details
+          </span>
 
           <div className="profile-detail-grid">
             <div>
@@ -265,69 +166,12 @@ export default function ProfilePage() {
               <div className="profile-detail-value">{user?.location || "Not set"}</div>
             </div>
             <div>
+              <div className="profile-detail-label">Date of joining</div>
+              <div className="profile-detail-value">{user?.joiningDate ? formatDate(user.joiningDate) : "Not set"}</div>
+            </div>
+            <div>
               <div className="profile-detail-label">Tax regime</div>
               <div className="profile-detail-value">{TAX_REGIME_LABELS[user?.taxRegime] || "Not set"}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-section">
-          <span className="card-section-title">PAN &amp; Aadhaar</span>
-          <p className="card-section-subtitle">
-            Sensitive numbers are shown masked. Uploaded documents are visible to admin only.
-          </p>
-
-          <div className="profile-detail-grid">
-            <div>
-              <div className="profile-detail-label">PAN number</div>
-              <div className="profile-detail-value">{user?.pan || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Name as per PAN</div>
-              <div className="profile-detail-value">{user?.panHolderName || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">UAN</div>
-              <div className="profile-detail-value">{user?.uan || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Aadhaar number</div>
-              <div className="profile-detail-value">{user?.aadharNumber || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Name as per Aadhaar</div>
-              <div className="profile-detail-value">{user?.aadharHolderName || "Not set"}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-section">
-          <span className="card-section-title">Bank &amp; salary</span>
-
-          <div className="profile-detail-grid">
-            <div>
-              <div className="profile-detail-label">Bank account number</div>
-              <div className="profile-detail-value">{user?.bankAccountNumber || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Bank name</div>
-              <div className="profile-detail-value">{user?.bankName || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">IFSC code</div>
-              <div className="profile-detail-value">{user?.ifscCode || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">PF number</div>
-              <div className="profile-detail-value">{user?.pfNumber || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">Salary / CTC (annual)</div>
-              <div className="profile-detail-value">{formatCtc(user?.salaryCtc)}</div>
             </div>
           </div>
         </div>
@@ -336,13 +180,20 @@ export default function ProfilePage() {
       {user?.salaryStructure && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-section">
-            <span className="card-section-title">Salary structure</span>
+            <span className="card-section-title">
+              <Wallet size={15} className="profile-title-icon" />
+              Salary structure
+            </span>
             <p className="card-section-subtitle">
               How your CTC breaks down, as fixed by admin - effective from{" "}
               <strong>{formatMonth(user.salaryStructure.effectiveFrom)}</strong> onward.
             </p>
 
             <div className="profile-detail-grid">
+              <div>
+                <div className="profile-detail-label">CTC (annual)</div>
+                <div className="profile-detail-value">{formatCtc(user.salaryStructure.ctc)}</div>
+              </div>
               <div>
                 <div className="profile-detail-label">Basic</div>
                 <div className="profile-detail-value">{user.salaryStructure.basicPercentOfCtc}% of monthly CTC</div>
@@ -385,7 +236,10 @@ export default function ProfilePage() {
       {user?.pastSalaryStructures?.length > 0 && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-section">
-            <span className="card-section-title">Past salary structures</span>
+            <span className="card-section-title">
+              <History size={15} className="profile-title-icon" />
+              Past salary structures
+            </span>
             <p className="card-section-subtitle">Earlier entries, most recent first - each was effective until the next one started.</p>
 
             {user.pastSalaryStructures.map((entry, index) => (
@@ -442,6 +296,140 @@ export default function ProfilePage() {
         </div>
       )}
 
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-section">
+          <span className="card-section-title">
+            <User size={15} className="profile-title-icon" />
+            Personal information
+          </span>
+          <p className="card-section-subtitle">
+            These fields are managed by your admin - contact them to update any of these.
+          </p>
+
+          <div className="profile-detail-grid">
+            <div>
+              <div className="profile-detail-label">Name</div>
+              <div className="profile-detail-value">
+                {user?.firstName} {user?.lastName}
+              </div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Email</div>
+              <div className="profile-detail-value">{user?.email}</div>
+            </div>
+            {user?.isManager && (
+              <div>
+                <div className="profile-detail-label">Manager status</div>
+                <div className="profile-detail-value">You currently have direct reports</div>
+              </div>
+            )}
+            <div>
+              <div className="profile-detail-label">Employee code</div>
+              <div className="profile-detail-value">{user?.employeeCode || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Mobile number</div>
+              <div className="profile-detail-value">{user?.phone || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Date of birth</div>
+              <div className="profile-detail-value">{user?.birthDate ? formatDate(user.birthDate) : "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Gender</div>
+              <div className="profile-detail-value">{GENDER_LABELS[user?.gender] || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Marital status</div>
+              <div className="profile-detail-value">{MARITAL_STATUS_LABELS[user?.maritalStatus] || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Father's name</div>
+              <div className="profile-detail-value">{user?.fatherName || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Spouse name</div>
+              <div className="profile-detail-value">{user?.spouseName || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Nationality</div>
+              <div className="profile-detail-value">{user?.nationality || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Qualification</div>
+              <div className="profile-detail-value">{user?.qualification || "Not set"}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-section">
+          <span className="card-section-title">
+            <CreditCard size={15} className="profile-title-icon" />
+            PAN &amp; Aadhaar
+          </span>
+          <p className="card-section-subtitle">
+            Sensitive numbers are shown masked. Uploaded documents are visible to admin only.
+          </p>
+
+          <div className="profile-detail-grid">
+            <div>
+              <div className="profile-detail-label">PAN number</div>
+              <div className="profile-detail-value">{user?.pan || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Name as per PAN</div>
+              <div className="profile-detail-value">{user?.panHolderName || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">UAN</div>
+              <div className="profile-detail-value">{user?.uan || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Aadhaar number</div>
+              <div className="profile-detail-value">{user?.aadharNumber || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Name as per Aadhaar</div>
+              <div className="profile-detail-value">{user?.aadharHolderName || "Not set"}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-section">
+          <span className="card-section-title">
+            <Landmark size={15} className="profile-title-icon" />
+            Bank &amp; salary
+          </span>
+
+          <div className="profile-detail-grid">
+            <div>
+              <div className="profile-detail-label">Bank account number</div>
+              <div className="profile-detail-value">{user?.bankAccountNumber || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Bank name</div>
+              <div className="profile-detail-value">{user?.bankName || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">IFSC code</div>
+              <div className="profile-detail-value">{user?.ifscCode || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">PF number</div>
+              <div className="profile-detail-value">{user?.pfNumber || "Not set"}</div>
+            </div>
+            <div>
+              <div className="profile-detail-label">Salary / CTC (annual)</div>
+              <div className="profile-detail-value">{formatCtc(user?.salaryCtc)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Hidden for employees - admin-only feature for now. Uncomment to re-enable.
       <MyIncomeTaxComputation />
       <MyIncomeTaxComputationHistory /> */}
@@ -449,7 +437,10 @@ export default function ProfilePage() {
       {user?.customFields?.length > 0 && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-section">
-            <span className="card-section-title">Other details</span>
+            <span className="card-section-title">
+              <FileText size={15} className="profile-title-icon" />
+              Other details
+            </span>
 
             <div className="profile-detail-grid">
               {user.customFields.map((field) => (
@@ -466,47 +457,34 @@ export default function ProfilePage() {
       {!isAdmin && (
         <div className="card">
           <div className="card-section">
-            <span className="card-section-title">My manager</span>
+            <span className="card-section-title">
+              <UserCog size={15} className="profile-title-icon" />
+              My manager
+            </span>
 
             {!user?.managerId && (
               <Alert type="error">
-                You need to set your manager before you can apply for leave.
+                You don't have a manager assigned yet - contact your admin to get one set before you can apply for
+                leave.
               </Alert>
             )}
-            {currentManagerIsInactive && (
-              <Alert type="error">
-                Your manager's account is no longer active. Please choose a new one.
-              </Alert>
-            )}
-            {error && <Alert type="error">{error}</Alert>}
-            {successMessage && <Alert type="success">{successMessage}</Alert>}
 
-            {!options ? (
-              <div style={{ display: "flex", justifyContent: "center", padding: "24px 0" }}>
-                <Spinner size={24} />
+            {user?.managerId && (
+              <div className="profile-detail-grid" style={{ marginBottom: 18 }}>
+                <div>
+                  <div className="profile-detail-label">Manager</div>
+                  <div className="profile-detail-value">
+                    {user?.manager?.firstName} {user?.manager?.lastName}
+                    {user?.manager?.email ? ` — ${user.manager.email}` : ""}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <form onSubmit={handleSubmit} noValidate>
-                <FormSelect label="Manager" value={managerId} onChange={(e) => setManagerId(e.target.value)}>
-                  <option value="">Select your manager</option>
-                  {displayOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.firstName} {option.lastName} — {option.email}
-                      {option.inactive ? " — inactive, please pick someone else" : ""}
-                    </option>
-                  ))}
-                </FormSelect>
-
-                <p className="helper-text">
-                  <UserCog size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                  Every leave request you submit will be sent to this person for approval.
-                </p>
-
-                <Button type="submit" isLoading={isSubmitting}>
-                  Save
-                </Button>
-              </form>
             )}
+
+            <p className="helper-text" style={{ marginTop: 0 }}>
+              <UserCog size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+              Only admin can set or change your manager. Every leave request you submit is sent to them for approval.
+            </p>
           </div>
         </div>
       )}
@@ -514,7 +492,10 @@ export default function ProfilePage() {
       {!isAdmin && (
         <div className="card" style={{ marginTop: 20 }}>
           <div className="card-section">
-            <span className="card-section-title">Resignation</span>
+            <span className="card-section-title">
+              <LogOut size={15} className="profile-title-icon" />
+              Resignation
+            </span>
 
             {resignationError && <Alert type="error">{resignationError}</Alert>}
 

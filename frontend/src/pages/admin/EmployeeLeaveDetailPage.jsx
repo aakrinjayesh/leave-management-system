@@ -7,9 +7,11 @@ import StatCard from "../../components/common/StatCard";
 import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
 import Calendar from "../../components/common/Calendar";
+import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
 import { useMonthNavigation } from "../../hooks/useMonthNavigation";
 import * as adminApi from "../../api/admin.api";
 import { formatDateRange } from "../../utils/formatDate";
+import { formatLeaveDays } from "../../utils/formatLeaveDays";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { openBlobInNewTab } from "../../utils/openBlob";
 import "../../styles/dashboardShared.css";
@@ -89,7 +91,7 @@ function EmployeeLeaveDetailContent({ id }) {
     );
   }
 
-  const { employee, balances, leaveRequests } = data;
+  const { employee, balances, leaveRequests, ledgers } = data;
 
   return (
     <DashboardLayout title="Admin">
@@ -115,7 +117,7 @@ function EmployeeLeaveDetailContent({ id }) {
             <div className="balance-card-name">{balance.leaveName}</div>
             <div className="balance-card-numbers">
               <span className="balance-card-remaining">{balance.remainingLeaves}</span>
-              <span className="balance-card-total">of {balance.allocatedLeaves} days remaining</span>
+              <span className="balance-card-total">of {formatLeaveDays(balance.allocatedLeaves)} remaining</span>
             </div>
             <div className="balance-progress-track">
               <div
@@ -123,10 +125,12 @@ function EmployeeLeaveDetailContent({ id }) {
                 style={{ width: `${Math.min(100, Math.round((balance.usedLeaves / (balance.allocatedLeaves || 1)) * 100))}%` }}
               />
             </div>
-            <div className="balance-card-used">{balance.usedLeaves} day(s) used this year</div>
+            <div className="balance-card-used">{formatLeaveDays(balance.usedLeaves)} used this year</div>
           </div>
         ))}
       </div>
+
+      <LeaveLedgerCard ledgers={ledgers} />
 
       {calendarData && (
         <>

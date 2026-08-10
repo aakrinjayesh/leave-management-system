@@ -79,7 +79,7 @@ const getEmployeeDetail = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Employee not found.");
   }
 
-  const [balances, leaveRequests] = await Promise.all([
+  const [balances, leaveRequests, ledgers] = await Promise.all([
     prisma.leaveBalance.findMany({
       where: { userId: employeeId, year: fiscalYear },
       include: { leavePolicy: true },
@@ -96,6 +96,7 @@ const getEmployeeDetail = asyncHandler(async (req, res) => {
       },
       orderBy: { startDate: "desc" },
     }),
+    leaveBalanceService.getAllLedgersForUser(employeeId, fiscalYear),
   ]);
 
   new ApiResponse(200, "OK", {
@@ -115,6 +116,7 @@ const getEmployeeDetail = asyncHandler(async (req, res) => {
       remainingLeaves: b.remainingLeaves,
     })),
     leaveRequests,
+    ledgers,
   }).send(res);
 });
 
@@ -144,7 +146,7 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
   const requestStart = startOfUtcDay(startDate);
   const requestEnd = startOfUtcDay(endDate);
 
-  const { totalDays } = await leaveCalendarService.computeWorkingDays({
+  const { totalDays, workingDates } = await leaveCalendarService.computeWorkingDays({
     startDate: requestStart,
     endDate: requestEnd,
     isHalfDay,
@@ -164,48 +166,93 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
 
   const requestFiscalYear = await companySettingsService.getFiscalYearForDate(requestStart);
   const balance = await leaveBalanceService.getOrCreateBalance(employeeId, leavePolicy, requestFiscalYear);
+
+  // Default: the whole thing under its own policy, unchanged. Only
+  // recomputed below if it doesn't fit the remaining balance.
+  let requestSpecs = [{ leavePolicyId: leavePolicy.id, startDate: requestStart, endDate: requestEnd, totalDays }];
+  let unpaidPolicy = null;
+  let unpaidBalance = null;
+
   if (!leavePolicy.isUnlimited && totalDays > balance.remainingLeaves) {
-    throw ApiError.badRequest(
-      `${employee.firstName} only has ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining.`
-    );
+    // Non-accrual capped policies keep the old hard block - only Sick/
+    // Casual/Earned (accrual policies) auto-split the overage into Unpaid
+    // Leave instead of rejecting the request outright.
+    if (leavePolicy.monthlyAccrualDays == null) {
+      throw ApiError.badRequest(
+        `${employee.firstName} only has ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining.`
+      );
+    }
+
+    unpaidPolicy = await prisma.leavePolicy.findFirst({ where: { isUnpaid: true, isActive: true } });
+    if (!unpaidPolicy) {
+      throw ApiError.badRequest(
+        `${employee.firstName} only has ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining, and no Unpaid Leave policy is set up to cover the rest.`
+      );
+    }
+    unpaidBalance = await leaveBalanceService.getOrCreateBalance(employeeId, unpaidPolicy, requestFiscalYear);
+
+    requestSpecs = leaveBalanceService.splitForOverage({
+      leavePolicy,
+      unpaidPolicyId: unpaidPolicy.id,
+      remainingLeaves: balance.remainingLeaves,
+      workingDates,
+      requestStart,
+      requestEnd,
+      isHalfDay,
+      totalDays,
+    });
   }
 
-  await leaveBalanceService.applyUsage(balance.id, totalDays);
+  const leaveRequests = [];
+  for (const spec of requestSpecs) {
+    const specBalance = spec.leavePolicyId === leavePolicy.id ? balance : unpaidBalance;
+    await leaveBalanceService.applyUsage(specBalance.id, spec.totalDays);
 
-  const leaveRequest = await prisma.leaveRequest.create({
-    data: {
-      userId: employeeId,
-      leavePolicyId: leavePolicy.id,
-      routedToId: req.user.id,
-      approvedById: req.user.id,
-      startDate: requestStart,
-      endDate: requestEnd,
-      totalDays,
-      reason,
-      status: "APPROVED",
-      approvedAt: new Date(),
-      createdByManager: true,
-    },
-    include: { leavePolicy: true },
-  });
+    const created = await prisma.leaveRequest.create({
+      data: {
+        userId: employeeId,
+        leavePolicyId: spec.leavePolicyId,
+        routedToId: req.user.id,
+        approvedById: req.user.id,
+        startDate: spec.startDate,
+        endDate: spec.endDate,
+        totalDays: spec.totalDays,
+        reason,
+        status: "APPROVED",
+        approvedAt: new Date(),
+        createdByManager: true,
+      },
+      include: { leavePolicy: true },
+    });
+    leaveRequests.push(created);
+  }
 
-  new ApiResponse(201, "Leave logged and approved.", { leaveRequest }).send(res);
+  const wasSplit = leaveRequests.length > 1;
+  new ApiResponse(
+    201,
+    wasSplit
+      ? `Leave logged and approved - only part of it was covered by ${employee.firstName}'s ${leavePolicy.leaveName} balance, so the rest was booked as Unpaid Leave.`
+      : "Leave logged and approved.",
+    { leaveRequests }
+  ).send(res);
 
   // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendLeaveDecisionEmail({
-      to: employee.email,
-      employeeFirstName: employee.firstName,
-      leaveName: leavePolicy.leaveName,
-      startDate: requestStart,
-      endDate: requestEnd,
-      totalDays,
-      status: "APPROVED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
-      remarks: `Logged directly by ${req.user.firstName} ${req.user.lastName} on your behalf.`,
-    });
-  } catch (err) {
-    console.error("Failed to send manager-logged leave email:", err);
+  for (const leaveRequest of leaveRequests) {
+    try {
+      await sendLeaveDecisionEmail({
+        to: employee.email,
+        employeeFirstName: employee.firstName,
+        leaveName: leaveRequest.leavePolicy.leaveName,
+        startDate: leaveRequest.startDate,
+        endDate: leaveRequest.endDate,
+        totalDays: leaveRequest.totalDays,
+        status: "APPROVED",
+        managerName: `${req.user.firstName} ${req.user.lastName}`,
+        remarks: `Logged directly by ${req.user.firstName} ${req.user.lastName} on your behalf.`,
+      });
+    } catch (err) {
+      console.error("Failed to send manager-logged leave email:", err);
+    }
   }
 });
 

@@ -8,6 +8,7 @@ const userManagerService = require("../services/userManager.service");
 const timesheetService = require("../services/timesheet.service");
 const companySettingsService = require("../services/companySettings.service");
 const leaveCalendarService = require("../services/leaveCalendar.service");
+const leaveBalanceService = require("../services/leaveBalance.service");
 const { UPLOAD_DIR } = require("../config/upload");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
@@ -156,7 +157,7 @@ const getUserLeaveDetail = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Account not found.");
   }
 
-  const [balances, leaveRequests] = await Promise.all([
+  const [balances, leaveRequests, ledgers] = await Promise.all([
     prisma.leaveBalance.findMany({
       where: { userId: employeeId, year: fiscalYear },
       include: { leavePolicy: true },
@@ -170,6 +171,7 @@ const getUserLeaveDetail = asyncHandler(async (req, res) => {
       },
       orderBy: { startDate: "desc" },
     }),
+    leaveBalanceService.getAllLedgersForUser(employeeId, fiscalYear),
   ]);
 
   new ApiResponse(200, "OK", {
@@ -188,6 +190,7 @@ const getUserLeaveDetail = asyncHandler(async (req, res) => {
       remainingLeaves: b.remainingLeaves,
     })),
     leaveRequests,
+    ledgers,
   }).send(res);
 });
 

@@ -489,6 +489,13 @@ model LeavePolicy {
 
     allocatedLeaves Int
 
+    // Set only for leave types that accrue monthly (e.g. 1.0 = one day
+    // credited on the 1st of every month) instead of being granted as a
+    // lump sum at the start of the fiscal year. Null means the old
+    // lump-sum-upfront behavior (e.g. Unpaid Leave, which is unlimited
+    // anyway). See leaveBalance.service.js's getOrCreateBalance.
+    monthlyAccrualDays Float?
+
     isUnlimited Boolean @default(false)
 
     // Marks this as the Loss-of-Pay / unpaid leave type - approved requests
@@ -537,11 +544,14 @@ model LeaveBalance {
 
     leavePolicyId Int
 
-    allocatedLeaves Int
+    // Float, not Int - accrual policies credit fractional days (e.g. half
+    // days, or an overage split that leaves a fractional remainder) and
+    // need to track those precisely rather than rounding to whole days.
+    allocatedLeaves Float
 
-    usedLeaves Int @default(0)
+    usedLeaves Float @default(0)
 
-    remainingLeaves Int
+    remainingLeaves Float
 
     year Int
 

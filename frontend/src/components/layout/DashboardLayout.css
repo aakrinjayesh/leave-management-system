@@ -3,10 +3,20 @@
   display: flex;
 }
 
+/* The shared .app-watermark centers on the whole viewport by default, which
+   here would put it off-center relative to the white content area (skewed
+   left, since the 240px sidebar eats into that centering). Shifting its left
+   edge past the sidebar re-centers it within just the visible white area
+   instead - scoped to this class so the login page's watermark (no sidebar)
+   is untouched. */
+.app-watermark.dashboard-watermark {
+  left: 240px;
+}
+
 .dashboard-sidebar {
   width: 240px;
   flex-shrink: 0;
-  background-color: var(--color-white);
+  background: linear-gradient(180deg, #581c87, #3b0764);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -19,7 +29,7 @@
   gap: 10px;
   font-size: 1.05rem;
   font-weight: 700;
-  color: var(--color-primary-700);
+  color: var(--color-white);
   padding: 0 6px 24px;
 }
 
@@ -48,19 +58,20 @@
   border-radius: var(--radius-md);
   font-size: 0.9rem;
   font-weight: 500;
-  color: var(--color-gray-600);
+  color: rgba(255, 255, 255, 0.82);
   text-decoration: none;
   transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .dashboard-nav-item:hover {
-  background-color: var(--color-gray-50);
+  background-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-white);
   text-decoration: none;
 }
 
 .dashboard-nav-item.active {
-  background-color: var(--color-primary-50);
-  color: var(--color-primary-700);
+  background-color: var(--color-white);
+  color: #581c87;
   font-weight: 600;
 }
 
@@ -77,7 +88,8 @@
   justify-content: space-between;
   padding: 16px 32px;
   background-color: var(--color-white);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, #581c87, #3b0764) 1;
 }
 
 .dashboard-topbar-title {
@@ -113,7 +125,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background-color: var(--color-primary-600);
+  background: linear-gradient(135deg, #581c87, #3b0764);
   color: var(--color-white);
   font-weight: 700;
   font-size: 0.85rem;
@@ -141,4 +153,12 @@
 .dashboard-content {
   padding: 32px;
   flex: 1;
+}
+
+.dashboard-footer {
+  padding: 14px 32px;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
 }

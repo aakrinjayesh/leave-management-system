@@ -5,9 +5,11 @@ import StatusBadge from "../../components/common/StatusBadge";
 import Button from "../../components/common/Button";
 import Spinner from "../../components/common/Spinner";
 import ApplyLeaveModal from "../employee/ApplyLeaveModal";
+import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
 import { useAuth } from "../../context/AuthContext";
 import * as employeeLeaveApi from "../../api/employeeLeave.api";
 import { formatDateRange } from "../../utils/formatDate";
+import { formatLeaveDays } from "../../utils/formatLeaveDays";
 import "../../styles/dashboardShared.css";
 import "./Dashboard.css";
 
@@ -65,7 +67,7 @@ export default function EmployeeDashboard() {
                       {balance.isUnlimited ? "∞" : balance.remainingLeaves}
                     </span>
                     <span className="balance-card-total">
-                      {balance.isUnlimited ? "unlimited" : `of ${balance.allocatedLeaves} days remaining`}
+                      {balance.isUnlimited ? "unlimited" : `of ${formatLeaveDays(balance.allocatedLeaves)} remaining`}
                     </span>
                   </div>
                   {!balance.isUnlimited && (
@@ -73,11 +75,13 @@ export default function EmployeeDashboard() {
                       <div className="balance-progress-fill" style={{ width: `${usedPct}%` }} />
                     </div>
                   )}
-                  <div className="balance-card-used">{balance.usedLeaves} day(s) used this year</div>
+                  <div className="balance-card-used">{formatLeaveDays(balance.usedLeaves)} used this year</div>
                 </div>
               );
             })}
           </div>
+
+          <LeaveLedgerCard ledgers={summary.ledgers} />
 
           <div className="card">
             <div className="card-section">

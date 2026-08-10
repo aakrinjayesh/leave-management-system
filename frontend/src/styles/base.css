@@ -61,8 +61,8 @@ a:hover {
 }
 
 .app-watermark img {
-  width: 480px;
-  height: 480px;
+  width: 620px;
+  height: 620px;
   object-fit: contain;
-  opacity: 0.05;
+  opacity: 0.15;
 }
