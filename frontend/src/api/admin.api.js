@@ -46,6 +46,9 @@ export const downloadTimesheetSubmissionAttachment = (submissionId) =>
 
 export const getProjectAssignmentReport = () => unwrap(axiosClient.get("/admin/reports/project-assignment"));
 
+export const getWeekTimesheetSubmissions = (date) =>
+  unwrap(axiosClient.get("/admin/reports/timesheet-submissions", { params: { date } }));
+
 export const listProjects = () => unwrap(axiosClient.get("/admin/projects"));
 
 export const createProject = (payload) => unwrap(axiosClient.post("/admin/projects", payload));

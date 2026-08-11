@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, FileCheck, ListChecks, Paperclip, Save, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileCheck, ListChecks, Paperclip, Save, Trash2 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextInput from "../../components/common/TextInput";
 import FormSelect from "../../components/common/FormSelect";
@@ -12,6 +12,7 @@ import { formatDate, formatDateRange } from "../../utils/formatDate";
 import { combineHoursMinutes, formatHoursMinutes, splitHoursMinutes } from "../../utils/formatDuration";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatProjectAssigned } from "../../utils/formatProjectAssigned";
+import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
 import "../../styles/dashboardShared.css";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
@@ -44,6 +45,7 @@ export default function MyTimesheetPage() {
   const [projectAssigned, setProjectAssigned] = useState("");
   const [projectId, setProjectId] = useState("");
   const [projects, setProjects] = useState([]);
+  const [downloadingId, setDownloadingId] = useState(null);
 
   const loadWeek = (param) =>
     timesheetApi.getMyEntries(param || undefined).then((res) => {
@@ -97,6 +99,19 @@ export default function MyTimesheetPage() {
       setAttachmentError(getErrorMessage(err, "Couldn't upload this file. Please try again."));
     } finally {
       setIsUploadingAttachment(false);
+    }
+  };
+
+  const handleDownloadSubmissionAttachment = async (submission) => {
+    setError("");
+    setDownloadingId(submission.id);
+    try {
+      const response = await timesheetApi.downloadSubmissionAttachment(submission.id);
+      downloadBlobAsFile(response.data, getFilenameFromResponse(response, submission.attachmentOriginalName));
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't download this attachment."));
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -313,10 +328,14 @@ export default function MyTimesheetPage() {
                       />
                     )}
 
-                    {isUploadingAttachment && <p className="helper-text">Uploading…</p>}
+                    {isUploadingAttachment && (
+                      <p className="helper-text" style={{ marginTop: 0 }}>
+                        Uploading…
+                      </p>
+                    )}
                     {attachmentError && <Alert type="error">{attachmentError}</Alert>}
 
-                    <p className="helper-text">
+                    <p className="helper-text" style={{ marginTop: 0 }}>
                       <Paperclip size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
                       Required before submitting.
                     </p>
@@ -446,6 +465,7 @@ export default function MyTimesheetPage() {
                         <th>Project Type</th>
                         <th>Project Name</th>
                         <th>Remarks</th>
+                        <th>Excel sheet</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -462,6 +482,19 @@ export default function MyTimesheetPage() {
                           <td className="table-cell-secondary">{formatProjectAssigned(sub.projectAssigned)}</td>
                           <td className="table-cell-secondary">{sub.project?.name || "—"}</td>
                           <td className="table-cell-secondary">{sub.managerRemarks || "—"}</td>
+                          <td>
+                            {sub.attachmentOriginalName && (
+                              <button
+                                type="button"
+                                className="link-btn"
+                                disabled={downloadingId === sub.id}
+                                onClick={() => handleDownloadSubmissionAttachment(sub)}
+                              >
+                                <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                                {downloadingId === sub.id ? "Downloading…" : "Download"}
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -58,6 +58,7 @@ router.get("/users/:id/timesheet/export", controller.exportUserTimesheet);
 router.get("/timesheets/export", controller.exportPayrollTimesheet);
 router.get("/timesheet-submissions/:id/attachment", controller.getTimesheetSubmissionAttachment);
 router.get("/reports/project-assignment", reportController.getProjectAssignmentReport);
+router.get("/reports/timesheet-submissions", reportController.getWeekTimesheetSubmissions);
 router.get("/projects", reportController.listProjects);
 router.post("/projects", validate(createProjectSchema), reportController.createProject);
 router.patch("/projects/:id", validate(renameProjectSchema), reportController.renameProject);

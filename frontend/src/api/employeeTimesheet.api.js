@@ -32,3 +32,8 @@ export const submitWeek = (weekStartDate, attachmentOriginalName, attachmentStor
 
 export const getMySubmissions = (status) =>
   unwrap(axiosClient.get("/employee/timesheet/submissions", { params: status ? { status } : {} }));
+
+// Returns the raw response (not unwrapped) - the caller needs the blob body
+// and the Content-Disposition header for the filename.
+export const downloadSubmissionAttachment = (submissionId) =>
+  axiosClient.get(`/employee/timesheet/submissions/${submissionId}/attachment`, { responseType: "blob" });

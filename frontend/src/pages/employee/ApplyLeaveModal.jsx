@@ -216,10 +216,14 @@ export default function ApplyLeaveModal({ onClose, onSuccess }) {
                 />
               )}
 
-              {isUploadingAttachment && <p className="helper-text">Uploading…</p>}
+              {isUploadingAttachment && (
+                <p className="helper-text" style={{ marginTop: 0 }}>
+                  Uploading…
+                </p>
+              )}
               {attachmentError && <Alert type="error">{attachmentError}</Alert>}
 
-              <p className="helper-text">
+              <p className="helper-text" style={{ marginTop: 0 }}>
                 <Paperclip size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
                 {selectedPolicy.leaveName} requests longer than {selectedPolicy.attachmentRequiredAboveDays} day(s)
                 require a supporting document (PDF, JPEG, or PNG, max 2MB) - up to{" "}

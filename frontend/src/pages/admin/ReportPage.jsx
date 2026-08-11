@@ -1,19 +1,35 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Ban, CheckCircle2, ChevronDown, ChevronUp, ListChecks, Pencil, Plus, RotateCcw, Users, XCircle } from "lucide-react";
+import {
+  Ban,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  ListChecks,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Users,
+  XCircle,
+} from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
 import StatusBadge from "../../components/common/StatusBadge";
 import FormSelect from "../../components/common/FormSelect";
+import TextInput from "../../components/common/TextInput";
 import Spinner from "../../components/common/Spinner";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { formatDateRange } from "../../utils/formatDate";
+import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
 import "../../styles/dashboardShared.css";
 
-function EmployeeListCard({ title, employees }) {
+function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadingId, onDownloadTimesheet }) {
   const navigate = useNavigate();
+  const showTimesheetColumn = Boolean(weekSubmissionsByUserId);
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -36,23 +52,44 @@ function EmployeeListCard({ title, employees }) {
                   <th>Employee</th>
                   <th>Email</th>
                   <th>Project</th>
+                  {showTimesheetColumn && <th>Timesheet</th>}
                 </tr>
               </thead>
               <tbody>
-                {employees.map((employee) => (
-                  <tr
-                    key={employee.id}
-                    className="is-clickable"
-                    onClick={() => navigate(`/admin/users/${employee.id}/timesheet`)}
-                  >
-                    <td className="table-cell-secondary">{employee.employeeCode || "—"}</td>
-                    <td className="table-cell-primary">
-                      {employee.firstName} {employee.lastName}
-                    </td>
-                    <td className="table-cell-secondary">{employee.email}</td>
-                    <td className="table-cell-secondary">{employee.projectName || "—"}</td>
-                  </tr>
-                ))}
+                {employees.map((employee) => {
+                  const submission = weekSubmissionsByUserId?.[employee.id];
+                  return (
+                    <tr
+                      key={employee.id}
+                      className="is-clickable"
+                      onClick={() => navigate(`/admin/users/${employee.id}/timesheet`)}
+                    >
+                      <td className="table-cell-secondary">{employee.employeeCode || "—"}</td>
+                      <td className="table-cell-primary">
+                        {employee.firstName} {employee.lastName}
+                      </td>
+                      <td className="table-cell-secondary">{employee.email}</td>
+                      <td className="table-cell-secondary">{employee.projectName || "—"}</td>
+                      {showTimesheetColumn && (
+                        <td onClick={(e) => e.stopPropagation()}>
+                          {submission?.attachmentStoredName ? (
+                            <button
+                              type="button"
+                              className="link-btn"
+                              disabled={downloadingId === submission.id}
+                              onClick={() => onDownloadTimesheet(submission)}
+                            >
+                              <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                              {downloadingId === submission.id ? "Downloading…" : "Download"}
+                            </button>
+                          ) : (
+                            <span className="table-cell-secondary">Not submitted</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -258,10 +295,23 @@ function ManageProjectsCard() {
 export default function ReportPage() {
   const [report, setReport] = useState(null);
   const [projectFilter, setProjectFilter] = useState("");
+  const [weekDate, setWeekDate] = useState("");
+  const [weekData, setWeekData] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     adminApi.getProjectAssignmentReport().then(setReport);
   }, []);
+
+  useEffect(() => {
+    if (!weekDate) return;
+    adminApi.getWeekTimesheetSubmissions(weekDate).then(setWeekData);
+  }, [weekDate]);
+
+  // Ignore any previously-fetched week once the date is cleared, rather than
+  // resetting weekData itself from the effect above.
+  const effectiveWeekData = weekDate ? weekData : null;
 
   // A-Z list of every project actually in use across both lists, so the
   // filter only ever offers projects that would return a result.
@@ -271,6 +321,23 @@ export default function ReportPage() {
 
   const applyProjectFilter = (employees) =>
     projectFilter ? employees.filter((employee) => employee.projectName === projectFilter) : employees;
+
+  const weekSubmissionsByUserId = effectiveWeekData
+    ? Object.fromEntries(effectiveWeekData.submissions.map((submission) => [submission.userId, submission]))
+    : null;
+
+  const handleDownloadTimesheet = async (submission) => {
+    setError("");
+    setDownloadingId(submission.id);
+    try {
+      const response = await adminApi.downloadTimesheetSubmissionAttachment(submission.id);
+      downloadBlobAsFile(response.data, getFilenameFromResponse(response, submission.attachmentOriginalName));
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't download this attachment."));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <DashboardLayout title="Report">
@@ -282,6 +349,8 @@ export default function ReportPage() {
       </div>
 
       <ManageProjectsCard />
+
+      <Alert type="error">{error}</Alert>
 
       {!report ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
@@ -295,20 +364,48 @@ export default function ReportPage() {
             <StatCard icon={<XCircle size={20} />} label="Internal Project" value={report.notAssignedCount} />
           </div>
 
-          <div className="field" style={{ maxWidth: 320, marginBottom: 20 }}>
-            <label className="field-label">Filter by Project</label>
-            <FormSelect value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-              <option value="">All projects</option>
-              {projectNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </FormSelect>
+          <div className="section-flex-row" style={{ alignItems: "flex-start" }}>
+            <div className="field" style={{ maxWidth: 320, marginBottom: 20 }}>
+              <label className="field-label">Filter by Project</label>
+              <FormSelect value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+                <option value="">All projects</option>
+                {projectNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </FormSelect>
+            </div>
+
+            <div className="field" style={{ maxWidth: 320, marginBottom: 20 }}>
+              <TextInput
+                label="Week of"
+                type="date"
+                value={weekDate}
+                onChange={(e) => setWeekDate(e.target.value)}
+              />
+              {effectiveWeekData && (
+                <p className="helper-text" style={{ marginTop: 0 }}>
+                  {formatDateRange(effectiveWeekData.weekStartDate, effectiveWeekData.weekEndDate)}
+                </p>
+              )}
+            </div>
           </div>
 
-          <EmployeeListCard title="Client Project" employees={applyProjectFilter(report.assigned)} />
-          <EmployeeListCard title="Internal Project" employees={applyProjectFilter(report.notAssigned)} />
+          <EmployeeListCard
+            title="Client Project"
+            employees={applyProjectFilter(report.assigned)}
+            weekSubmissionsByUserId={weekSubmissionsByUserId}
+            downloadingId={downloadingId}
+            onDownloadTimesheet={handleDownloadTimesheet}
+          />
+          <EmployeeListCard
+            title="Internal Project"
+            employees={applyProjectFilter(report.notAssigned)}
+            weekSubmissionsByUserId={weekSubmissionsByUserId}
+            downloadingId={downloadingId}
+            onDownloadTimesheet={handleDownloadTimesheet}
+          />
         </>
       )}
     </DashboardLayout>

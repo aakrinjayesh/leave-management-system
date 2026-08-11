@@ -1,3 +1,4 @@
+const path = require("path");
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
@@ -5,6 +6,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
 const projectService = require("../services/project.service");
 const { sendTimesheetSubmittedEmail } = require("../utils/email.util");
+const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const getMyEntries = asyncHandler(async (req, res) => {
   const anchor = req.query.weekStart ? new Date(req.query.weekStart) : new Date();
@@ -221,6 +223,30 @@ const listMySubmissions = asyncHandler(async (req, res) => {
   new ApiResponse(200, "OK", { submissions }).send(res);
 });
 
+// The Excel sheet the employee attached to one of their own weekly
+// submissions - scoped to their own submissions only, same pattern as the
+// manager's equivalent endpoint.
+const getSubmissionAttachment = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+
+  const submission = await prisma.timesheetSubmission.findFirst({
+    where: { id, userId: req.user.id },
+  });
+  if (!submission) {
+    throw ApiError.notFound("Timesheet submission not found.");
+  }
+  if (!submission.attachmentStoredName) {
+    throw ApiError.notFound("No attachment found for this submission.");
+  }
+
+  const filePath = path.join(TIMESHEET_ATTACHMENT_DIR, path.basename(submission.attachmentStoredName));
+  res.download(filePath, submission.attachmentOriginalName || submission.attachmentStoredName, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ success: false, message: "Attachment file not found." });
+    }
+  });
+});
+
 module.exports = {
   getMyEntries,
   listProjects,
@@ -229,4 +255,5 @@ module.exports = {
   uploadAttachment,
   submitWeek,
   listMySubmissions,
+  getSubmissionAttachment,
 };

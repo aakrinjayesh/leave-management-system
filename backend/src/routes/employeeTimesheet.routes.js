@@ -21,5 +21,6 @@ router.post("/attachment", uploadSingleTimesheetAttachment, controller.uploadAtt
 
 router.post("/submissions", validate(submitWeekSchema), controller.submitWeek);
 router.get("/submissions", controller.listMySubmissions);
+router.get("/submissions/:id/attachment", controller.getSubmissionAttachment);
 
 module.exports = router;

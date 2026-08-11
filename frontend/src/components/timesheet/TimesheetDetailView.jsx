@@ -85,26 +85,17 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
     <>
       <Alert type="error">{error}</Alert>
 
-      <div className="section-flex-row">
-        <div className="filter-tabs" style={{ marginBottom: 0 }}>
-          {VIEWS.map((v) => (
-            <button
-              key={v.value}
-              type="button"
-              className={`filter-tab ${view === v.value ? "active" : ""}`}
-              onClick={() => setView(v.value)}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-
-        {exportTimesheet && (
-          <button type="button" className="link-btn" onClick={handleExport} disabled={isExporting}>
-            <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-            {isExporting ? "Exporting…" : "Export CSV"}
+      <div className="filter-tabs">
+        {VIEWS.map((v) => (
+          <button
+            key={v.value}
+            type="button"
+            className={`filter-tab ${view === v.value ? "active" : ""}`}
+            onClick={() => setView(v.value)}
+          >
+            {v.label}
           </button>
-        )}
+        ))}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -125,7 +116,17 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
 
       <div className="card">
         <div className="card-section">
-          <span className="card-section-title">Entries</span>
+          <div className="section-flex-row">
+            <span className="card-section-title" style={{ marginBottom: 0 }}>
+              Entries
+            </span>
+            {exportTimesheet && (
+              <button type="button" className="link-btn" onClick={handleExport} disabled={isExporting}>
+                <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                {isExporting ? "Exporting…" : "Export CSV"}
+              </button>
+            )}
+          </div>
 
           {data.entries.length === 0 ? (
             <div className="empty-state">
