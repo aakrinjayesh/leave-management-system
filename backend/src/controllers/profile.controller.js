@@ -5,6 +5,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const incomeTaxService = require("../services/incomeTax.service");
 const resignationService = require("../services/resignation.service");
 const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.service");
+const { sendResignationSubmittedEmail } = require("../utils/email.util");
 
 // Completed years since joining, computed server-side (not trusted from the
 // client) so the stored "last celebrated" value can't be spoofed.
@@ -78,6 +79,24 @@ const submitMyResignation = asyncHandler(async (req, res) => {
   const resignation = await resignationService.submitResignation(req.user.id, reason, proposedLastWorkingDate);
 
   new ApiResponse(201, "Resignation submitted.", { resignation }).send(res);
+
+  // Notify every active admin - sent after the response so the employee
+  // doesn't wait on the email round-trips; failures here shouldn't fail the
+  // submission itself.
+  try {
+    const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
+    for (const admin of admins) {
+      await sendResignationSubmittedEmail({
+        to: admin.email,
+        recipientFirstName: admin.firstName,
+        employeeName: `${req.user.firstName} ${req.user.lastName}`,
+        proposedLastWorkingDate,
+        reason,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send resignation submitted email:", err);
+  }
 });
 
 const getMyResignation = asyncHandler(async (req, res) => {

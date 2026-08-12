@@ -4,6 +4,7 @@ const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const { USER_STATUS } = require("../utils/constants");
 const { streamRelievingLetterPdf } = require("../services/relievingLetterPdf.service");
+const { sendExitNotificationEmail } = require("../utils/email.util");
 
 // Replaces the plain "deactivate" flow - records a permanent ExitRecord (so
 // the relieving letter can always be re-downloaded later, even across
@@ -29,6 +30,40 @@ const recordExit = asyncHandler(async (req, res) => {
   ]);
 
   new ApiResponse(200, "Account exited.", { user, exitRecord }).send(res);
+
+  // Notify the exited employee, their manager, and every other active admin -
+  // sent after the response so the acting admin doesn't wait on the email
+  // round-trips; failures here shouldn't fail the exit itself.
+  try {
+    const employeeName = `${user.firstName} ${user.lastName}`;
+    const recipients = [];
+
+    recipients.push({ email: user.email, firstName: user.firstName, isSelf: true });
+
+    if (user.managerId) {
+      const manager = await prisma.user.findFirst({ where: { id: user.managerId, status: USER_STATUS.ACTIVE } });
+      if (manager) recipients.push({ email: manager.email, firstName: manager.firstName, isSelf: false });
+    }
+
+    const otherAdmins = await prisma.user.findMany({
+      where: { userType: "ADMIN", status: USER_STATUS.ACTIVE, id: { not: req.user.id } },
+    });
+    for (const admin of otherAdmins) {
+      recipients.push({ email: admin.email, firstName: admin.firstName, isSelf: false });
+    }
+
+    for (const recipient of recipients) {
+      await sendExitNotificationEmail({
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
+        employeeName,
+        exitDate,
+        isSelf: recipient.isSelf,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send exit notification email:", err);
+  }
 });
 
 const listExitRecords = asyncHandler(async (req, res) => {

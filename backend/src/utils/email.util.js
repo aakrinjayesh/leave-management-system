@@ -342,6 +342,67 @@ const sendTimesheetDecisionEmail = async ({
   });
 };
 
+// ---------- Resignation notifications ----------
+
+const sendResignationSubmittedEmail = async ({ to, recipientFirstName, employeeName, proposedLastWorkingDate, reason }) => {
+  const html = buildLeaveEmailHtml({
+    heading: "New resignation submitted",
+    intro: `Hi ${recipientFirstName || "there"}, ${employeeName} has submitted their resignation.`,
+    detailsRows: [
+      ["Proposed last working day", formatDateShort(proposedLastWorkingDate)],
+      ["Reason", reason],
+    ],
+    footerNote: "Log in to Aakrin Leave Management to accept or reject it.",
+  });
+
+  return sendMail({
+    to,
+    subject: `Resignation submitted by ${employeeName}`,
+    html,
+    logLabel: `Resignation submitted by ${employeeName} to ${to}`,
+  });
+};
+
+const sendResignationDecisionEmail = async ({ to, employeeFirstName, status, lastWorkingDate, decidedByName }) => {
+  const isAccepted = status === "ACCEPTED";
+  const html = buildLeaveEmailHtml({
+    heading: isAccepted ? "Resignation accepted" : "Resignation rejected",
+    intro: `Hi ${employeeFirstName || "there"}, your resignation has been ${
+      isAccepted ? "accepted" : "rejected"
+    } by ${decidedByName}.`,
+    detailsRows: isAccepted ? [["Confirmed last working day", formatDateShort(lastWorkingDate)]] : [],
+    footerNote: isAccepted
+      ? "Please reach out to your manager or admin if you have any questions about your last working day."
+      : "You can submit a new resignation at any time if you still wish to.",
+  });
+
+  return sendMail({
+    to,
+    subject: `Your resignation was ${isAccepted ? "accepted" : "rejected"}`,
+    html,
+    logLabel: `Resignation ${status} for ${employeeFirstName}`,
+  });
+};
+
+// ---------- Account exit notifications ----------
+
+const sendExitNotificationEmail = async ({ to, recipientFirstName, employeeName, exitDate, isSelf }) => {
+  const html = buildLeaveEmailHtml({
+    heading: "Account exited",
+    intro: isSelf
+      ? `Hi ${recipientFirstName || "there"}, your account has been marked inactive.`
+      : `Hi ${recipientFirstName || "there"}, ${employeeName}'s account has been marked inactive.`,
+    detailsRows: [["Exit date", formatDateShort(exitDate)]],
+  });
+
+  return sendMail({
+    to,
+    subject: isSelf ? "Your account has been exited" : `${employeeName}'s account has been exited`,
+    html,
+    logLabel: `Exit notice for ${employeeName} to ${to}`,
+  });
+};
+
 module.exports = {
   sendOtpEmail,
   isRealMailConfigured,
@@ -354,4 +415,7 @@ module.exports = {
   sendAdminBirthdayBroadcastEmail,
   sendTimesheetSubmittedEmail,
   sendTimesheetDecisionEmail,
+  sendResignationSubmittedEmail,
+  sendResignationDecisionEmail,
+  sendExitNotificationEmail,
 };

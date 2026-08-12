@@ -52,7 +52,15 @@ const withdrawResignation = async (userId, resignationId) => {
 };
 
 const USER_SUMMARY_SELECT = {
-  select: { id: true, firstName: true, lastName: true, employeeCode: true, designation: true, joiningDate: true },
+  select: {
+    id: true,
+    firstName: true,
+    lastName: true,
+    email: true,
+    employeeCode: true,
+    designation: true,
+    joiningDate: true,
+  },
 };
 
 // Manager sees resignations from whoever currently reports to them - view
