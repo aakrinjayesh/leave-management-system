@@ -6,6 +6,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
 const companySettingsService = require("../services/companySettings.service");
+const { RESIGNATION_STATUS } = require("../utils/constants");
 const { sendLeaveSubmittedEmail, sendManagerOnLeaveNoticeEmail, sendLeaveCancelledEmail } = require("../utils/email.util");
 const { UPLOAD_DIR } = require("../config/upload");
 
@@ -69,6 +70,16 @@ const getDashboardSummary = asyncHandler(async (req, res) => {
 
 const applyLeave = asyncHandler(async (req, res) => {
   const { leavePolicyId, startDate, endDate, isHalfDay, reason, attachmentUrl } = req.body;
+
+  // Once their resignation is accepted, an employee can no longer submit new
+  // leave requests of any type - a manager can still log leave on their
+  // behalf via the separate "log leave for employee" flow if needed.
+  const acceptedResignation = await prisma.resignation.findFirst({
+    where: { userId: req.user.id, status: RESIGNATION_STATUS.ACCEPTED },
+  });
+  if (acceptedResignation) {
+    throw ApiError.badRequest("Your resignation has been accepted. You can no longer apply for new leave.");
+  }
 
   const leavePolicy = await prisma.leavePolicy.findFirst({ where: { id: leavePolicyId, isActive: true } });
   if (!leavePolicy) {

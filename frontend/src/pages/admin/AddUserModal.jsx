@@ -7,7 +7,7 @@ import Alert from "../../components/common/Alert";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 
-const INITIAL_FORM = { firstName: "", lastName: "", email: "", userType: "MANAGER" };
+const INITIAL_FORM = { firstName: "", lastName: "", email: "", userType: "" };
 
 export default function AddUserModal({ onClose, onSuccess }) {
   const [form, setForm] = useState(INITIAL_FORM);
@@ -22,6 +22,10 @@ export default function AddUserModal({ onClose, onSuccess }) {
 
     if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) {
       setError("Please fill in first name, last name, and email.");
+      return;
+    }
+    if (!form.userType) {
+      setError("Please select an account type.");
       return;
     }
 
@@ -63,8 +67,8 @@ export default function AddUserModal({ onClose, onSuccess }) {
         </p>
 
         <FormSelect label="Account type" value={form.userType} onChange={handleChange("userType")}>
+          <option value="" hidden></option>
           <option value="EMPLOYEE">Employee</option>
-          <option value="MANAGER">Manager-tier</option>
           <option value="ADMIN">Admin</option>
         </FormSelect>
 

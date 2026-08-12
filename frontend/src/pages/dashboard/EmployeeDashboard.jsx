@@ -42,10 +42,16 @@ export default function EmployeeDashboard() {
           <h1>Welcome back, {user?.firstName}.</h1>
           <p>Here's where your leave balance and requests stand.</p>
         </div>
-        <Button onClick={() => setIsApplyOpen(true)} className="page-header-btn">
-          <CalendarPlus size={16} />
-          Apply for leave
-        </Button>
+        {user?.hasAcceptedResignation ? (
+          <p className="helper-text" style={{ marginTop: 0 }}>
+            Your resignation has been accepted - new leave requests are no longer available.
+          </p>
+        ) : (
+          <Button onClick={() => setIsApplyOpen(true)} className="page-header-btn">
+            <CalendarPlus size={16} />
+            Apply for leave
+          </Button>
+        )}
       </div>
 
       {isLoading || !summary ? (

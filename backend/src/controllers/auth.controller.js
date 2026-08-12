@@ -4,7 +4,7 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const { hashPassword, comparePassword } = require("../utils/password.util");
-const { REFRESH_TOKEN_COOKIE, OTP_PURPOSE, USER_TYPE, USER_STATUS } = require("../utils/constants");
+const { REFRESH_TOKEN_COOKIE, OTP_PURPOSE, USER_TYPE, USER_STATUS, RESIGNATION_STATUS } = require("../utils/constants");
 const { isEmployeeDomainEmail } = require("../utils/emailDomain.util");
 const otpService = require("../services/otp.service");
 const tokenService = require("../services/token.service");
@@ -30,25 +30,30 @@ const maskTail = (value) => {
 // always reflect the current org chart even as managerId assignments change.
 const toSafeUser = async (user) => {
   const now = new Date();
-  const [manager, directReportsCount, customFields, salaryStructure, salaryStructureHistory] = await Promise.all([
-    user.managerId
-      ? prisma.user.findUnique({
-          where: { id: user.managerId },
-          select: { id: true, firstName: true, lastName: true, email: true },
-        })
-      : null,
-    prisma.user.count({ where: { managerId: user.id } }),
-    prisma.employeeCustomField.findMany({
-      where: { userId: user.id },
-      select: { id: true, label: true, value: true },
-      orderBy: { createdAt: "asc" },
-    }),
-    // Whatever salary structure is currently in effect for this employee -
-    // lets their own Profile page show exactly what admin has fixed for them.
-    payrollService.getEffectiveSalaryConfig(user.id, now.getFullYear(), now.getMonth() + 1),
-    // Every past entry too, so the employee can see how their structure changed over time.
-    payrollService.getSalaryStructureHistory(user.id),
-  ]);
+  const [manager, directReportsCount, customFields, salaryStructure, salaryStructureHistory, acceptedResignation] =
+    await Promise.all([
+      user.managerId
+        ? prisma.user.findUnique({
+            where: { id: user.managerId },
+            select: { id: true, firstName: true, lastName: true, email: true },
+          })
+        : null,
+      prisma.user.count({ where: { managerId: user.id } }),
+      prisma.employeeCustomField.findMany({
+        where: { userId: user.id },
+        select: { id: true, label: true, value: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      // Whatever salary structure is currently in effect for this employee -
+      // lets their own Profile page show exactly what admin has fixed for them.
+      payrollService.getEffectiveSalaryConfig(user.id, now.getFullYear(), now.getMonth() + 1),
+      // Every past entry too, so the employee can see how their structure changed over time.
+      payrollService.getSalaryStructureHistory(user.id),
+      // Once accepted, the employee is on their way out - blocks new leave
+      // requests (see employeeLeave.controller.js's applyLeave), and lets the
+      // frontend hide the "Apply for leave" button instead of just erroring.
+      prisma.resignation.findFirst({ where: { userId: user.id, status: RESIGNATION_STATUS.ACCEPTED } }),
+    ]);
 
   return {
     id: user.id,
@@ -117,6 +122,7 @@ const toSafeUser = async (user) => {
     managerId: user.managerId,
     manager,
     isManager: directReportsCount > 0,
+    hasAcceptedResignation: Boolean(acceptedResignation),
   };
 };
 

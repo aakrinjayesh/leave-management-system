@@ -6,6 +6,7 @@ import Button from "../../components/common/Button";
 import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
 import ApplyLeaveModal from "./ApplyLeaveModal";
+import { useAuth } from "../../context/AuthContext";
 import * as employeeLeaveApi from "../../api/employeeLeave.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
@@ -23,6 +24,7 @@ const FILTERS = [
 const isCancellable = (request) => request.status === "PENDING";
 
 export default function MyLeaveRequestsPage() {
+  const { user } = useAuth();
   const [filter, setFilter] = useState("");
   const [requests, setRequests] = useState(null);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
@@ -74,10 +76,16 @@ export default function MyLeaveRequestsPage() {
           <h1>My leave requests</h1>
           <p>Track the status of every request you've submitted.</p>
         </div>
-        <Button onClick={() => setIsApplyOpen(true)} className="page-header-btn">
-          <CalendarPlus size={16} />
-          Apply for leave
-        </Button>
+        {user?.hasAcceptedResignation ? (
+          <p className="helper-text" style={{ marginTop: 0 }}>
+            Your resignation has been accepted - new leave requests are no longer available.
+          </p>
+        ) : (
+          <Button onClick={() => setIsApplyOpen(true)} className="page-header-btn">
+            <CalendarPlus size={16} />
+            Apply for leave
+          </Button>
+        )}
       </div>
 
       <Alert type="error">{error}</Alert>
