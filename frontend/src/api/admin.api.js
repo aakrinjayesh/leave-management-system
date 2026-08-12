@@ -9,6 +9,8 @@ export const createUser = (payload) => unwrap(axiosClient.post("/admin/users", p
 export const updateUserManager = (id, managerId) =>
   unwrap(axiosClient.patch(`/admin/users/${id}/manager`, { managerId }));
 
+export const setAdminAccess = (id, grant) => unwrap(axiosClient.patch(`/admin/users/${id}/admin-access`, { grant }));
+
 export const reactivateUser = (id) => unwrap(axiosClient.patch(`/admin/users/${id}/reactivate`));
 
 export const recordExit = (id, payload) => unwrap(axiosClient.post(`/admin/users/${id}/exit`, payload));

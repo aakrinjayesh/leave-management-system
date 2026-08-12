@@ -54,12 +54,16 @@ export default function AddUserModal({ onClose, onSuccess }) {
         <TextInput
           label="Email address"
           type="email"
-          placeholder="firstname.lastname@company.com"
+          placeholder="firstname.lastname@aakrin.com"
           value={form.email}
           onChange={handleChange("email")}
         />
+        <p className="helper-text" style={{ marginTop: 0 }}>
+          Must be an @aakrin.com email, for every account type.
+        </p>
 
         <FormSelect label="Account type" value={form.userType} onChange={handleChange("userType")}>
+          <option value="EMPLOYEE">Employee</option>
           <option value="MANAGER">Manager-tier</option>
           <option value="ADMIN">Admin</option>
         </FormSelect>

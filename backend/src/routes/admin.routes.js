@@ -4,6 +4,7 @@ const validate = require("../middlewares/validate.middleware");
 const {
   createUserSchema,
   updateManagerSchema,
+  setAdminAccessSchema,
   createLeavePolicySchema,
   updateLeavePolicySchema,
   createHolidaySchema,
@@ -40,6 +41,7 @@ router.use(authenticate, authorize(USER_TYPE.ADMIN));
 router.get("/users", controller.listUsers);
 router.post("/users", validate(createUserSchema), controller.createUser);
 router.patch("/users/:id/manager", validate(updateManagerSchema), controller.updateUserManager);
+router.patch("/users/:id/admin-access", validate(setAdminAccessSchema), controller.setAdminAccess);
 router.patch("/users/:id/reactivate", controller.reactivateUser);
 router.post("/users/:id/exit", validate(recordExitSchema), exitController.recordExit);
 router.get("/users/:id/exit-records", exitController.listExitRecords);

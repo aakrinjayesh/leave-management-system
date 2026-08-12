@@ -3,7 +3,7 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
-const { USER_STATUS } = require("../utils/constants");
+const { USER_STATUS, USER_TYPE } = require("../utils/constants");
 const userManagerService = require("../services/userManager.service");
 const timesheetService = require("../services/timesheet.service");
 const companySettingsService = require("../services/companySettings.service");
@@ -96,6 +96,43 @@ const updateUserManager = asyncHandler(async (req, res) => {
   const user = await userManagerService.setUserManager(id, managerId);
 
   new ApiResponse(200, "Manager updated.", { user: toSafeUser(user) }).send(res);
+});
+
+// Promotes an existing account to Admin, or demotes an existing Admin back
+// to a plain Employee - unlike Manager status (which is derived from who
+// reports to whom), Admin is a stored flag that only ever changes here.
+// Guards against locking the app out of admin access entirely and against an
+// admin accidentally changing their own access.
+const setAdminAccess = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const { grant } = req.body;
+
+  if (id === req.user.id) {
+    throw ApiError.badRequest("You can't change your own admin access.");
+  }
+
+  const target = await prisma.user.findUnique({ where: { id } });
+  if (!target) {
+    throw ApiError.notFound("Account not found.");
+  }
+
+  if (!grant && target.userType === USER_TYPE.ADMIN) {
+    const adminCount = await prisma.user.count({
+      where: { userType: USER_TYPE.ADMIN, status: USER_STATUS.ACTIVE },
+    });
+    if (adminCount <= 1) {
+      throw ApiError.badRequest("Can't remove the last admin account.");
+    }
+  }
+
+  const user = await prisma.user.update({
+    where: { id },
+    data: { userType: grant ? USER_TYPE.ADMIN : USER_TYPE.EMPLOYEE },
+  });
+
+  new ApiResponse(200, grant ? "Admin access granted." : "Admin access removed.", {
+    user: toSafeUser(user),
+  }).send(res);
 });
 
 // Unrestricted version of the manager's employee-timesheet view - Admin can
@@ -374,6 +411,7 @@ module.exports = {
   createUser,
   reactivateUser,
   updateUserManager,
+  setAdminAccess,
   getUserTimesheet,
   getTimesheetSubmissionAttachment,
   exportUserTimesheet,

@@ -1,6 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, Clock, Download, Eye, FileDown, IdCard, LogOut, RotateCcw, Upload, UserPlus, Users, UserCog } from "lucide-react";
+import {
+  CalendarDays,
+  Clock,
+  Download,
+  Eye,
+  FileDown,
+  IdCard,
+  LogOut,
+  RotateCcw,
+  ShieldCheck,
+  ShieldOff,
+  Upload,
+  UserPlus,
+  Users,
+  UserCog,
+} from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -10,6 +25,7 @@ import Spinner from "../../components/common/Spinner";
 import AddUserModal from "../admin/AddUserModal";
 import AssignManagerModal from "../admin/AssignManagerModal";
 import ExitModal from "../admin/ExitModal";
+import AdminAccessModal from "../admin/AdminAccessModal";
 import { useAuth } from "../../context/AuthContext";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -28,6 +44,7 @@ export default function AdminDashboard() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [managingUser, setManagingUser] = useState(null);
   const [exitingUser, setExitingUser] = useState(null);
+  const [adminAccessTarget, setAdminAccessTarget] = useState(null);
   const [actioningId, setActioningId] = useState(null);
   const [payrollMonth, setPayrollMonth] = useState(currentMonthValue());
   const [isExportingPayroll, setIsExportingPayroll] = useState(false);
@@ -71,6 +88,11 @@ export default function AdminDashboard() {
 
   const handleExitSuccess = () => {
     setExitingUser(null);
+    loadUsers();
+  };
+
+  const handleAdminAccessSuccess = () => {
+    setAdminAccessTarget(null);
     loadUsers();
   };
 
@@ -206,7 +228,6 @@ export default function AdminDashboard() {
                   <tr>
                     <th>Name</th>
                     <th>Email</th>
-                    <th>Type</th>
                     <th>Manager</th>
                     <th>Status</th>
                     <th>Exit date</th>
@@ -220,7 +241,6 @@ export default function AdminDashboard() {
                         {user.firstName} {user.lastName}
                       </td>
                       <td className="table-cell-secondary">{user.email}</td>
-                      <td className="table-cell-secondary">{user.userType}</td>
                       <td className="table-cell-secondary">{managerNameById(user.managerId)}</td>
                       <td>
                         <StatusBadge status={user.status} />
@@ -236,6 +256,26 @@ export default function AdminDashboard() {
                             <UserCog size={14} />
                             Set manager
                           </button>
+                          {user.id !== currentUser.id &&
+                            (user.userType === "ADMIN" ? (
+                              <button
+                                type="button"
+                                className="row-action-btn reject"
+                                onClick={() => setAdminAccessTarget({ user, grant: false })}
+                              >
+                                <ShieldOff size={14} />
+                                Remove admin access
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="row-action-btn"
+                                onClick={() => setAdminAccessTarget({ user, grant: true })}
+                              >
+                                <ShieldCheck size={14} />
+                                Make admin
+                              </button>
+                            ))}
                           <button
                             type="button"
                             className="row-action-btn"
@@ -332,6 +372,14 @@ export default function AdminDashboard() {
       )}
       {exitingUser && (
         <ExitModal user={exitingUser} onClose={() => setExitingUser(null)} onSuccess={handleExitSuccess} />
+      )}
+      {adminAccessTarget && (
+        <AdminAccessModal
+          user={adminAccessTarget.user}
+          grant={adminAccessTarget.grant}
+          onClose={() => setAdminAccessTarget(null)}
+          onSuccess={handleAdminAccessSuccess}
+        />
       )}
       <input
         ref={documentFileInputRef}
