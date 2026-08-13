@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck } from "lucide-react";
 import * as notificationApi from "../../api/notification.api";
+import { useAuth } from "../../context/AuthContext";
+import { getNotificationDestination } from "../../utils/notificationLinks";
 import "./NotificationBell.css";
 
 const POLL_INTERVAL_MS = 30000;
@@ -21,6 +24,8 @@ const formatRelativeTime = (dateString) => {
 };
 
 export default function NotificationBell() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -59,14 +64,18 @@ export default function NotificationBell() {
 
   const handleToggle = () => (isOpen ? setIsOpen(false) : openPanel());
 
-  const handleItemClick = async (notification) => {
-    if (notification.isRead) return;
-    setNotifications((prev) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true } : n)));
-    setUnreadCount((prev) => Math.max(0, prev - 1));
-    try {
-      await notificationApi.markNotificationRead(notification.id);
-    } catch {
+  const handleItemClick = (notification) => {
+    if (!notification.isRead) {
+      setNotifications((prev) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true } : n)));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
       // Best-effort - a failed mark-as-read isn't worth surfacing an error for.
+      notificationApi.markNotificationRead(notification.id).catch(() => {});
+    }
+
+    const destination = getNotificationDestination(notification.type, user);
+    if (destination) {
+      setIsOpen(false);
+      navigate(destination);
     }
   };
 
