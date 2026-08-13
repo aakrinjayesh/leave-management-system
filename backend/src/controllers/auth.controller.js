@@ -65,6 +65,7 @@ const toSafeUser = async (user) => {
     birthDate: user.birthDate,
     joiningDate: user.joiningDate,
     lastAnniversaryCelebratedYears: user.lastAnniversaryCelebratedYears,
+    lastBirthdayCelebratedYear: user.lastBirthdayCelebratedYear,
     gender: user.gender,
     fatherName: user.fatherName,
     spouseName: user.spouseName,

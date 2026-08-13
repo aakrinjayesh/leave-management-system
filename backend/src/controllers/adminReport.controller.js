@@ -3,6 +3,22 @@ const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
 const projectService = require("../services/project.service");
+const notificationService = require("../services/notification.service");
+
+// Notifies every active account - the project list feeds the timesheet
+// dropdown everyone uses, so a project add/rename/status change is
+// company-wide, not just visible to the admin who made it.
+const notifyAllOfProjectChange = async (message) => {
+  try {
+    const everyone = await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+    await notificationService.notifyMany(
+      everyone.map((u) => u.id),
+      { type: notificationService.NOTIFICATION_TYPES.PROJECT_UPDATED, title: "Project list updated", message }
+    );
+  } catch (err) {
+    console.error("Failed to create project updated notification:", err);
+  }
+};
 
 const getProjectAssignmentReport = asyncHandler(async (req, res) => {
   const report = await timesheetService.getProjectAssignmentReport();
@@ -42,6 +58,8 @@ const createProject = asyncHandler(async (req, res) => {
   const project = await projectService.createProject(req.body.name, req.user.id);
 
   new ApiResponse(201, "Project added.", { project }).send(res);
+
+  await notifyAllOfProjectChange(`A new project "${project.name}" has been added.`);
 });
 
 const renameProject = asyncHandler(async (req, res) => {
@@ -49,6 +67,8 @@ const renameProject = asyncHandler(async (req, res) => {
   const project = await projectService.renameProject(id, req.body.name);
 
   new ApiResponse(200, "Project renamed.", { project }).send(res);
+
+  await notifyAllOfProjectChange(`A project has been renamed to "${project.name}".`);
 });
 
 const deactivateProject = asyncHandler(async (req, res) => {
@@ -56,6 +76,8 @@ const deactivateProject = asyncHandler(async (req, res) => {
   const project = await projectService.setProjectActive(id, false);
 
   new ApiResponse(200, "Project deactivated.", { project }).send(res);
+
+  await notifyAllOfProjectChange(`Project "${project.name}" has been deactivated.`);
 });
 
 const reactivateProject = asyncHandler(async (req, res) => {
@@ -63,6 +85,8 @@ const reactivateProject = asyncHandler(async (req, res) => {
   const project = await projectService.setProjectActive(id, true);
 
   new ApiResponse(200, "Project reactivated.", { project }).send(res);
+
+  await notifyAllOfProjectChange(`Project "${project.name}" has been reactivated.`);
 });
 
 module.exports = {

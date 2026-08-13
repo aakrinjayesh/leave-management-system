@@ -5,7 +5,24 @@ const asyncHandler = require("../utils/asyncHandler");
 const incomeTaxService = require("../services/incomeTax.service");
 const resignationService = require("../services/resignation.service");
 const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.service");
-const { sendResignationSubmittedEmail } = require("../utils/email.util");
+const { sendResignationSubmittedEmail, sendResignationWithdrawnEmail } = require("../utils/email.util");
+const notificationService = require("../services/notification.service");
+const { formatDateShort } = require("../utils/formatDate.util");
+
+// Every active admin, plus this employee's own active manager if they have
+// one - the shared recipient set for resignation submit/withdraw notices
+// (dedup'd by id, since a manager could in theory also be an admin).
+const getResignationNoticeRecipients = async (employee) => {
+  const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
+  const recipientsById = new Map(admins.map((admin) => [admin.id, admin]));
+
+  if (employee.managerId) {
+    const manager = await prisma.user.findFirst({ where: { id: employee.managerId, status: "ACTIVE" } });
+    if (manager) recipientsById.set(manager.id, manager);
+  }
+
+  return [...recipientsById.values()];
+};
 
 // Completed years since joining, computed server-side (not trusted from the
 // client) so the stored "last celebrated" value can't be spoofed.
@@ -35,6 +52,18 @@ const markAnniversaryCelebrationSeen = asyncHandler(async (req, res) => {
   });
 
   new ApiResponse(200, "OK", { lastAnniversaryCelebratedYears: user.lastAnniversaryCelebratedYears }).send(res);
+});
+
+// Records that this employee's birthday celebration overlay has been shown
+// for the current year, so it doesn't replay on later dashboard visits the
+// same year.
+const markBirthdayCelebrationSeen = asyncHandler(async (req, res) => {
+  const user = await prisma.user.update({
+    where: { id: req.user.id },
+    data: { lastBirthdayCelebratedYear: new Date().getFullYear() },
+  });
+
+  new ApiResponse(200, "OK", { lastBirthdayCelebratedYear: user.lastBirthdayCelebratedYear }).send(res);
 });
 
 // Employee's own read-only Income Tax Computation, scoped to their own
@@ -83,19 +112,46 @@ const submitMyResignation = asyncHandler(async (req, res) => {
   // Notify every active admin - sent after the response so the employee
   // doesn't wait on the email round-trips; failures here shouldn't fail the
   // submission itself.
+  const employeeName = `${req.user.firstName} ${req.user.lastName}`;
   try {
     const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
     for (const admin of admins) {
       await sendResignationSubmittedEmail({
         to: admin.email,
         recipientFirstName: admin.firstName,
-        employeeName: `${req.user.firstName} ${req.user.lastName}`,
+        employeeName,
         proposedLastWorkingDate,
         reason,
       });
     }
   } catch (err) {
     console.error("Failed to send resignation submitted email:", err);
+  }
+
+  // In-app notification goes to both the manager (view-only on resignations)
+  // and every active admin (who can actually accept/reject).
+  try {
+    const recipientIds = new Set();
+    const admins = await prisma.user.findMany({
+      where: { userType: "ADMIN", status: "ACTIVE" },
+      select: { id: true },
+    });
+    admins.forEach((admin) => recipientIds.add(admin.id));
+
+    if (req.user.managerId) {
+      const manager = await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } });
+      if (manager) recipientIds.add(manager.id);
+    }
+
+    await notificationService.notifyMany([...recipientIds], {
+      type: notificationService.NOTIFICATION_TYPES.RESIGNATION_SUBMITTED,
+      title: "New resignation submitted",
+      message: `${employeeName} submitted their resignation, proposed last working day ${formatDateShort(
+        proposedLastWorkingDate
+      )}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create resignation submitted notification:", err);
   }
 });
 
@@ -111,10 +167,45 @@ const withdrawMyResignation = asyncHandler(async (req, res) => {
   const resignation = await resignationService.withdrawResignation(req.user.id, id);
 
   new ApiResponse(200, "Resignation withdrawn.", { resignation }).send(res);
+
+  // Notifies the same audience as the submission itself (every active admin
+  // + this employee's manager) - sent after the response so the employee
+  // doesn't wait on the round-trips; failures here shouldn't fail the
+  // withdrawal itself.
+  const employeeName = `${req.user.firstName} ${req.user.lastName}`;
+  try {
+    const recipients = await getResignationNoticeRecipients(req.user);
+
+    for (const recipient of recipients) {
+      try {
+        await sendResignationWithdrawnEmail({
+          to: recipient.email,
+          recipientFirstName: recipient.firstName,
+          employeeName,
+        });
+      } catch (err) {
+        console.error("Failed to send resignation withdrawn email:", err);
+      }
+
+      try {
+        await notificationService.notify({
+          userId: recipient.id,
+          type: notificationService.NOTIFICATION_TYPES.RESIGNATION_WITHDRAWN,
+          title: "Resignation withdrawn",
+          message: `${employeeName} has withdrawn their resignation.`,
+        });
+      } catch (err) {
+        console.error("Failed to create resignation withdrawn notification:", err);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to look up recipients for resignation withdrawn notice:", err);
+  }
 });
 
 module.exports = {
   markAnniversaryCelebrationSeen,
+  markBirthdayCelebrationSeen,
   getMyIncomeTaxComputation,
   listMyIncomeTaxComputationGenerations,
   downloadMyIncomeTaxComputationPdf,

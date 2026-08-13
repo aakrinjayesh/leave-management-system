@@ -5,6 +5,8 @@ const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
 const { sendTimesheetDecisionEmail } = require("../utils/email.util");
+const notificationService = require("../services/notification.service");
+const { formatDateShort } = require("../utils/formatDate.util");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const listTeamSubmissions = asyncHandler(async (req, res) => {
@@ -142,6 +144,19 @@ const approveSubmission = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send timesheet approved email:", err);
   }
+
+  try {
+    await notificationService.notify({
+      userId: submission.user.id,
+      type: notificationService.NOTIFICATION_TYPES.TIMESHEET_DECIDED,
+      title: "Timesheet approved",
+      message: `Your timesheet for the week of ${formatDateShort(submission.weekStartDate)} - ${formatDateShort(
+        submission.weekEndDate
+      )} was approved by ${req.user.firstName} ${req.user.lastName}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create timesheet approved notification:", err);
+  }
 });
 
 const rejectSubmission = asyncHandler(async (req, res) => {
@@ -188,6 +203,19 @@ const rejectSubmission = asyncHandler(async (req, res) => {
     });
   } catch (err) {
     console.error("Failed to send timesheet rejected email:", err);
+  }
+
+  try {
+    await notificationService.notify({
+      userId: submission.user.id,
+      type: notificationService.NOTIFICATION_TYPES.TIMESHEET_DECIDED,
+      title: "Timesheet rejected",
+      message: `Your timesheet for the week of ${formatDateShort(submission.weekStartDate)} - ${formatDateShort(
+        submission.weekEndDate
+      )} was rejected by ${req.user.firstName} ${req.user.lastName}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create timesheet rejected notification:", err);
   }
 });
 

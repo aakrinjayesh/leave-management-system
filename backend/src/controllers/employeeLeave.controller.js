@@ -8,6 +8,8 @@ const leaveBalanceService = require("../services/leaveBalance.service");
 const companySettingsService = require("../services/companySettings.service");
 const { RESIGNATION_STATUS } = require("../utils/constants");
 const { sendLeaveSubmittedEmail, sendManagerOnLeaveNoticeEmail, sendLeaveCancelledEmail } = require("../utils/email.util");
+const notificationService = require("../services/notification.service");
+const { formatDateShort } = require("../utils/formatDate.util");
 const { UPLOAD_DIR } = require("../config/upload");
 
 const startOfUtcDay = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -250,12 +252,13 @@ const applyLeave = asyncHandler(async (req, res) => {
 
   // Notify the manager - sent after the response so the employee doesn't wait
   // on the email round-trip; failures here shouldn't fail the leave request itself.
+  const employeeName = `${req.user.firstName} ${req.user.lastName}`;
   for (const leaveRequest of leaveRequests) {
     try {
       await sendLeaveSubmittedEmail({
         to: recipient.email,
         managerFirstName: recipient.firstName,
-        employeeName: `${req.user.firstName} ${req.user.lastName}`,
+        employeeName,
         leaveName: leaveRequest.leavePolicy.leaveName,
         startDate: leaveRequest.startDate,
         endDate: leaveRequest.endDate,
@@ -264,6 +267,19 @@ const applyLeave = asyncHandler(async (req, res) => {
       });
     } catch (err) {
       console.error("Failed to send leave request submitted email:", err);
+    }
+
+    try {
+      await notificationService.notify({
+        userId: recipient.id,
+        type: notificationService.NOTIFICATION_TYPES.LEAVE_SUBMITTED,
+        title: "New leave request",
+        message: `${employeeName} applied for ${leaveRequest.leavePolicy.leaveName} (${formatDateShort(
+          leaveRequest.startDate
+        )} - ${formatDateShort(leaveRequest.endDate)}) on ${formatDateShort(new Date())}.`,
+      });
+    } catch (err) {
+      console.error("Failed to create leave request submitted notification:", err);
     }
   }
 
@@ -371,6 +387,19 @@ const cancelLeaveRequest = asyncHandler(async (req, res) => {
       });
     } catch (err) {
       console.error("Failed to send leave cancelled email:", err);
+    }
+
+    try {
+      await notificationService.notify({
+        userId: leaveRequest.routedTo.id,
+        type: notificationService.NOTIFICATION_TYPES.LEAVE_CANCELLED,
+        title: "Leave request cancelled",
+        message: `${req.user.firstName} ${req.user.lastName} cancelled their ${
+          leaveRequest.leavePolicy.leaveName
+        } request (${formatDateShort(leaveRequest.startDate)} - ${formatDateShort(leaveRequest.endDate)}).`,
+      });
+    } catch (err) {
+      console.error("Failed to create leave cancelled notification:", err);
     }
   }
 });

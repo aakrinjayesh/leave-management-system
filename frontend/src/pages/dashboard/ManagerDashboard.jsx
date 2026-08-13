@@ -6,6 +6,7 @@ import StatCard from "../../components/common/StatCard";
 import Button from "../../components/common/Button";
 import Spinner from "../../components/common/Spinner";
 import ApplyLeaveModal from "../employee/ApplyLeaveModal";
+import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
 import { useAuth } from "../../context/AuthContext";
 import * as managerLeaveApi from "../../api/managerLeave.api";
 import "../../styles/dashboardShared.css";
@@ -23,6 +24,7 @@ export default function ManagerDashboard() {
 
   return (
     <DashboardLayout title="Dashboard">
+      <BirthdayCelebrationGate />
       <div className="page-header">
         <div>
           <h1>Welcome back, {user?.firstName}.</h1>

@@ -44,14 +44,38 @@ const createLeavePolicySchema = z.object({
 
 const updateLeavePolicySchema = createLeavePolicySchema.partial();
 
-const createHolidaySchema = z.object({
-  holidayName: z.string().trim().min(1, "Holiday name is required.").max(150),
-  holidayDate: z.coerce.date({ errorMap: () => ({ message: "Please provide a valid date." }) }),
+// holidayEndDate is optional - when set, createHoliday adds one row per day
+// in the [holidayDate, holidayEndDate] range instead of just a single day.
+const createHolidaySchema = z
+  .object({
+    holidayName: z.string().trim().min(1, "Holiday name is required.").max(150),
+    holidayDate: z.coerce.date({ errorMap: () => ({ message: "Please provide a valid date." }) }),
+    holidayEndDate: z.coerce.date().optional(),
+    description: z.string().trim().max(500).nullable().optional(),
+    isOptional: z.boolean().optional(),
+  })
+  .refine((data) => !data.holidayEndDate || data.holidayEndDate >= data.holidayDate, {
+    message: "End date can't be before the start date.",
+    path: ["holidayEndDate"],
+  })
+  .refine(
+    (data) =>
+      !data.holidayEndDate ||
+      (data.holidayEndDate.getTime() - data.holidayDate.getTime()) / 86400000 <= 30,
+    { message: "A holiday range can span at most 31 days.", path: ["holidayEndDate"] }
+  );
+
+// holidayEndDate isn't cross-validated against holidayDate here (unlike
+// createHolidaySchema) because an omitted holidayDate means "keep the
+// existing row's date," which this schema can't see - the controller does
+// that comparison once it has the existing row loaded.
+const updateHolidaySchema = z.object({
+  holidayName: z.string().trim().min(1, "Holiday name is required.").max(150).optional(),
+  holidayDate: z.coerce.date({ errorMap: () => ({ message: "Please provide a valid date." }) }).optional(),
+  holidayEndDate: z.coerce.date().optional(),
   description: z.string().trim().max(500).nullable().optional(),
   isOptional: z.boolean().optional(),
 });
-
-const updateHolidaySchema = createHolidaySchema.partial();
 
 // Empty-string form fields become null rather than an empty value, so
 // clearing a field in the UI actually clears it in the database.

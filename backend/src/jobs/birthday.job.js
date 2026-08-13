@@ -5,6 +5,7 @@ const {
   sendBirthdayManagerNoticeEmail,
   sendAdminBirthdayBroadcastEmail,
 } = require("../utils/email.util");
+const notificationService = require("../services/notification.service");
 
 const IST_TIMEZONE = "Asia/Kolkata";
 
@@ -44,6 +45,10 @@ const runBirthdayCheck = async () => {
   );
 
   for (const user of todaysBirthdays) {
+    // Email and notification are independent concerns, each with its own
+    // try/catch - a failure in one must never prevent the other from
+    // running (an earlier version nested them under one try, which meant an
+    // email failure silently skipped the notification too).
     try {
       await sendBirthdayEmployeeEmail({ to: user.email, firstName: user.firstName });
 
@@ -72,10 +77,42 @@ const runBirthdayCheck = async () => {
           });
         }
       }
-
-      await prisma.user.update({ where: { id: user.id }, data: { lastBirthdayEmailYear: todayYear } });
     } catch (err) {
       console.error(`Failed to send birthday email for user ${user.id}:`, err);
+    }
+
+    // In-app notification broadcast: unlike the email above (targeted at
+    // just the birthday person's manager, or everyone only if they're an
+    // admin), every active account gets notified regardless of role.
+    try {
+      const everyoneElse = await prisma.user.findMany({
+        where: { status: "ACTIVE", id: { not: user.id } },
+        select: { id: true },
+      });
+      const employeeName = `${user.firstName} ${user.lastName}`;
+
+      await notificationService.notify({
+        userId: user.id,
+        type: notificationService.NOTIFICATION_TYPES.BIRTHDAY,
+        title: "Happy Birthday!",
+        message: "Wishing you a very happy birthday! Have a great day.",
+      });
+      await notificationService.notifyMany(
+        everyoneElse.map((u) => u.id),
+        {
+          type: notificationService.NOTIFICATION_TYPES.BIRTHDAY,
+          title: "Team birthday today",
+          message: `Today is ${employeeName}'s birthday!`,
+        }
+      );
+    } catch (err) {
+      console.error(`Failed to create birthday notification for user ${user.id}:`, err);
+    }
+
+    try {
+      await prisma.user.update({ where: { id: user.id }, data: { lastBirthdayEmailYear: todayYear } });
+    } catch (err) {
+      console.error(`Failed to record birthday email year for user ${user.id}:`, err);
     }
   }
 

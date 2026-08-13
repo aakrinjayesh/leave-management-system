@@ -115,6 +115,10 @@ model User {
     // never double-sends if it happens to run more than once on the same day.
     lastBirthdayEmailYear Int?
 
+    // The year the birthday dashboard celebration overlay was last shown, so
+    // it fires once per birthday instead of on every dashboard visit that day.
+    lastBirthdayCelebratedYear Int?
+
     // HR/payroll fields - admin-managed only, employees can view but not edit.
     pan               String?
     panHolderName     String?

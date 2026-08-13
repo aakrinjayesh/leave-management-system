@@ -6,6 +6,8 @@ const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
 const projectService = require("../services/project.service");
 const { sendTimesheetSubmittedEmail } = require("../utils/email.util");
+const notificationService = require("../services/notification.service");
+const { formatDateShort } = require("../utils/formatDate.util");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const getMyEntries = asyncHandler(async (req, res) => {
@@ -191,19 +193,37 @@ const submitWeek = asyncHandler(async (req, res) => {
   try {
     const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
     const recipients = [recipient, ...admins.filter((a) => a.id !== recipient.id)];
+    const employeeName = `${req.user.firstName} ${req.user.lastName}`;
 
     for (const person of recipients) {
-      await sendTimesheetSubmittedEmail({
-        to: person.email,
-        recipientFirstName: person.firstName,
-        employeeName: `${req.user.firstName} ${req.user.lastName}`,
-        weekStartDate,
-        weekEndDate,
-        totalHours,
-      });
+      try {
+        await sendTimesheetSubmittedEmail({
+          to: person.email,
+          recipientFirstName: person.firstName,
+          employeeName,
+          weekStartDate,
+          weekEndDate,
+          totalHours,
+        });
+      } catch (err) {
+        console.error("Failed to send timesheet submitted email:", err);
+      }
+
+      try {
+        await notificationService.notify({
+          userId: person.id,
+          type: notificationService.NOTIFICATION_TYPES.TIMESHEET_SUBMITTED,
+          title: "Timesheet submitted",
+          message: `${employeeName} submitted their timesheet for the week of ${formatDateShort(
+            weekStartDate
+          )} - ${formatDateShort(weekEndDate)}.`,
+        });
+      } catch (err) {
+        console.error("Failed to create timesheet submitted notification:", err);
+      }
     }
   } catch (err) {
-    console.error("Failed to send timesheet submitted email:", err);
+    console.error("Failed to notify about timesheet submission:", err);
   }
 });
 

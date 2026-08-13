@@ -60,6 +60,7 @@ const USER_SUMMARY_SELECT = {
     employeeCode: true,
     designation: true,
     joiningDate: true,
+    managerId: true,
   },
 };
 

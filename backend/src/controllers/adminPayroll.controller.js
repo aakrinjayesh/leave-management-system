@@ -4,6 +4,8 @@ const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const payrollService = require("../services/payroll.service");
 const { streamPayslipPdf } = require("../services/payslipPdf.service");
+const notificationService = require("../services/notification.service");
+const { formatDateShort } = require("../utils/formatDate.util");
 
 // Computes what a payslip would look like without saving it, so admin can
 // see the numbers before confirming.
@@ -85,6 +87,21 @@ const recordSalaryStructure = asyncHandler(async (req, res) => {
   );
 
   new ApiResponse(201, "Salary structure recorded.", { history }).send(res);
+
+  // Sent after the response so the admin doesn't wait on it; failures here
+  // shouldn't fail the salary structure update itself.
+  try {
+    await notificationService.notify({
+      userId,
+      type: notificationService.NOTIFICATION_TYPES.SALARY_STRUCTURE_UPDATED,
+      title: "Salary structure updated",
+      message: `Your CTC has been updated to ₹${Number(ctc).toLocaleString("en-IN")}, effective ${formatDateShort(
+        effectiveFrom
+      )}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create salary structure notification:", err);
+  }
 });
 
 const downloadPayslipPdf = asyncHandler(async (req, res) => {

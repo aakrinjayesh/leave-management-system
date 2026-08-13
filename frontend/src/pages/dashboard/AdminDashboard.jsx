@@ -26,6 +26,7 @@ import AddUserModal from "../admin/AddUserModal";
 import AssignManagerModal from "../admin/AssignManagerModal";
 import ExitModal from "../admin/ExitModal";
 import AdminAccessModal from "../admin/AdminAccessModal";
+import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
 import { useAuth } from "../../context/AuthContext";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -173,6 +174,7 @@ export default function AdminDashboard() {
 
   return (
     <DashboardLayout title="Manage Accounts">
+      <BirthdayCelebrationGate />
       <div className="page-header">
         <div>
           <h1>Accounts</h1>

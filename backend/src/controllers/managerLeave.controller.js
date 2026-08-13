@@ -7,6 +7,8 @@ const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
 const companySettingsService = require("../services/companySettings.service");
 const { sendLeaveDecisionEmail } = require("../utils/email.util");
+const notificationService = require("../services/notification.service");
+const { formatDateShort } = require("../utils/formatDate.util");
 const { UPLOAD_DIR } = require("../config/upload");
 
 const startOfUtcDay = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -361,6 +363,19 @@ const approveLeaveRequest = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to send leave approved email:", err);
   }
+
+  try {
+    await notificationService.notify({
+      userId: leaveRequest.user.id,
+      type: notificationService.NOTIFICATION_TYPES.LEAVE_DECIDED,
+      title: "Leave request approved",
+      message: `Your ${leaveRequest.leavePolicy.leaveName} request (${formatDateShort(
+        leaveRequest.startDate
+      )} - ${formatDateShort(leaveRequest.endDate)}) was approved by ${req.user.firstName} ${req.user.lastName}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create leave approved notification:", err);
+  }
 });
 
 const rejectLeaveRequest = asyncHandler(async (req, res) => {
@@ -399,6 +414,19 @@ const rejectLeaveRequest = asyncHandler(async (req, res) => {
     });
   } catch (err) {
     console.error("Failed to send leave rejected email:", err);
+  }
+
+  try {
+    await notificationService.notify({
+      userId: leaveRequest.user.id,
+      type: notificationService.NOTIFICATION_TYPES.LEAVE_DECIDED,
+      title: "Leave request rejected",
+      message: `Your ${leaveRequest.leavePolicy.leaveName} request (${formatDateShort(
+        leaveRequest.startDate
+      )} - ${formatDateShort(leaveRequest.endDate)}) was rejected by ${req.user.firstName} ${req.user.lastName}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create leave rejected notification:", err);
   }
 });
 

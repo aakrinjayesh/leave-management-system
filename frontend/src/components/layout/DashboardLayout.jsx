@@ -16,6 +16,7 @@ import {
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useBackNavigation } from "../../hooks/useBackNavigation";
+import NotificationBell from "./NotificationBell";
 import aakrinLogo from "../../assets/aakrin-logo.png";
 import { COPYRIGHT_TEXT } from "../../utils/copyright";
 import "./DashboardLayout.css";
@@ -169,6 +170,7 @@ export default function DashboardLayout({ title, children }) {
             <span className="dashboard-topbar-title">{title}</span>
           </div>
           <div className="dashboard-user">
+            <NotificationBell />
             <div className="dashboard-user-info">
               <div className="dashboard-user-name">
                 {user?.firstName} {user?.lastName}

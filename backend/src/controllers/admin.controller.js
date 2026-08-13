@@ -9,6 +9,8 @@ const timesheetService = require("../services/timesheet.service");
 const companySettingsService = require("../services/companySettings.service");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
+const notificationService = require("../services/notification.service");
+const { sendAdminAccessRemovedEmail } = require("../utils/email.util");
 const { UPLOAD_DIR } = require("../config/upload");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
@@ -133,6 +135,39 @@ const setAdminAccess = asyncHandler(async (req, res) => {
   new ApiResponse(200, grant ? "Admin access granted." : "Admin access removed.", {
     user: toSafeUser(user),
   }).send(res);
+
+  const actingAdminName = `${req.user.firstName} ${req.user.lastName}`;
+
+  if (grant) {
+    try {
+      await notificationService.notify({
+        userId: user.id,
+        type: notificationService.NOTIFICATION_TYPES.ADMIN_GRANTED,
+        title: "You've been made an admin",
+        message: `${actingAdminName} made you an admin - you can now manage accounts, reports, payslips, and every other admin page.`,
+      });
+    } catch (err) {
+      console.error("Failed to create admin granted notification:", err);
+    }
+  } else {
+    // Sent after the response so the acting admin doesn't wait on the email round-trip.
+    try {
+      await sendAdminAccessRemovedEmail({ to: user.email, firstName: user.firstName, removedByName: actingAdminName });
+    } catch (err) {
+      console.error("Failed to send admin access removed email:", err);
+    }
+
+    try {
+      await notificationService.notify({
+        userId: user.id,
+        type: notificationService.NOTIFICATION_TYPES.ADMIN_REMOVED,
+        title: "Admin access removed",
+        message: `${actingAdminName} removed your admin access. You now have a regular employee account.`,
+      });
+    } catch (err) {
+      console.error("Failed to create admin removed notification:", err);
+    }
+  }
 });
 
 // Unrestricted version of the manager's employee-timesheet view - Admin can

@@ -290,6 +290,40 @@ const sendAdminBirthdayBroadcastEmail = async ({ to, recipientFirstName, adminNa
   });
 };
 
+// ---------- Work anniversary notifications ----------
+
+const yearWord = (years) => (years === 1 ? "1 year" : `${years} years`);
+
+const sendAnniversaryEmployeeEmail = async ({ to, firstName, years }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "🎉 Happy Work Anniversary!",
+    intro: `Hi ${firstName}, congratulations on completing ${yearWord(years)} with us! Thank you for your contribution.`,
+  });
+
+  return sendMail({
+    to,
+    subject: `Happy ${yearWord(years)} work anniversary, ${firstName}!`,
+    html,
+    logLabel: `Anniversary wishes for ${firstName} (${yearWord(years)})`,
+  });
+};
+
+const sendAnniversaryManagerNoticeEmail = async ({ to, managerFirstName, employeeName, years }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "🎉 Team work anniversary today",
+    intro: `Hi ${managerFirstName || "there"}, today ${employeeName} completes ${yearWord(
+      years
+    )} with us - might be a nice moment to congratulate them.`,
+  });
+
+  return sendMail({
+    to,
+    subject: `${employeeName} completes ${yearWord(years)} today`,
+    html,
+    logLabel: `Anniversary notice: ${employeeName} (${yearWord(years)}) to manager`,
+  });
+};
+
 // ---------- Timesheet notifications ----------
 
 const sendTimesheetSubmittedEmail = async ({ to, recipientFirstName, employeeName, weekStartDate, weekEndDate, totalHours }) => {
@@ -384,6 +418,20 @@ const sendResignationDecisionEmail = async ({ to, employeeFirstName, status, las
   });
 };
 
+const sendResignationWithdrawnEmail = async ({ to, recipientFirstName, employeeName }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "Resignation withdrawn",
+    intro: `Hi ${recipientFirstName || "there"}, ${employeeName} has withdrawn their resignation - no further action needed.`,
+  });
+
+  return sendMail({
+    to,
+    subject: `${employeeName} withdrew their resignation`,
+    html,
+    logLabel: `Resignation withdrawn by ${employeeName} to ${to}`,
+  });
+};
+
 // ---------- Account exit notifications ----------
 
 const sendExitNotificationEmail = async ({ to, recipientFirstName, employeeName, exitDate, isSelf }) => {
@@ -403,6 +451,20 @@ const sendExitNotificationEmail = async ({ to, recipientFirstName, employeeName,
   });
 };
 
+const sendAdminAccessRemovedEmail = async ({ to, firstName, removedByName }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "Admin access removed",
+    intro: `Hi ${firstName || "there"}, ${removedByName} has removed your admin access. You now have a regular employee account.`,
+  });
+
+  return sendMail({
+    to,
+    subject: "Your admin access has been removed",
+    html,
+    logLabel: `Admin access removed for ${firstName} (${to})`,
+  });
+};
+
 module.exports = {
   sendOtpEmail,
   isRealMailConfigured,
@@ -413,9 +475,13 @@ module.exports = {
   sendBirthdayEmployeeEmail,
   sendBirthdayManagerNoticeEmail,
   sendAdminBirthdayBroadcastEmail,
+  sendAnniversaryEmployeeEmail,
+  sendAnniversaryManagerNoticeEmail,
   sendTimesheetSubmittedEmail,
   sendTimesheetDecisionEmail,
   sendResignationSubmittedEmail,
   sendResignationDecisionEmail,
+  sendResignationWithdrawnEmail,
   sendExitNotificationEmail,
+  sendAdminAccessRemovedEmail,
 };

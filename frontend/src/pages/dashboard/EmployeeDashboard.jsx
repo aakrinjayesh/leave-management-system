@@ -6,6 +6,7 @@ import Button from "../../components/common/Button";
 import Spinner from "../../components/common/Spinner";
 import ApplyLeaveModal from "../employee/ApplyLeaveModal";
 import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
+import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
 import { useAuth } from "../../context/AuthContext";
 import * as employeeLeaveApi from "../../api/employeeLeave.api";
 import { formatDateRange } from "../../utils/formatDate";
@@ -37,6 +38,7 @@ export default function EmployeeDashboard() {
 
   return (
     <DashboardLayout title="Dashboard">
+      <BirthdayCelebrationGate />
       <div className="page-header">
         <div>
           <h1>Welcome back, {user?.firstName}.</h1>

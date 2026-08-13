@@ -4,6 +4,8 @@ const unwrap = (promise) => promise.then((res) => res.data.data);
 
 export const markAnniversaryCelebrationSeen = () => unwrap(axiosClient.put("/profile/anniversary-celebration-seen"));
 
+export const markBirthdayCelebrationSeen = () => unwrap(axiosClient.put("/profile/birthday-celebration-seen"));
+
 export const getMyIncomeTaxComputation = (financialYear) =>
   unwrap(axiosClient.get("/profile/tax-computation", { params: { financialYear } }));
 
