@@ -1,21 +1,40 @@
-const nodemailer = require("nodemailer");
 const env = require("../config/env");
 
-let transporter = null;
+const sendViaForcehead = async ({ to, subject, html }) => {
+  console.log("Sending email through Forcehead:", {
+    to,
+    subject,
+  });
 
-const isRealMailConfigured = () => !env.MAIL_STUB && env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS;
+  const response = await fetch(`${env.FORCEHEAD_URL}/send/mail`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      EMAIL_HOST: env.EMAIL_HOST,
+      EMAIL_PORT: env.EMAIL_PORT,
+      EMAIL_SECURE: env.EMAIL_SECURE,
+      EMAIL_SENDEREMAIL: env.EMAIL_SENDEREMAIL,
+      EMAIL_SENDERPASS: env.EMAIL_SENDERPASS,
 
-const getTransporter = () => {
-  if (!isRealMailConfigured()) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT,
-      secure: env.SMTP_PORT === 465,
-      auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
-    });
-  }
-  return transporter;
+      mailinfo: {
+        from: "info@aakrin.com",
+        to,
+        subject,
+        html,
+      },
+    }),
+  });
+
+  const data = await response.json();
+
+  console.log(data);
+
+  return {
+    stubbed: false,
+    messageId: data.messageId,
+  };
 };
 
 const otpEmailTemplates = {
@@ -51,33 +70,35 @@ const buildOtpEmailHtml = ({ heading, intro, otp, firstName, minutes }) => `
 
 const sendOtpEmail = async ({ to, firstName, purpose, otp, minutes }) => {
   const template = otpEmailTemplates[purpose] || otpEmailTemplates.LOGIN;
-  const html = buildOtpEmailHtml({ ...template, otp, firstName, minutes });
-  const activeTransporter = getTransporter();
 
-  // Always echo the OTP to the terminal outside production - handy for testing
-  // even when real email is configured, so you don't have to check an inbox.
+  const html = buildOtpEmailHtml({
+    ...template,
+    otp,
+    firstName,
+    minutes,
+  });
+
   if (env.NODE_ENV !== "production") {
-    console.log(`\n[OTP] To: ${to} | Purpose: ${purpose} | OTP: ${otp} (expires in ${minutes}m)\n`);
+    console.log(
+      `\n[OTP] To: ${to} | Purpose: ${purpose} | OTP: ${otp} (expires in ${minutes}m)\n`,
+    );
   }
 
-  if (!activeTransporter) {
-    return { stubbed: true };
-  }
-
-  await activeTransporter.sendMail({
-    from: env.MAIL_FROM,
+  return sendMail({
     to,
     subject: template.subject,
     html,
   });
-
-  return { stubbed: false };
 };
 
 // ---------- Leave-request notifications ----------
 
 const formatDateShort = (date) =>
-  new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  new Date(date).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 
 const buildLeaveEmailHtml = ({ heading, intro, detailsRows, footerNote }) => `
   <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #1f2937;">
@@ -90,7 +111,7 @@ const buildLeaveEmailHtml = ({ heading, intro, detailsRows, footerNote }) => `
         <tr>
           <td style="padding: 6px 0; color: #6b7280; font-size: 13px; width: 140px; vertical-align: top;">${label}</td>
           <td style="padding: 6px 0; font-size: 14px; font-weight: 600;">${value}</td>
-        </tr>`
+        </tr>`,
         )
         .join("")}
     </table>
@@ -99,22 +120,16 @@ const buildLeaveEmailHtml = ({ heading, intro, detailsRows, footerNote }) => `
   </div>
 `;
 
-// Generic sender shared by all leave-notification emails - same stub-mode /
-// real-transport behavior as sendOtpEmail, just without an OTP payload.
 const sendMail = async ({ to, subject, html, logLabel }) => {
-  const activeTransporter = getTransporter();
-
   if (env.NODE_ENV !== "production") {
     console.log(`\n[MAIL] To: ${to} | ${logLabel || subject}\n`);
   }
 
-  if (!activeTransporter) {
-    return { stubbed: true };
-  }
-
-  await activeTransporter.sendMail({ from: env.MAIL_FROM, to, subject, html });
-
-  return { stubbed: false };
+  return sendViaForcehead({
+    to,
+    subject,
+    html,
+  });
 };
 
 const sendLeaveSubmittedEmail = async ({
@@ -136,7 +151,8 @@ const sendLeaveSubmittedEmail = async ({
       ["Days", String(totalDays)],
       ["Reason", reason],
     ],
-    footerNote: "Log in to Aakrin Leave Management to approve or decline this request.",
+    footerNote:
+      "Log in to Aakrin Leave Management to approve or decline this request.",
   });
 
   return sendMail({
@@ -216,7 +232,14 @@ const sendLeaveDecisionEmail = async ({
   });
 };
 
-const sendLeaveCancelledEmail = async ({ to, managerFirstName, employeeName, leaveName, startDate, endDate }) => {
+const sendLeaveCancelledEmail = async ({
+  to,
+  managerFirstName,
+  employeeName,
+  leaveName,
+  startDate,
+  endDate,
+}) => {
   const html = buildLeaveEmailHtml({
     heading: "Leave request cancelled",
     intro: `Hi ${managerFirstName || "there"}, ${employeeName} has cancelled their pending leave request.`,
@@ -259,7 +282,11 @@ const sendBirthdayEmployeeEmail = async ({ to, firstName }) => {
   });
 };
 
-const sendBirthdayManagerNoticeEmail = async ({ to, managerFirstName, employeeName }) => {
+const sendBirthdayManagerNoticeEmail = async ({
+  to,
+  managerFirstName,
+  employeeName,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: "🎂 Team birthday today",
     intro: `Hi ${managerFirstName || "there"}, today is ${employeeName}'s birthday - might be a nice moment to wish them well.`,
@@ -276,7 +303,11 @@ const sendBirthdayManagerNoticeEmail = async ({ to, managerFirstName, employeeNa
 // Broadcast version of the birthday notice, sent to every active account
 // instead of just a manager - used when the birthday person is an Admin,
 // since Admins typically have no manager to notify.
-const sendAdminBirthdayBroadcastEmail = async ({ to, recipientFirstName, adminName }) => {
+const sendAdminBirthdayBroadcastEmail = async ({
+  to,
+  recipientFirstName,
+  adminName,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: "🎂 It's your admin's birthday!",
     intro: `Hi ${recipientFirstName || "there"}, today is ${adminName}'s birthday - your admin! Might be a nice moment to wish them well.`,
@@ -308,11 +339,16 @@ const sendAnniversaryEmployeeEmail = async ({ to, firstName, years }) => {
   });
 };
 
-const sendAnniversaryManagerNoticeEmail = async ({ to, managerFirstName, employeeName, years }) => {
+const sendAnniversaryManagerNoticeEmail = async ({
+  to,
+  managerFirstName,
+  employeeName,
+  years,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: "🎉 Team work anniversary today",
     intro: `Hi ${managerFirstName || "there"}, today ${employeeName} completes ${yearWord(
-      years
+      years,
     )} with us - might be a nice moment to congratulate them.`,
   });
 
@@ -326,12 +362,22 @@ const sendAnniversaryManagerNoticeEmail = async ({ to, managerFirstName, employe
 
 // ---------- Timesheet notifications ----------
 
-const sendTimesheetSubmittedEmail = async ({ to, recipientFirstName, employeeName, weekStartDate, weekEndDate, totalHours }) => {
+const sendTimesheetSubmittedEmail = async ({
+  to,
+  recipientFirstName,
+  employeeName,
+  weekStartDate,
+  weekEndDate,
+  totalHours,
+}) => {
   const html = buildLeaveEmailHtml({
     heading: "Timesheet submitted",
     intro: `Hi ${recipientFirstName || "there"}, ${employeeName} submitted their timesheet for the week of ${formatDateShort(weekStartDate)} – ${formatDateShort(weekEndDate)}.`,
     detailsRows: [
-      ["Week", `${formatDateShort(weekStartDate)} – ${formatDateShort(weekEndDate)}`],
+      [
+        "Week",
+        `${formatDateShort(weekStartDate)} – ${formatDateShort(weekEndDate)}`,
+      ],
       ["Total hours", String(totalHours)],
     ],
     footerNote: "Log in to Aakrin Leave Management to review it.",
@@ -362,7 +408,10 @@ const sendTimesheetDecisionEmail = async ({
       isApproved ? "approved" : "declined"
     } by ${managerName}.`,
     detailsRows: [
-      ["Week", `${formatDateShort(weekStartDate)} – ${formatDateShort(weekEndDate)}`],
+      [
+        "Week",
+        `${formatDateShort(weekStartDate)} – ${formatDateShort(weekEndDate)}`,
+      ],
       ["Total hours", String(totalHours)],
       ...(remarks ? [["Remarks", remarks]] : []),
     ],
@@ -378,7 +427,13 @@ const sendTimesheetDecisionEmail = async ({
 
 // ---------- Resignation notifications ----------
 
-const sendResignationSubmittedEmail = async ({ to, recipientFirstName, employeeName, proposedLastWorkingDate, reason }) => {
+const sendResignationSubmittedEmail = async ({
+  to,
+  recipientFirstName,
+  employeeName,
+  proposedLastWorkingDate,
+  reason,
+}) => {
   const html = buildLeaveEmailHtml({
     heading: "New resignation submitted",
     intro: `Hi ${recipientFirstName || "there"}, ${employeeName} has submitted their resignation.`,
@@ -397,14 +452,22 @@ const sendResignationSubmittedEmail = async ({ to, recipientFirstName, employeeN
   });
 };
 
-const sendResignationDecisionEmail = async ({ to, employeeFirstName, status, lastWorkingDate, decidedByName }) => {
+const sendResignationDecisionEmail = async ({
+  to,
+  employeeFirstName,
+  status,
+  lastWorkingDate,
+  decidedByName,
+}) => {
   const isAccepted = status === "ACCEPTED";
   const html = buildLeaveEmailHtml({
     heading: isAccepted ? "Resignation accepted" : "Resignation rejected",
     intro: `Hi ${employeeFirstName || "there"}, your resignation has been ${
       isAccepted ? "accepted" : "rejected"
     } by ${decidedByName}.`,
-    detailsRows: isAccepted ? [["Confirmed last working day", formatDateShort(lastWorkingDate)]] : [],
+    detailsRows: isAccepted
+      ? [["Confirmed last working day", formatDateShort(lastWorkingDate)]]
+      : [],
     footerNote: isAccepted
       ? "Please reach out to your manager or admin if you have any questions about your last working day."
       : "You can submit a new resignation at any time if you still wish to.",
@@ -418,7 +481,11 @@ const sendResignationDecisionEmail = async ({ to, employeeFirstName, status, las
   });
 };
 
-const sendResignationWithdrawnEmail = async ({ to, recipientFirstName, employeeName }) => {
+const sendResignationWithdrawnEmail = async ({
+  to,
+  recipientFirstName,
+  employeeName,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: "Resignation withdrawn",
     intro: `Hi ${recipientFirstName || "there"}, ${employeeName} has withdrawn their resignation - no further action needed.`,
@@ -434,7 +501,13 @@ const sendResignationWithdrawnEmail = async ({ to, recipientFirstName, employeeN
 
 // ---------- Account exit notifications ----------
 
-const sendExitNotificationEmail = async ({ to, recipientFirstName, employeeName, exitDate, isSelf }) => {
+const sendExitNotificationEmail = async ({
+  to,
+  recipientFirstName,
+  employeeName,
+  exitDate,
+  isSelf,
+}) => {
   const html = buildLeaveEmailHtml({
     heading: "Account exited",
     intro: isSelf
@@ -445,13 +518,19 @@ const sendExitNotificationEmail = async ({ to, recipientFirstName, employeeName,
 
   return sendMail({
     to,
-    subject: isSelf ? "Your account has been exited" : `${employeeName}'s account has been exited`,
+    subject: isSelf
+      ? "Your account has been exited"
+      : `${employeeName}'s account has been exited`,
     html,
     logLabel: `Exit notice for ${employeeName} to ${to}`,
   });
 };
 
-const sendAdminAccessRemovedEmail = async ({ to, firstName, removedByName }) => {
+const sendAdminAccessRemovedEmail = async ({
+  to,
+  firstName,
+  removedByName,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: "Admin access removed",
     intro: `Hi ${firstName || "there"}, ${removedByName} has removed your admin access. You now have a regular employee account.`,
@@ -467,7 +546,7 @@ const sendAdminAccessRemovedEmail = async ({ to, firstName, removedByName }) => 
 
 module.exports = {
   sendOtpEmail,
-  isRealMailConfigured,
+
   sendLeaveSubmittedEmail,
   sendManagerOnLeaveNoticeEmail,
   sendLeaveDecisionEmail,
