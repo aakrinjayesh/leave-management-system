@@ -37,6 +37,7 @@ enum ProjectAssignmentStatus {
     NOT_ASSIGNED
 }
 
+
 enum DayOfWeek {
     MONDAY
     TUESDAY
@@ -882,6 +883,18 @@ model Project {
     name String @unique
 
     isActive Boolean @default(true)
+
+    // Client vs internal, and the working-hours window employees on this
+    // project should expect - set once by admin, then just displayed to the
+    // employee once they pick the project on their timesheet (see
+    // ProjectAssignmentStatus reuse: TimesheetSubmission.projectAssigned is
+    // copied straight from here at submit time, not chosen by the employee).
+    // Free text rather than an enum - admin can pick one of the common
+    // suggestions on the frontend or type any other timezone label directly.
+    projectType   ProjectAssignmentStatus @default(NOT_ASSIGNED)
+    timezone      String                  @default("IST")
+    workStartTime String                  @default("09:00")
+    workEndTime   String                  @default("18:00")
 
     createdById Int
 

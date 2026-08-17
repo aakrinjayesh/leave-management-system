@@ -6,11 +6,11 @@ import Button from "../../components/common/Button";
 import Spinner from "../../components/common/Spinner";
 import ApplyLeaveModal from "../employee/ApplyLeaveModal";
 import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
+import LeaveBalanceCards from "../../components/common/LeaveBalanceCards";
 import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
 import { useAuth } from "../../context/AuthContext";
 import * as employeeLeaveApi from "../../api/employeeLeave.api";
 import { formatDateRange } from "../../utils/formatDate";
-import { formatLeaveDays } from "../../utils/formatLeaveDays";
 import "../../styles/dashboardShared.css";
 import "./Dashboard.css";
 
@@ -62,32 +62,7 @@ export default function EmployeeDashboard() {
         </div>
       ) : (
         <>
-          <div className="balance-card-grid">
-            {summary.balances.map((balance) => {
-              const usedPct = balance.isUnlimited
-                ? 0
-                : Math.min(100, Math.round((balance.usedLeaves / (balance.allocatedLeaves || 1)) * 100));
-              return (
-                <div className="balance-card" key={balance.leavePolicyId}>
-                  <div className="balance-card-name">{balance.leaveName}</div>
-                  <div className="balance-card-numbers">
-                    <span className="balance-card-remaining">
-                      {balance.isUnlimited ? "∞" : balance.remainingLeaves}
-                    </span>
-                    <span className="balance-card-total">
-                      {balance.isUnlimited ? "unlimited" : `of ${formatLeaveDays(balance.allocatedLeaves)} remaining`}
-                    </span>
-                  </div>
-                  {!balance.isUnlimited && (
-                    <div className="balance-progress-track">
-                      <div className="balance-progress-fill" style={{ width: `${usedPct}%` }} />
-                    </div>
-                  )}
-                  <div className="balance-card-used">{formatLeaveDays(balance.usedLeaves)} used this year</div>
-                </div>
-              );
-            })}
-          </div>
+          <LeaveBalanceCards balances={summary.balances} />
 
           <LeaveLedgerCard ledgers={summary.ledgers} />
 

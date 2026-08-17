@@ -13,6 +13,11 @@
   left: 240px;
 }
 
+.app-watermark.dashboard-watermark img {
+  width: 380px;
+  height: 380px;
+}
+
 .dashboard-sidebar {
   width: 240px;
   flex-shrink: 0;
@@ -21,6 +26,10 @@
   display: flex;
   flex-direction: column;
   padding: 24px 18px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .dashboard-brand {
@@ -90,6 +99,9 @@
   background-color: var(--color-white);
   border-bottom: 3px solid transparent;
   border-image: linear-gradient(90deg, #581c87, #3b0764) 1;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .dashboard-topbar-left {

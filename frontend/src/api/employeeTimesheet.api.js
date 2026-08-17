@@ -19,13 +19,12 @@ export const uploadAttachment = (file) => {
   return unwrap(axiosClient.post("/employee/timesheet/attachment", formData));
 };
 
-export const submitWeek = (weekStartDate, attachmentOriginalName, attachmentStoredName, projectAssigned, projectId) =>
+export const submitWeek = (weekStartDate, attachmentOriginalName, attachmentStoredName, projectId) =>
   unwrap(
     axiosClient.post("/employee/timesheet/submissions", {
       weekStartDate,
       attachmentOriginalName,
       attachmentStoredName,
-      projectAssigned,
       projectId,
     })
   );

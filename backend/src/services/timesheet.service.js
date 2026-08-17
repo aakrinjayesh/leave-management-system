@@ -124,6 +124,29 @@ const buildPayrollCsv = async (monthStart, monthEnd) => {
   return { csv, filename };
 };
 
+// Collapses a user's submissions (must already be sorted ascending by
+// weekStartDate) into one row per consecutive run on the same project, most
+// recent stint first - e.g. weeks on "Aakrin LMS" then weeks on "XYZ"
+// becomes [{ project: XYZ, since: ... }, { project: Aakrin LMS, since: ... }]
+// instead of one row per week.
+const buildProjectStints = (submissions) => {
+  const stints = [];
+  for (const submission of submissions) {
+    const last = stints[stints.length - 1];
+    if (last && last.projectId === submission.projectId) {
+      last.endDate = submission.weekEndDate;
+    } else {
+      stints.push({
+        projectId: submission.projectId,
+        projectName: submission.project?.name ?? null,
+        startDate: submission.weekStartDate,
+        endDate: submission.weekEndDate,
+      });
+    }
+  }
+  return stints.reverse();
+};
+
 // Census for the admin Report tab: every active Employee/Manager, split by
 // their latest recorded Project Assigned choice (same "sticky" value used to
 // pre-fill the timesheet dropdown) - anyone who's never made a choice yet
@@ -135,39 +158,51 @@ const getProjectAssignmentReport = async () => {
     orderBy: { firstName: "asc" },
   });
 
-  const latestSubmissions = await prisma.timesheetSubmission.findMany({
+  // Full history (not just the latest row) so the current project's start
+  // date can be derived from where its run of consecutive weeks began.
+  const allSubmissions = await prisma.timesheetSubmission.findMany({
     where: { userId: { in: users.map((u) => u.id) }, projectAssigned: { not: null } },
-    orderBy: { weekStartDate: "desc" },
-    select: { userId: true, projectAssigned: true, project: { select: { name: true } } },
+    orderBy: { weekStartDate: "asc" },
+    select: {
+      userId: true,
+      projectAssigned: true,
+      projectId: true,
+      weekStartDate: true,
+      weekEndDate: true,
+      project: { select: { name: true } },
+    },
   });
 
-  // Already ordered newest-first, so the first row seen per user is their latest.
-  const latestByUserId = new Map();
-  for (const submission of latestSubmissions) {
-    if (!latestByUserId.has(submission.userId)) {
-      latestByUserId.set(submission.userId, {
-        projectAssigned: submission.projectAssigned,
-        projectName: submission.project?.name ?? null,
-      });
-    }
+  const submissionsByUserId = new Map();
+  for (const submission of allSubmissions) {
+    if (!submissionsByUserId.has(submission.userId)) submissionsByUserId.set(submission.userId, []);
+    submissionsByUserId.get(submission.userId).push(submission);
   }
 
-  const toReportEntry = (user, projectName) => ({
-    id: user.id,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    employeeCode: user.employeeCode,
-    email: user.email,
-    managerId: user.managerId,
-    projectName,
-  });
+  const toReportEntry = (user) => {
+    const submissions = submissionsByUserId.get(user.id) ?? [];
+    const [current] = buildProjectStints(submissions);
+    const latestSubmission = submissions[submissions.length - 1];
+    return {
+      entry: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        employeeCode: user.employeeCode,
+        email: user.email,
+        managerId: user.managerId,
+        projectName: current?.projectName ?? null,
+        projectSince: current?.startDate ?? null,
+      },
+      projectAssigned: latestSubmission?.projectAssigned ?? null,
+    };
+  };
 
   const assigned = [];
   const notAssigned = [];
   for (const user of users) {
-    const latest = latestByUserId.get(user.id);
-    const entry = toReportEntry(user, latest?.projectName ?? null);
-    (latest?.projectAssigned === "ASSIGNED" ? assigned : notAssigned).push(entry);
+    const { entry, projectAssigned } = toReportEntry(user);
+    (projectAssigned === "ASSIGNED" ? assigned : notAssigned).push(entry);
   }
 
   return {
@@ -179,6 +214,18 @@ const getProjectAssignmentReport = async () => {
   };
 };
 
+// Full project timeline for one employee, most recent stint first - powers
+// the admin "View history" popup.
+const getProjectHistoryForUser = async (userId) => {
+  const submissions = await prisma.timesheetSubmission.findMany({
+    where: { userId, projectId: { not: null } },
+    orderBy: { weekStartDate: "asc" },
+    select: { projectId: true, weekStartDate: true, weekEndDate: true, project: { select: { name: true } } },
+  });
+
+  return buildProjectStints(submissions).map((stint, index) => ({ ...stint, isCurrent: index === 0 }));
+};
+
 module.exports = {
   startOfUtcDay,
   getWeekStart,
@@ -188,6 +235,7 @@ module.exports = {
   getSubmissionsOverlappingRange,
   getLastProjectAssigned,
   getProjectAssignmentReport,
+  getProjectHistoryForUser,
   sumHours,
   buildEmployeeTimesheetCsv,
   buildPayrollCsv,

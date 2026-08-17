@@ -6,6 +6,7 @@ import Button from "../../components/common/Button";
 import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
 import ApplyLeaveModal from "./ApplyLeaveModal";
+import LeaveBalanceCards from "../../components/common/LeaveBalanceCards";
 import { useAuth } from "../../context/AuthContext";
 import * as employeeLeaveApi from "../../api/employeeLeave.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -27,6 +28,7 @@ export default function MyLeaveRequestsPage() {
   const { user } = useAuth();
   const [filter, setFilter] = useState("");
   const [requests, setRequests] = useState(null);
+  const [balances, setBalances] = useState(null);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [error, setError] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
@@ -41,6 +43,13 @@ export default function MyLeaveRequestsPage() {
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  // Same balance data as the employee dashboard - shown here too since a
+  // manager's own "Dashboard" nav link goes to the team overview instead,
+  // which never surfaces their own leave balance otherwise.
+  useEffect(() => {
+    employeeLeaveApi.getMyBalances().then((data) => setBalances(data.balances));
+  }, []);
 
   const handleCancel = async (id) => {
     setError("");
@@ -89,6 +98,8 @@ export default function MyLeaveRequestsPage() {
       </div>
 
       <Alert type="error">{error}</Alert>
+
+      {balances && <LeaveBalanceCards balances={balances} />}
 
       <div className="filter-tabs">
         {FILTERS.map((f) => (

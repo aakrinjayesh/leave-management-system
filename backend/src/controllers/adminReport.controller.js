@@ -26,6 +26,13 @@ const getProjectAssignmentReport = asyncHandler(async (req, res) => {
   new ApiResponse(200, "OK", report).send(res);
 });
 
+const getProjectHistory = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const history = await timesheetService.getProjectHistoryForUser(id);
+
+  new ApiResponse(200, "OK", { history }).send(res);
+});
+
 // Every timesheet submission for the Mon-Sun week containing `date` - lets
 // the Report page show, per employee, whether they submitted a timesheet
 // that week and offer its attachment for download.
@@ -54,8 +61,15 @@ const listProjects = asyncHandler(async (req, res) => {
   new ApiResponse(200, "OK", { projects }).send(res);
 });
 
+const toProjectDetails = ({ projectType, timezone, workStartTime, workEndTime }) => ({
+  projectType,
+  timezone,
+  workStartTime,
+  workEndTime,
+});
+
 const createProject = asyncHandler(async (req, res) => {
-  const project = await projectService.createProject(req.body.name, req.user.id);
+  const project = await projectService.createProject(req.body.name, req.user.id, toProjectDetails(req.body));
 
   new ApiResponse(201, "Project added.", { project }).send(res);
 
@@ -64,11 +78,11 @@ const createProject = asyncHandler(async (req, res) => {
 
 const renameProject = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const project = await projectService.renameProject(id, req.body.name);
+  const project = await projectService.renameProject(id, req.body.name, toProjectDetails(req.body));
 
-  new ApiResponse(200, "Project renamed.", { project }).send(res);
+  new ApiResponse(200, "Project updated.", { project }).send(res);
 
-  await notifyAllOfProjectChange(`A project has been renamed to "${project.name}".`);
+  await notifyAllOfProjectChange(`Project "${project.name}" has been updated.`);
 });
 
 const deactivateProject = asyncHandler(async (req, res) => {
@@ -91,6 +105,7 @@ const reactivateProject = asyncHandler(async (req, res) => {
 
 module.exports = {
   getProjectAssignmentReport,
+  getProjectHistory,
   getWeekTimesheetSubmissions,
   listProjects,
   createProject,

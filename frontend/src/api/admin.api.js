@@ -48,6 +48,8 @@ export const downloadTimesheetSubmissionAttachment = (submissionId) =>
 
 export const getProjectAssignmentReport = () => unwrap(axiosClient.get("/admin/reports/project-assignment"));
 
+export const getProjectHistory = (id) => unwrap(axiosClient.get(`/admin/users/${id}/project-history`));
+
 export const getWeekTimesheetSubmissions = (date) =>
   unwrap(axiosClient.get("/admin/reports/timesheet-submissions", { params: { date } }));
 
@@ -55,7 +57,7 @@ export const listProjects = () => unwrap(axiosClient.get("/admin/projects"));
 
 export const createProject = (payload) => unwrap(axiosClient.post("/admin/projects", payload));
 
-export const renameProject = (id, payload) => unwrap(axiosClient.patch(`/admin/projects/${id}`, payload));
+export const updateProject = (id, payload) => unwrap(axiosClient.patch(`/admin/projects/${id}`, payload));
 
 export const deactivateProject = (id) => unwrap(axiosClient.patch(`/admin/projects/${id}/deactivate`));
 

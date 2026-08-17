@@ -9,36 +9,14 @@ const prisma = new PrismaClient();
 // their manager in their profile. Employees are NOT seeded anymore - they
 // self-register at /activate with any @aakrin.com email.
 const ADMIN_USER = {
-  firstName: "Hari",
-  lastName: "Babu",
-  email: "hari.babu@aakrin.com",
+  firstName: "Krishna",
+  lastName: "Dadi",
+  email: "krishna@aakrin.com",
   userType: "ADMIN",
 };
 
-const MANAGER_TIER_USERS = [
-  {
-    firstName: "Rohith",
-    lastName: "Kumar",
-    email: "rohith.kumar@aakrin.com",
-    userType: "MANAGER",
-  },
-  {
-    firstName: "Divya",
-    lastName: "Rao",
-    email: "divya.rao@aakrin.com",
-    userType: "MANAGER",
-  },
-  {
-    firstName: "Sneha",
-    lastName: "Iyer",
-    email: "sneha.iyer@aakrin.com",
-    userType: "MANAGER",
-  },
-];
-
 // Test data from earlier phases - removed so the new self-registration +
 // per-request routing flow can be tested cleanly.
-const LEGACY_EMPLOYEE_EMAILS = ["test.employee@aakrin.com", "priya.sharma@aakrin.com", "arjun.mehta@aakrin.com"];
 
 // ---------- Leave policies ----------
 const LEAVE_POLICIES = [
@@ -49,7 +27,8 @@ const LEAVE_POLICIES = [
     maxLeavesPerRequest: 5,
     longRequestThresholdDays: 4,
     longRequestMinNoticeDays: 20,
-    description: "For short personal or planned time off. Requests longer than 4 days need at least 20 days' notice.",
+    description:
+      "For short personal or planned time off. Requests longer than 4 days need at least 20 days' notice.",
   },
   {
     leaveName: "Sick Leave",
@@ -76,7 +55,8 @@ const LEAVE_POLICIES = [
     isUnpaid: true,
     allowHalfDay: false,
     maxLeavesPerRequest: 30,
-    description: "For time off beyond your paid balances - salary is deducted for each day taken (Loss of Pay).",
+    description:
+      "For time off beyond your paid balances - salary is deducted for each day taken (Loss of Pay).",
   },
 ];
 
@@ -86,18 +66,27 @@ const WEEKEND_POLICIES = [
 ];
 
 const HOLIDAYS = [
-  { holidayName: "Independence Day", holidayDate: new Date("2026-08-15"), isOptional: false },
-  { holidayName: "Gandhi Jayanti", holidayDate: new Date("2026-10-02"), isOptional: false },
-  { holidayName: "Diwali", holidayDate: new Date("2026-11-08"), isOptional: false },
-  { holidayName: "Christmas", holidayDate: new Date("2026-12-25"), isOptional: true },
+  {
+    holidayName: "Independence Day",
+    holidayDate: new Date("2026-08-15"),
+    isOptional: false,
+  },
+  {
+    holidayName: "Gandhi Jayanti",
+    holidayDate: new Date("2026-10-02"),
+    isOptional: false,
+  },
+  {
+    holidayName: "Diwali",
+    holidayDate: new Date("2026-11-08"),
+    isOptional: false,
+  },
+  {
+    holidayName: "Christmas",
+    holidayDate: new Date("2026-12-25"),
+    isOptional: true,
+  },
 ];
-
-async function removeLegacyEmployees() {
-  const { count } = await prisma.user.deleteMany({ where: { email: { in: LEGACY_EMPLOYEE_EMAILS } } });
-  if (count > 0) {
-    console.log(`Removed ${count} legacy test employee account(s) from earlier phases.`);
-  }
-}
 
 async function seedUsers() {
   const admin = await prisma.user.upsert({
@@ -105,16 +94,9 @@ async function seedUsers() {
     update: ADMIN_USER,
     create: ADMIN_USER,
   });
-  console.log(`Seeded ${admin.userType}: ${admin.email} (id: ${admin.id}, status: ${admin.status})`);
-
-  for (const data of MANAGER_TIER_USERS) {
-    const user = await prisma.user.upsert({
-      where: { email: data.email },
-      update: data,
-      create: data,
-    });
-    console.log(`Seeded ${user.userType}: ${user.email} (id: ${user.id})`);
-  }
+  console.log(
+    `Seeded ${admin.userType}: ${admin.email} (id: ${admin.id}, status: ${admin.status})`,
+  );
 
   return { admin };
 }
@@ -154,37 +136,22 @@ async function seedCompanySettings() {
   return settings;
 }
 
-async function seedSalaryStructureConfig() {
-  const existing = await prisma.salaryStructureConfig.findFirst();
-  if (existing) {
-    console.log("Salary structure config already exists, skipping.");
-    return existing;
-  }
-
-  const config = await prisma.salaryStructureConfig.create({
-    data: {
-      basicPercentOfCtc: 40,
-      hraPercentOfBasic: 50,
-      ltaPercentOfBasic: 8.33,
-      guaranteedAllowancePercentOfBasic: 10,
-      conveyanceMonthly: 1600,
-      pfPercentOfBasic: 12,
-      professionalTax: 200,
-    },
-  });
-  console.log("Seeded default salary structure config.");
-  return config;
-}
-
 async function seedWeekendPolicies() {
   for (const data of WEEKEND_POLICIES) {
     await prisma.weekendPolicy.upsert({
-      where: { dayOfWeek_weekNumber: { dayOfWeek: data.dayOfWeek, weekNumber: data.weekNumber } },
+      where: {
+        dayOfWeek_weekNumber: {
+          dayOfWeek: data.dayOfWeek,
+          weekNumber: data.weekNumber,
+        },
+      },
       update: data,
       create: data,
     });
   }
-  console.log(`Seeded ${WEEKEND_POLICIES.length} weekend policy rows (Sat + Sun off).`);
+  console.log(
+    `Seeded ${WEEKEND_POLICIES.length} weekend policy rows (Sat + Sun off).`,
+  );
 }
 
 async function seedHolidays(admin) {
@@ -199,16 +166,15 @@ async function seedHolidays(admin) {
 }
 
 async function main() {
-  await removeLegacyEmployees();
+  // await removeLegacyEmployees();
   const { admin } = await seedUsers();
   await seedLeavePolicies();
   await seedCompanySettings();
-  await seedSalaryStructureConfig();
   await seedWeekendPolicies();
   await seedHolidays(admin);
 
   console.log(
-    "\nNo employees seeded - go to /activate and register with any @aakrin.com email to test the employee flow."
+    "\nNo employees seeded - go to /activate and register with any @aakrin.com email to test the employee flow.",
   );
 }
 

@@ -12,6 +12,7 @@ import { formatDate, formatDateRange } from "../../utils/formatDate";
 import { combineHoursMinutes, formatHoursMinutes, splitHoursMinutes } from "../../utils/formatDuration";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatProjectAssigned } from "../../utils/formatProjectAssigned";
+import { formatProjectType, formatWorkingHours } from "../../utils/projectOptions";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
 import "../../styles/dashboardShared.css";
 
@@ -42,12 +43,17 @@ export default function MyTimesheetPage() {
   const [attachment, setAttachment] = useState(null);
   const [attachmentError, setAttachmentError] = useState("");
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
-  const [projectAssigned, setProjectAssigned] = useState("");
   const [projectId, setProjectId] = useState("");
   const [projects, setProjects] = useState([]);
   const [downloadingId, setDownloadingId] = useState(null);
 
-  const loadWeek = (param) =>
+  // preserveProjectId skips re-deriving the Project dropdown from the
+  // server's "sticky" default - used when reloading after saving/deleting an
+  // entry within the same week, so it doesn't stomp over a project the
+  // employee already picked but hasn't submitted yet. Switching weeks (or
+  // the initial load) still wants the sticky default, so that path leaves
+  // this false.
+  const loadWeek = (param, { preserveProjectId = false } = {}) =>
     timesheetApi.getMyEntries(param || undefined).then((res) => {
       setData(res);
       // Rebuild each row's editable state from the loaded entries - one row
@@ -66,11 +72,14 @@ export default function MyTimesheetPage() {
         };
       });
       setRowState(nextRowState);
-      // Sticky default: pre-fill from this week's own submission if it has
-      // one already (e.g. a rejected week being edited again), otherwise
-      // fall back to whatever the employee picked most recently.
-      setProjectAssigned(res.submission?.projectAssigned ?? res.lastProjectAssigned ?? "");
-      setProjectId(res.submission?.projectId ?? res.lastProjectId ?? "");
+      if (!preserveProjectId) {
+        // Sticky default: pre-fill from this week's own submission if it has
+        // one already (e.g. a rejected week being edited again), otherwise
+        // fall back to whatever the employee picked most recently. Project
+        // type/timezone/hours are no longer picked here - they're read off
+        // whichever project this resolves to.
+        setProjectId(res.submission?.projectId ?? res.lastProjectId ?? "");
+      }
     });
   const loadSubmissions = () => timesheetApi.getMySubmissions().then((res) => setSubmissions(res.submissions));
 
@@ -172,10 +181,10 @@ export default function MyTimesheetPage() {
         )
       );
       setSuccessMessage("Week saved.");
-      await loadWeek(weekParam);
+      await loadWeek(weekParam, { preserveProjectId: true });
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save the week. Please try again."));
-      await loadWeek(weekParam);
+      await loadWeek(weekParam, { preserveProjectId: true });
     } finally {
       setSavingDate(null);
     }
@@ -189,7 +198,7 @@ export default function MyTimesheetPage() {
     setSavingDate(dateKey);
     try {
       await timesheetApi.deleteEntry(row.id);
-      await loadWeek(weekParam);
+      await loadWeek(weekParam, { preserveProjectId: true });
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't delete this entry."));
     } finally {
@@ -205,10 +214,6 @@ export default function MyTimesheetPage() {
       setError("Please upload this week's Excel sheet before submitting.");
       return;
     }
-    if (!projectAssigned) {
-      setError("Please select a project type before submitting.");
-      return;
-    }
     if (!projectId) {
       setError("Please select a project before submitting.");
       return;
@@ -220,7 +225,6 @@ export default function MyTimesheetPage() {
         toDateInputValue(data.weekStartDate),
         attachment.attachmentOriginalName,
         attachment.attachmentStoredName,
-        projectAssigned,
         projectId
       );
       setSuccessMessage("Timesheet submitted for approval.");
@@ -233,6 +237,8 @@ export default function MyTimesheetPage() {
       setSavingDate(null);
     }
   };
+
+  const selectedProject = projects.find((project) => String(project.id) === String(projectId));
 
   return (
     <DashboardLayout title="My Timesheet">
@@ -273,6 +279,7 @@ export default function MyTimesheetPage() {
                   {formatProjectAssigned(data.submission.projectAssigned)}.
                   {" Project Name: "}
                   {data.submission.project?.name || "—"}.
+                  {data.submission.project && ` Working hours: ${formatWorkingHours(data.submission.project)}.`}
                   {data.submission.managerRemarks ? ` Remarks: ${data.submission.managerRemarks}` : ""}
                   {data.submission.status === "REJECTED" && " You can edit the entries below and submit this week again."}
                 </div>
@@ -287,15 +294,6 @@ export default function MyTimesheetPage() {
               {(!data.submission || data.submission.status === "REJECTED") && (
                 <div className="form-three-col" style={{ marginBottom: 20 }}>
                   <div className="field">
-                    <label className="field-label">Project Type</label>
-                    <FormSelect value={projectAssigned} onChange={(e) => setProjectAssigned(e.target.value)}>
-                      <option value="">Select…</option>
-                      <option value="ASSIGNED">Client Project</option>
-                      <option value="NOT_ASSIGNED">Internal Project</option>
-                    </FormSelect>
-                  </div>
-
-                  <div className="field">
                     <label className="field-label">Project Name</label>
                     <FormSelect value={projectId} onChange={(e) => setProjectId(e.target.value)}>
                       <option value="">Select…</option>
@@ -305,6 +303,21 @@ export default function MyTimesheetPage() {
                         </option>
                       ))}
                     </FormSelect>
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Project details</label>
+                    {selectedProject ? (
+                      <p className="helper-text" style={{ marginTop: 8 }}>
+                        {formatProjectType(selectedProject.projectType)}
+                        <br />
+                        {formatWorkingHours(selectedProject)}
+                      </p>
+                    ) : (
+                      <p className="helper-text" style={{ marginTop: 8 }}>
+                        Select a project to see its type, timezone and working hours.
+                      </p>
+                    )}
                   </div>
 
                   <div className="field">

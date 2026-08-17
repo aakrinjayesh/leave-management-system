@@ -114,14 +114,22 @@ const uploadAttachment = asyncHandler(async (req, res) => {
 });
 
 const submitWeek = asyncHandler(async (req, res) => {
-  const { weekStartDate: rawWeekStart, attachmentOriginalName, attachmentStoredName, projectAssigned, projectId } =
-    req.body;
+  const { weekStartDate: rawWeekStart, attachmentOriginalName, attachmentStoredName, projectId } = req.body;
   const weekStartDate = timesheetService.getWeekStart(rawWeekStart);
   const weekEndDate = timesheetService.getWeekEnd(weekStartDate);
 
   if (!req.user.managerId) {
     throw ApiError.badRequest("Please set your manager in your profile before submitting a timesheet.");
   }
+
+  // Client vs internal is no longer a manual choice - it's read straight off
+  // the project admin already classified, so it can't drift from what the
+  // project itself says.
+  const project = await prisma.project.findFirst({ where: { id: projectId, isActive: true } });
+  if (!project) {
+    throw ApiError.badRequest("Please select a valid, active project before submitting.");
+  }
+  const projectAssigned = project.projectType;
 
   const recipient = await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } });
   if (!recipient) {

@@ -19,7 +19,13 @@ const formatBalance = (balance) => ({
   leaveName: balance.leavePolicy.leaveName,
   allowHalfDay: balance.leavePolicy.allowHalfDay,
   isUnlimited: balance.leavePolicy.isUnlimited,
+  // allocatedLeaves is what's actually been accrued/available so far this
+  // year (accrual policies build this up month by month - see
+  // leaveBalance.service.js) - annualAllocatedLeaves is the policy's full
+  // yearly entitlement, so the UI can show "accrues up to N/year" instead of
+  // letting the accrued-so-far number look like the whole year's total.
   allocatedLeaves: balance.allocatedLeaves,
+  annualAllocatedLeaves: balance.leavePolicy.allocatedLeaves,
   usedLeaves: balance.usedLeaves,
   remainingLeaves: balance.remainingLeaves,
 });

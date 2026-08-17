@@ -223,12 +223,24 @@ const customFieldSchema = z.object({
   value: z.string().trim().max(500).nullable().optional(),
 });
 
+const TIME_OF_DAY_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const projectDetailsSchema = {
+  projectType: z.enum(["ASSIGNED", "NOT_ASSIGNED"], { message: "Please select whether this is a client or internal project." }),
+  // Free text - admin can pick a suggested timezone or type any other label.
+  timezone: z.string().trim().min(1, "Please enter a timezone.").max(100),
+  workStartTime: z.string().regex(TIME_OF_DAY_REGEX, "Please enter a valid start time."),
+  workEndTime: z.string().regex(TIME_OF_DAY_REGEX, "Please enter a valid end time."),
+};
+
 const createProjectSchema = z.object({
   name: z.string().trim().min(1, "Please enter a project name.").max(120),
+  ...projectDetailsSchema,
 });
 
 const renameProjectSchema = z.object({
   name: z.string().trim().min(1, "Please enter a project name.").max(120),
+  ...projectDetailsSchema,
 });
 
 module.exports = {

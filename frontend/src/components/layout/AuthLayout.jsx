@@ -5,7 +5,11 @@ import "./AuthLayout.css";
 
 function BrandMark({ variant = "light" }) {
   return (
-    <div className={variant === "light" ? "auth-brand-mark" : "auth-card-mobile-brand"}>
+    <div
+      className={
+        variant === "light" ? "auth-brand-mark" : "auth-card-mobile-brand"
+      }
+    >
       <img src={aakrinLogo} alt="Aakrin" className="auth-brand-mark-logo" />
       Employee Portal
     </div>
@@ -29,7 +33,10 @@ export default function AuthLayout({ title, subtitle, children }) {
         <BrandMark />
         <div className="auth-brand-copy">
           <h1>Everything your workday needs, in one portal.</h1>
-          <p>Built for Aakrin employees, managers and admins to handle it all in one place.</p>
+          <p>
+            Built for Aakrin employees, managers and admins to handle it all in
+            one place.
+          </p>
 
           <span className="auth-feature-eyebrow">What you can do</span>
           <ul className="auth-feature-list">

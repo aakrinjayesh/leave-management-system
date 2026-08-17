@@ -12,9 +12,8 @@ const submitWeekSchema = z.object({
   weekStartDate: z.coerce.date({ message: "Please choose a valid week." }),
   attachmentOriginalName: z.string().min(1, "Please upload this week's Excel sheet before submitting."),
   attachmentStoredName: z.string().min(1, "Please upload this week's Excel sheet before submitting."),
-  projectAssigned: z.enum(["ASSIGNED", "NOT_ASSIGNED"], {
-    message: "Please select whether a project is assigned before submitting.",
-  }),
+  // projectAssigned is no longer taken from the client - it's derived from
+  // the selected project's own admin-set type (see submitWeek controller).
   projectId: z.coerce.number().int().positive({ message: "Please select a project before submitting." }),
 });
 

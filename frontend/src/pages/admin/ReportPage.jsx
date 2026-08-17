@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
   Download,
   ListChecks,
   Pencil,
@@ -21,13 +22,16 @@ import TextInput from "../../components/common/TextInput";
 import Spinner from "../../components/common/Spinner";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
+import EditProjectModal from "./EditProjectModal";
+import ProjectHistoryModal from "./ProjectHistoryModal";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
-import { formatDateRange } from "../../utils/formatDate";
+import { formatDate, formatDateRange } from "../../utils/formatDate";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
+import { PROJECT_TYPE_OPTIONS, TIMEZONE_OPTIONS, formatProjectType, formatWorkingHours } from "../../utils/projectOptions";
 import "../../styles/dashboardShared.css";
 
-function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadingId, onDownloadTimesheet }) {
+function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadingId, onDownloadTimesheet, onViewHistory }) {
   const navigate = useNavigate();
   const showTimesheetColumn = Boolean(weekSubmissionsByUserId);
 
@@ -52,7 +56,9 @@ function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadi
                   <th>Employee</th>
                   <th>Email</th>
                   <th>Project</th>
+                  <th>Since</th>
                   {showTimesheetColumn && <th>Timesheet</th>}
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -70,6 +76,9 @@ function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadi
                       </td>
                       <td className="table-cell-secondary">{employee.email}</td>
                       <td className="table-cell-secondary">{employee.projectName || "—"}</td>
+                      <td className="table-cell-secondary">
+                        {employee.projectSince ? formatDate(employee.projectSince) : "—"}
+                      </td>
                       {showTimesheetColumn && (
                         <td onClick={(e) => e.stopPropagation()}>
                           {submission?.attachmentStoredName ? (
@@ -87,6 +96,12 @@ function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadi
                           )}
                         </td>
                       )}
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <button type="button" className="row-action-btn" onClick={() => onViewHistory(employee)}>
+                          <Clock size={14} />
+                          View history
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -99,14 +114,21 @@ function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadi
   );
 }
 
+const DEFAULT_NEW_PROJECT = {
+  name: "",
+  projectType: "",
+  timezone: "",
+  workStartTime: "",
+  workEndTime: "",
+};
+
 function ManageProjectsCard() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [projects, setProjects] = useState(null);
   const [error, setError] = useState("");
-  const [newName, setNewName] = useState("");
+  const [newProject, setNewProject] = useState(DEFAULT_NEW_PROJECT);
   const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editingName, setEditingName] = useState("");
+  const [editingProject, setEditingProject] = useState(null);
   const [actioningId, setActioningId] = useState(null);
 
   const loadProjects = () =>
@@ -119,15 +141,34 @@ function ManageProjectsCard() {
     loadProjects();
   }, []);
 
+  const handleNewProjectChange = (field) => (e) =>
+    setNewProject((prev) => ({ ...prev, [field]: e.target.value }));
+
   const handleAdd = async (e) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!newProject.name.trim()) return;
+    if (!newProject.projectType) {
+      setError("Please select a project type.");
+      return;
+    }
+    if (!newProject.timezone.trim()) {
+      setError("Please enter a timezone.");
+      return;
+    }
+    if (!newProject.workStartTime || !newProject.workEndTime) {
+      setError("Please set both a start and end working hour.");
+      return;
+    }
+    if (newProject.workEndTime <= newProject.workStartTime) {
+      setError("End time must be after the start time.");
+      return;
+    }
 
     setError("");
     setIsAdding(true);
     try {
-      await adminApi.createProject({ name: newName.trim() });
-      setNewName("");
+      await adminApi.createProject({ ...newProject, name: newProject.name.trim() });
+      setNewProject(DEFAULT_NEW_PROJECT);
       await loadProjects();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't add this project."));
@@ -136,25 +177,9 @@ function ManageProjectsCard() {
     }
   };
 
-  const startRename = (project) => {
-    setEditingId(project.id);
-    setEditingName(project.name);
-  };
-
-  const handleRename = async (project) => {
-    if (!editingName.trim()) return;
-
-    setError("");
-    setActioningId(project.id);
-    try {
-      await adminApi.renameProject(project.id, { name: editingName.trim() });
-      setEditingId(null);
-      await loadProjects();
-    } catch (err) {
-      setError(getErrorMessage(err, "Couldn't rename this project."));
-    } finally {
-      setActioningId(null);
-    }
+  const handleEditSuccess = () => {
+    setEditingProject(null);
+    loadProjects();
   };
 
   const handleToggleActive = async (project) => {
@@ -180,27 +205,72 @@ function ManageProjectsCard() {
         <button
           type="button"
           className="section-flex-row"
-          style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+          style={{
+            width: "100%",
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+            justifyContent: "flex-start",
+            gap: 10,
+          }}
           onClick={() => setIsExpanded((prev) => !prev)}
         >
-          <span className="card-section-title" style={{ marginBottom: 0 }}>
-            Manage projects {projects ? `(${projects.length})` : ""}
-          </span>
           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          <span className="card-section-title" style={{ marginBottom: 0 }}>
+            Create project {projects ? `(${projects.length})` : ""}
+          </span>
         </button>
 
         {isExpanded && (
           <>
             <Alert type="error">{error}</Alert>
 
-            <form onSubmit={handleAdd} className="section-flex-row" style={{ marginTop: 16, marginBottom: 16 }}>
-              <input
-                type="text"
-                className="field-input"
-                placeholder="New project name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-              />
+            <form onSubmit={handleAdd} style={{ marginTop: 16, marginBottom: 16 }}>
+              <div className="form-two-col">
+                <TextInput
+                  label="Project name"
+                  placeholder="New project name"
+                  value={newProject.name}
+                  onChange={handleNewProjectChange("name")}
+                />
+                <FormSelect label="Project type" value={newProject.projectType} onChange={handleNewProjectChange("projectType")}>
+                  <option value="" hidden></option>
+                  {PROJECT_TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </FormSelect>
+              </div>
+              <div className="form-two-col">
+                <TextInput
+                  label="Timezone"
+                  list="timezone-suggestions"
+                  placeholder="e.g. India (IST, UTC+5:30)"
+                  value={newProject.timezone}
+                  onChange={handleNewProjectChange("timezone")}
+                />
+                <div className="form-two-col" style={{ margin: 0 }}>
+                  <TextInput
+                    label="Hours start"
+                    type="time"
+                    value={newProject.workStartTime}
+                    onChange={handleNewProjectChange("workStartTime")}
+                  />
+                  <TextInput
+                    label="Hours end"
+                    type="time"
+                    value={newProject.workEndTime}
+                    onChange={handleNewProjectChange("workEndTime")}
+                  />
+                </div>
+              </div>
+              <datalist id="timezone-suggestions">
+                {TIMEZONE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.label} />
+                ))}
+              </datalist>
               <Button type="submit" isLoading={isAdding}>
                 <Plus size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
                 Add project
@@ -226,6 +296,8 @@ function ManageProjectsCard() {
               <thead>
                 <tr>
                   <th>Project name</th>
+                  <th>Type</th>
+                  <th>Working hours</th>
                   <th>Status</th>
                   <th></th>
                 </tr>
@@ -233,43 +305,18 @@ function ManageProjectsCard() {
               <tbody>
                 {projects.map((project) => (
                   <tr key={project.id}>
-                    <td className="table-cell-primary">
-                      {editingId === project.id ? (
-                        <input
-                          type="text"
-                          className="field-input"
-                          value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                        />
-                      ) : (
-                        project.name
-                      )}
-                    </td>
+                    <td className="table-cell-primary">{project.name}</td>
+                    <td className="table-cell-secondary">{formatProjectType(project.projectType)}</td>
+                    <td className="table-cell-secondary">{formatWorkingHours(project)}</td>
                     <td>
                       <StatusBadge status={project.isActive ? "ACTIVE" : "INACTIVE"} />
                     </td>
                     <td>
                       <div className="row-actions">
-                        {editingId === project.id ? (
-                          <>
-                            <button
-                              type="button"
-                              className="row-action-btn approve"
-                              disabled={actioningId === project.id}
-                              onClick={() => handleRename(project)}
-                            >
-                              Save
-                            </button>
-                            <button type="button" className="row-action-btn" onClick={() => setEditingId(null)}>
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <button type="button" className="row-action-btn" onClick={() => startRename(project)}>
-                            <Pencil size={14} />
-                            Rename
-                          </button>
-                        )}
+                        <button type="button" className="row-action-btn" onClick={() => setEditingProject(project)}>
+                          <Pencil size={14} />
+                          Edit
+                        </button>
                         <button
                           type="button"
                           className={`row-action-btn ${project.isActive ? "reject" : "approve"}`}
@@ -288,6 +335,14 @@ function ManageProjectsCard() {
           </div>
         ))}
       </div>
+
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSuccess={handleEditSuccess}
+        />
+      )}
     </div>
   );
 }
@@ -299,6 +354,7 @@ export default function ReportPage() {
   const [weekData, setWeekData] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
   const [error, setError] = useState("");
+  const [historyEmployee, setHistoryEmployee] = useState(null);
 
   useEffect(() => {
     adminApi.getProjectAssignmentReport().then(setReport);
@@ -360,8 +416,8 @@ export default function ReportPage() {
         <>
           <div className="stat-card-grid">
             <StatCard icon={<Users size={20} />} label="Total employees" value={report.totalEmployees} />
-            <StatCard icon={<CheckCircle2 size={20} />} label="Client Project" value={report.assignedCount} />
-            <StatCard icon={<XCircle size={20} />} label="Internal Project" value={report.notAssignedCount} />
+            <StatCard icon={<CheckCircle2 size={20} />} label="Employees on Client Projects" value={report.assignedCount} />
+            <StatCard icon={<XCircle size={20} />} label="Employees on Internal Projects" value={report.notAssignedCount} />
           </div>
 
           <div className="section-flex-row" style={{ alignItems: "flex-start" }}>
@@ -398,6 +454,7 @@ export default function ReportPage() {
             weekSubmissionsByUserId={weekSubmissionsByUserId}
             downloadingId={downloadingId}
             onDownloadTimesheet={handleDownloadTimesheet}
+            onViewHistory={setHistoryEmployee}
           />
           <EmployeeListCard
             title="Internal Project"
@@ -405,8 +462,13 @@ export default function ReportPage() {
             weekSubmissionsByUserId={weekSubmissionsByUserId}
             downloadingId={downloadingId}
             onDownloadTimesheet={handleDownloadTimesheet}
+            onViewHistory={setHistoryEmployee}
           />
         </>
+      )}
+
+      {historyEmployee && (
+        <ProjectHistoryModal employee={historyEmployee} onClose={() => setHistoryEmployee(null)} />
       )}
     </DashboardLayout>
   );
