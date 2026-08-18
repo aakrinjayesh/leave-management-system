@@ -9,6 +9,8 @@ const { isEmployeeDomainEmail } = require("../utils/emailDomain.util");
 const otpService = require("../services/otp.service");
 const tokenService = require("../services/token.service");
 const payrollService = require("../services/payroll.service");
+const notificationService = require("../services/notification.service");
+const { sendAccountApprovalRequestedEmail } = require("../utils/email.util");
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -74,6 +76,10 @@ const toSafeUser = async (user) => {
     qualification: user.qualification,
     designation: user.designation,
     location: user.location,
+    // Photo itself is only ever streamed through the authenticated
+    // /profile/photo endpoint (no public URL exists) - this just tells the
+    // frontend whether it's worth fetching at all.
+    hasPhoto: Boolean(user.photoUrl),
     taxRegime: user.taxRegime,
     pan: maskTail(user.pan),
     panHolderName: user.panHolderName,
@@ -192,18 +198,56 @@ const activateSetPassword = asyncHandler(async (req, res) => {
 
   const passwordHash = await hashPassword(password);
 
+  // Password set doesn't activate the account by itself anymore - it goes
+  // back to (or stays) PENDING, now meaning "awaiting admin approval" rather
+  // than "not yet activated" (isPasswordSet distinguishes the two - see
+  // login below). A previously REJECTED account resubmits into the same
+  // PENDING state so it shows back up for admin to review.
   const user = await prisma.user.update({
     where: { id: payload.userId },
     data: {
       password: passwordHash,
       isPasswordSet: true,
-      status: USER_STATUS.ACTIVE,
+      status: USER_STATUS.PENDING,
     },
   });
 
-  new ApiResponse(200, "Your account is activated. You can now log in.", {
-    email: user.email,
-  }).send(res);
+  new ApiResponse(
+    200,
+    "Your details are submitted. An admin needs to approve your account before you can log in - you'll be notified once that happens.",
+    { email: user.email }
+  ).send(res);
+
+  // Sent after the response so the employee doesn't wait on it; failures
+  // here shouldn't fail account activation itself.
+  try {
+    const admins = await prisma.user.findMany({ where: { userType: USER_TYPE.ADMIN, status: USER_STATUS.ACTIVE } });
+    const employeeName = `${user.firstName} ${user.lastName}`;
+
+    await notificationService.notifyMany(
+      admins.map((a) => a.id),
+      {
+        type: notificationService.NOTIFICATION_TYPES.ACCOUNT_APPROVAL_REQUESTED,
+        title: "New account awaiting approval",
+        message: `${employeeName} (${user.email}) has finished setting up their account and needs your approval before they can log in.`,
+      }
+    );
+
+    for (const admin of admins) {
+      try {
+        await sendAccountApprovalRequestedEmail({
+          to: admin.email,
+          adminFirstName: admin.firstName,
+          employeeName,
+          employeeEmail: user.email,
+        });
+      } catch (err) {
+        console.error(`Failed to send account approval requested email to ${admin.email}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to notify admins of new account approval request:", err);
+  }
 });
 
 // ---------- Login (email + password, or email + OTP) ----------
@@ -220,6 +264,24 @@ const findLoginableUser = async (email) => {
   return user;
 };
 
+// Distinguishes every reason a not-yet-loggable-in account can be in that
+// state, since "isn't activated yet" stopped being the only possibility once
+// admin approval was added as a separate step after activation.
+const assertCanLogIn = (user) => {
+  if (user.status === USER_STATUS.ACTIVE && user.isPasswordSet) return;
+
+  if (!user.isPasswordSet) {
+    throw ApiError.forbidden("Your account isn't activated yet. Please activate it first.");
+  }
+  if (user.status === USER_STATUS.PENDING) {
+    throw ApiError.forbidden("Your account is awaiting admin approval. You'll be notified once it's approved.");
+  }
+  if (user.status === USER_STATUS.REJECTED) {
+    throw ApiError.forbidden("Your account request wasn't approved. Please contact your administrator.");
+  }
+  throw ApiError.forbidden("Your account is inactive. Please contact your administrator.");
+};
+
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
@@ -228,9 +290,7 @@ const login = asyncHandler(async (req, res) => {
     throw ApiError.unauthorized("Invalid email or password.");
   }
 
-  if (!user.isPasswordSet || user.status !== USER_STATUS.ACTIVE) {
-    throw ApiError.forbidden("Your account isn't activated yet. Please activate it first.");
-  }
+  assertCanLogIn(user);
 
   const isPasswordValid = await comparePassword(password, user.password);
   if (!isPasswordValid) {
@@ -254,9 +314,7 @@ const loginOtpSend = asyncHandler(async (req, res) => {
     throw ApiError.unauthorized("We couldn't find an account with this email.");
   }
 
-  if (!user.isPasswordSet || user.status !== USER_STATUS.ACTIVE) {
-    throw ApiError.forbidden("Your account isn't activated yet. Please activate it first.");
-  }
+  assertCanLogIn(user);
 
   const { flowToken } = await otpService.createAndSendOtp(user, OTP_PURPOSE.LOGIN);
 

@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Users } from "lucide-react";
+import { Clock, ClockAlert, CalendarOff, Users } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
+import StatCard from "../../components/common/StatCard";
 import * as managerLeaveApi from "../../api/managerLeave.api";
 import "../../styles/dashboardShared.css";
 
 export default function EmployeesListPage() {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState(null);
+  const [overview, setOverview] = useState(null);
 
   useEffect(() => {
     managerLeaveApi.getEmployees().then((data) => setEmployees(data.employees));
+    managerLeaveApi.getOverview().then(setOverview);
   }, []);
 
   return (
@@ -22,6 +25,19 @@ export default function EmployeesListPage() {
           <p>Everyone who reports to you, with their usage and balance.</p>
         </div>
       </div>
+
+      {overview && (
+        <div className="stat-card-grid">
+          <StatCard icon={<Users size={20} />} label="Total employees" value={overview.totalEmployees} />
+          <StatCard
+            icon={<ClockAlert size={20} />}
+            label="Pending requests"
+            value={overview.pendingRequestsCount}
+            onClick={() => navigate("/manager/leave-requests")}
+          />
+          <StatCard icon={<CalendarOff size={20} />} label="On leave today" value={overview.onLeaveTodayCount} />
+        </div>
+      )}
 
       <div className="card">
         <div className="card-section">

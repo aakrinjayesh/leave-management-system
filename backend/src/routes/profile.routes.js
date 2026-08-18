@@ -10,6 +10,7 @@ router.use(authenticate);
 
 router.put("/anniversary-celebration-seen", controller.markAnniversaryCelebrationSeen);
 router.put("/birthday-celebration-seen", controller.markBirthdayCelebrationSeen);
+router.get("/photo", controller.getMyPhoto);
 router.get("/tax-computation", controller.getMyIncomeTaxComputation);
 router.get("/tax-computation-generations", controller.listMyIncomeTaxComputationGenerations);
 router.get("/tax-computation-generations/:id/pdf", controller.downloadMyIncomeTaxComputationPdf);

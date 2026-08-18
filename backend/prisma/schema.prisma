@@ -17,6 +17,7 @@ enum UserStatus {
     PENDING
     ACTIVE
     INACTIVE
+    REJECTED
 }
 
 enum OTPPurpose {

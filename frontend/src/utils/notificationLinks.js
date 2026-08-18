@@ -33,6 +33,10 @@ export const getNotificationDestination = (type, user) => {
       return isManager ? "/manager/calendar" : "/employee/calendar";
     case "PROJECT_UPDATED":
       return isAdmin ? "/admin/reports" : "/timesheet";
+    case "ACCOUNT_APPROVAL_REQUESTED":
+      return isAdmin ? "/admin/dashboard" : null;
+    case "ACCOUNT_APPROVAL_DECIDED":
+      return "/profile";
     default:
       return null;
   }

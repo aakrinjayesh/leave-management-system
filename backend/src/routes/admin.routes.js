@@ -43,6 +43,8 @@ router.post("/users", validate(createUserSchema), controller.createUser);
 router.patch("/users/:id/manager", validate(updateManagerSchema), controller.updateUserManager);
 router.patch("/users/:id/admin-access", validate(setAdminAccessSchema), controller.setAdminAccess);
 router.patch("/users/:id/reactivate", controller.reactivateUser);
+router.patch("/users/:id/approve-signup", controller.approveSignup);
+router.patch("/users/:id/reject-signup", controller.rejectSignup);
 router.post("/users/:id/exit", validate(recordExitSchema), exitController.recordExit);
 router.get("/users/:id/exit-records", exitController.listExitRecords);
 router.get("/exit-records/:id/pdf", exitController.downloadRelievingLetterPdf);

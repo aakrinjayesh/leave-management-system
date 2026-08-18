@@ -544,6 +544,39 @@ const sendAdminAccessRemovedEmail = async ({
   });
 };
 
+// ---------- Account approval notifications ----------
+
+const sendAccountApprovalRequestedEmail = async ({ to, adminFirstName, employeeName, employeeEmail }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "New account awaiting approval",
+    intro: `Hi ${adminFirstName || "there"}, ${employeeName} (${employeeEmail}) has finished setting up their account and is waiting for your approval before they can log in.`,
+    footerNote: "Log in to Aakrin Leave Management and open Manage Accounts to approve or reject this request.",
+  });
+
+  return sendMail({
+    to,
+    subject: `${employeeName} is awaiting account approval`,
+    html,
+    logLabel: `Account approval requested for ${employeeName} (${employeeEmail}) to ${to}`,
+  });
+};
+
+const sendAccountApprovalDecisionEmail = async ({ to, firstName, isApproved, decidedByName }) => {
+  const html = buildSimpleEmailHtml({
+    heading: isApproved ? "Your account has been approved" : "Your account request wasn't approved",
+    intro: isApproved
+      ? `Hi ${firstName || "there"}, ${decidedByName} has approved your account. You can now log in.`
+      : `Hi ${firstName || "there"}, ${decidedByName} didn't approve your account request. Please contact your administrator for details.`,
+  });
+
+  return sendMail({
+    to,
+    subject: isApproved ? "Your account has been approved" : "Your account request wasn't approved",
+    html,
+    logLabel: `Account ${isApproved ? "approved" : "rejected"} for ${firstName} (${to})`,
+  });
+};
+
 module.exports = {
   sendOtpEmail,
 
@@ -563,4 +596,6 @@ module.exports = {
   sendResignationWithdrawnEmail,
   sendExitNotificationEmail,
   sendAdminAccessRemovedEmail,
+  sendAccountApprovalRequestedEmail,
+  sendAccountApprovalDecisionEmail,
 };

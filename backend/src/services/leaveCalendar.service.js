@@ -105,4 +105,13 @@ const getWorkingDaysInMonth = async (year, month) => {
   return daysInMonth - excludedDates.size;
 };
 
-module.exports = { computeWorkingDays, getMonthCalendarData, getWorkingDaysInMonth, toDateKey };
+module.exports = {
+  computeWorkingDays,
+  getMonthCalendarData,
+  getWorkingDaysInMonth,
+  toDateKey,
+  eachDate,
+  isWeekendDate,
+  getWeekendPolicies,
+  getHolidaysInRange,
+};

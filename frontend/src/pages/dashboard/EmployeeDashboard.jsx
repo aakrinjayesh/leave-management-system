@@ -1,40 +1,17 @@
-import { useEffect, useState } from "react";
-import { CalendarPlus, ListChecks } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import StatusBadge from "../../components/common/StatusBadge";
-import Button from "../../components/common/Button";
-import Spinner from "../../components/common/Spinner";
-import ApplyLeaveModal from "../employee/ApplyLeaveModal";
-import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
-import LeaveBalanceCards from "../../components/common/LeaveBalanceCards";
 import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
+import WelcomeBanner from "../../components/common/WelcomeBanner";
 import { useAuth } from "../../context/AuthContext";
-import * as employeeLeaveApi from "../../api/employeeLeave.api";
-import { formatDateRange } from "../../utils/formatDate";
 import "../../styles/dashboardShared.css";
 import "./Dashboard.css";
 
+// Deliberately minimal - leave balances, accrual history, recent requests
+// and "Apply for leave" all live on "My Leave Requests" now, since that's
+// where leave is actually managed (and the one page both employees and
+// managers land on for their own leave). This page is the landing spot for
+// whatever dashboard-level widgets come next.
 export default function EmployeeDashboard() {
   const { user } = useAuth();
-  const [summary, setSummary] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isApplyOpen, setIsApplyOpen] = useState(false);
-
-  const fetchSummary = () =>
-    employeeLeaveApi
-      .getDashboardSummary()
-      .then(setSummary)
-      .finally(() => setIsLoading(false));
-
-  useEffect(() => {
-    fetchSummary();
-  }, []);
-
-  const handleApplySuccess = () => {
-    setIsApplyOpen(false);
-    setIsLoading(true);
-    fetchSummary();
-  };
 
   return (
     <DashboardLayout title="Dashboard">
@@ -42,75 +19,10 @@ export default function EmployeeDashboard() {
       <div className="page-header">
         <div>
           <h1>Welcome back, {user?.firstName}.</h1>
-          <p>Here's where your leave balance and requests stand.</p>
+          <p>Here's your workspace at a glance.</p>
         </div>
-        {user?.hasAcceptedResignation ? (
-          <p className="helper-text" style={{ marginTop: 0 }}>
-            Your resignation has been accepted - new leave requests are no longer available.
-          </p>
-        ) : (
-          <Button onClick={() => setIsApplyOpen(true)} className="page-header-btn">
-            <CalendarPlus size={16} />
-            Apply for leave
-          </Button>
-        )}
       </div>
-
-      {isLoading || !summary ? (
-        <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
-          <Spinner size={28} />
-        </div>
-      ) : (
-        <>
-          <LeaveBalanceCards balances={summary.balances} />
-
-          <LeaveLedgerCard ledgers={summary.ledgers} />
-
-          <div className="card">
-            <div className="card-section">
-              <div className="section-flex-row">
-                <span className="card-section-title">Recent leave requests</span>
-              </div>
-
-              {summary.recentRequests.length === 0 ? (
-                <div className="empty-state">
-                  <span className="empty-state-icon">
-                    <ListChecks size={22} />
-                  </span>
-                  <p>You haven't applied for any leave yet.</p>
-                </div>
-              ) : (
-                <div className="data-table-wrap">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Leave type</th>
-                        <th>Dates</th>
-                        <th>Days</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summary.recentRequests.map((request) => (
-                        <tr key={request.id}>
-                          <td className="table-cell-primary">{request.leavePolicy.leaveName}</td>
-                          <td>{formatDateRange(request.startDate, request.endDate)}</td>
-                          <td>{request.totalDays}</td>
-                          <td>
-                            <StatusBadge status={request.status} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {isApplyOpen && <ApplyLeaveModal onClose={() => setIsApplyOpen(false)} onSuccess={handleApplySuccess} />}
+      <WelcomeBanner />
     </DashboardLayout>
   );
 }

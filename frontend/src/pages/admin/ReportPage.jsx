@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Users,
   XCircle,
 } from "lucide-react";
@@ -31,16 +32,56 @@ import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlo
 import { PROJECT_TYPE_OPTIONS, TIMEZONE_OPTIONS, formatProjectType, formatWorkingHours } from "../../utils/projectOptions";
 import "../../styles/dashboardShared.css";
 
-function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadingId, onDownloadTimesheet, onViewHistory }) {
+// Trims to 1 decimal only when it's not a whole number - "5" instead of
+// "5.0", but "4.5" stays as-is.
+const formatNum = (value) => {
+  const n = Number(value) || 0;
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+};
+
+function EmployeeListCard({
+  title,
+  employees,
+  weekSubmissionsByUserId,
+  workloadByUserId,
+  downloadingId,
+  onDownloadTimesheet,
+  onViewHistory,
+}) {
   const navigate = useNavigate();
   const showTimesheetColumn = Boolean(weekSubmissionsByUserId);
+  const showWorkloadColumns = Boolean(workloadByUserId);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+
+  // Scoped to just this card's own list (e.g. only the 10 people on Internal
+  // Project), not every employee company-wide - a quick jump-to-person
+  // picker for when that list itself is too long to scroll through.
+  const visibleEmployees = selectedEmployeeId
+    ? employees.filter((employee) => String(employee.id) === selectedEmployeeId)
+    : employees;
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
       <div className="card-section">
-        <span className="card-section-title">{title}</span>
+        <div className="section-flex-row">
+          <span className="card-section-title" style={{ marginBottom: 0 }}>
+            {title} {employees.length ? `(${employees.length})` : ""}
+          </span>
+          {employees.length > 0 && (
+            <div className="field" style={{ maxWidth: 280, marginBottom: 0 }}>
+              <FormSelect value={selectedEmployeeId} onChange={(e) => setSelectedEmployeeId(e.target.value)}>
+                <option value="">All {employees.length} members</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.firstName} {employee.lastName} ({employee.email})
+                  </option>
+                ))}
+              </FormSelect>
+            </div>
+          )}
+        </div>
 
-        {employees.length === 0 ? (
+        {visibleEmployees.length === 0 ? (
           <div className="empty-state">
             <span className="empty-state-icon">
               <ListChecks size={22} />
@@ -58,12 +99,23 @@ function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadi
                   <th>Project</th>
                   <th>Since</th>
                   {showTimesheetColumn && <th>Timesheet</th>}
+                  {showWorkloadColumns && (
+                    <>
+                      <th>Total Working Days</th>
+                      <th>Leaves &amp; Holidays</th>
+                      <th>Billable Days</th>
+                      <th>Total Working Hrs</th>
+                      <th>Total Worked Hrs</th>
+                      <th>Billable Hrs</th>
+                    </>
+                  )}
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {employees.map((employee) => {
+                {visibleEmployees.map((employee) => {
                   const submission = weekSubmissionsByUserId?.[employee.id];
+                  const workload = workloadByUserId?.[employee.id];
                   return (
                     <tr
                       key={employee.id}
@@ -95,6 +147,16 @@ function EmployeeListCard({ title, employees, weekSubmissionsByUserId, downloadi
                             <span className="table-cell-secondary">Not submitted</span>
                           )}
                         </td>
+                      )}
+                      {showWorkloadColumns && (
+                        <>
+                          <td className="table-cell-secondary">{formatNum(workload?.totalWorkingDays)}</td>
+                          <td className="table-cell-secondary">{formatNum(workload?.leavesHolidaysDays)}</td>
+                          <td className="table-cell-secondary">{formatNum(workload?.billableDays)}</td>
+                          <td className="table-cell-secondary">{formatNum(workload?.totalWorkingHrs)}h</td>
+                          <td className="table-cell-secondary">{formatNum(workload?.totalWorkedHrs)}h</td>
+                          <td className="table-cell-secondary">{formatNum(workload?.billableHrs)}h</td>
+                        </>
                       )}
                       <td onClick={(e) => e.stopPropagation()}>
                         <button type="button" className="row-action-btn" onClick={() => onViewHistory(employee)}>
@@ -350,6 +412,7 @@ function ManageProjectsCard() {
 export default function ReportPage() {
   const [report, setReport] = useState(null);
   const [projectFilter, setProjectFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [weekDate, setWeekDate] = useState("");
   const [weekData, setWeekData] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
@@ -375,12 +438,29 @@ export default function ReportPage() {
     ? [...new Set([...report.assigned, ...report.notAssigned].map((e) => e.projectName).filter(Boolean))].sort()
     : [];
 
-  const applyProjectFilter = (employees) =>
-    projectFilter ? employees.filter((employee) => employee.projectName === projectFilter) : employees;
+  const applyFilters = (employees) => {
+    const byProject = projectFilter
+      ? employees.filter((employee) => employee.projectName === projectFilter)
+      : employees;
+
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return byProject;
+
+    return byProject.filter((employee) => {
+      const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
+      return (
+        fullName.includes(query) ||
+        (employee.employeeCode || "").toLowerCase().includes(query) ||
+        (employee.email || "").toLowerCase().includes(query)
+      );
+    });
+  };
 
   const weekSubmissionsByUserId = effectiveWeekData
     ? Object.fromEntries(effectiveWeekData.submissions.map((submission) => [submission.userId, submission]))
     : null;
+
+  const workloadByUserId = effectiveWeekData?.workload ?? null;
 
   const handleDownloadTimesheet = async (submission) => {
     setError("");
@@ -435,6 +515,16 @@ export default function ReportPage() {
 
             <div className="field" style={{ maxWidth: 320, marginBottom: 20 }}>
               <TextInput
+                label="Search employee"
+                icon={<Search size={16} />}
+                placeholder="Name, employee ID or email"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div className="field" style={{ maxWidth: 320, marginBottom: 20 }}>
+              <TextInput
                 label="Week of"
                 type="date"
                 value={weekDate}
@@ -450,16 +540,18 @@ export default function ReportPage() {
 
           <EmployeeListCard
             title="Client Project"
-            employees={applyProjectFilter(report.assigned)}
+            employees={applyFilters(report.assigned)}
             weekSubmissionsByUserId={weekSubmissionsByUserId}
+            workloadByUserId={workloadByUserId}
             downloadingId={downloadingId}
             onDownloadTimesheet={handleDownloadTimesheet}
             onViewHistory={setHistoryEmployee}
           />
           <EmployeeListCard
             title="Internal Project"
-            employees={applyProjectFilter(report.notAssigned)}
+            employees={applyFilters(report.notAssigned)}
             weekSubmissionsByUserId={weekSubmissionsByUserId}
+            workloadByUserId={workloadByUserId}
             downloadingId={downloadingId}
             onDownloadTimesheet={handleDownloadTimesheet}
             onViewHistory={setHistoryEmployee}

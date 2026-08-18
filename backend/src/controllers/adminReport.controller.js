@@ -35,24 +35,29 @@ const getProjectHistory = asyncHandler(async (req, res) => {
 
 // Every timesheet submission for the Mon-Sun week containing `date` - lets
 // the Report page show, per employee, whether they submitted a timesheet
-// that week and offer its attachment for download.
+// that week and offer its attachment for download. Also returns the
+// working-days/hours workload breakdown for that same week (see
+// timesheetService.getWeeklyWorkloadReport).
 const getWeekTimesheetSubmissions = asyncHandler(async (req, res) => {
   const anchor = req.query.date ? new Date(req.query.date) : new Date();
   const weekStartDate = timesheetService.getWeekStart(anchor);
   const weekEndDate = timesheetService.getWeekEnd(weekStartDate);
 
-  const submissions = await prisma.timesheetSubmission.findMany({
-    where: { weekStartDate },
-    select: {
-      id: true,
-      userId: true,
-      status: true,
-      attachmentOriginalName: true,
-      attachmentStoredName: true,
-    },
-  });
+  const [submissions, workload] = await Promise.all([
+    prisma.timesheetSubmission.findMany({
+      where: { weekStartDate },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        attachmentOriginalName: true,
+        attachmentStoredName: true,
+      },
+    }),
+    timesheetService.getWeeklyWorkloadReport(weekStartDate, weekEndDate),
+  ]);
 
-  new ApiResponse(200, "OK", { weekStartDate, weekEndDate, submissions }).send(res);
+  new ApiResponse(200, "OK", { weekStartDate, weekEndDate, submissions, workload }).send(res);
 });
 
 const listProjects = asyncHandler(async (req, res) => {

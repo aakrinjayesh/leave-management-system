@@ -1,3 +1,4 @@
+const path = require("path");
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
@@ -8,6 +9,25 @@ const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.serv
 const { sendResignationSubmittedEmail, sendResignationWithdrawnEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { EMPLOYEE_DOCUMENT_DIR } = require("../config/employeeDocumentUpload");
+
+// Self-service version of admin's downloadUserDocument (type "photo" only) -
+// admin is still the only one who can upload/replace it (see
+// adminEmployeeDocs.controller.js), but everyone needs to be able to fetch
+// their OWN photo to show on their own dashboard.
+const getMyPhoto = asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user?.photoUrl) {
+    throw ApiError.notFound("No photo uploaded yet.");
+  }
+
+  const filePath = path.join(EMPLOYEE_DOCUMENT_DIR, path.basename(user.photoUrl));
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ success: false, message: "Photo file not found." });
+    }
+  });
+});
 
 // Every active admin, plus this employee's own active manager if they have
 // one - the shared recipient set for resignation submit/withdraw notices
@@ -206,6 +226,7 @@ const withdrawMyResignation = asyncHandler(async (req, res) => {
 module.exports = {
   markAnniversaryCelebrationSeen,
   markBirthdayCelebrationSeen,
+  getMyPhoto,
   getMyIncomeTaxComputation,
   listMyIncomeTaxComputationGenerations,
   downloadMyIncomeTaxComputationPdf,

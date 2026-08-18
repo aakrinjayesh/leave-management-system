@@ -367,7 +367,7 @@ export default function ProfilePage() {
         <div className="card-section">
           <span className="card-section-title">
             <CreditCard size={15} className="profile-title-icon" />
-            PAN &amp; Aadhaar
+            Statutory Information
           </span>
           <p className="card-section-subtitle">
             Sensitive numbers are shown masked. Uploaded documents are visible to admin only.
@@ -394,6 +394,10 @@ export default function ProfilePage() {
               <div className="profile-detail-label">Name as per Aadhaar</div>
               <div className="profile-detail-value">{user?.aadharHolderName || "Not set"}</div>
             </div>
+            <div>
+              <div className="profile-detail-label">PF number</div>
+              <div className="profile-detail-value">{user?.pfNumber || "Not set"}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -417,10 +421,6 @@ export default function ProfilePage() {
             <div>
               <div className="profile-detail-label">IFSC code</div>
               <div className="profile-detail-value">{user?.ifscCode || "Not set"}</div>
-            </div>
-            <div>
-              <div className="profile-detail-label">PF number</div>
-              <div className="profile-detail-value">{user?.pfNumber || "Not set"}</div>
             </div>
             <div>
               <div className="profile-detail-label">Salary / CTC (annual)</div>

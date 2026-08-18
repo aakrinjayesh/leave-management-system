@@ -22,7 +22,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const successMessage = location.state?.activated
-    ? "Account activated! You can now log in."
+    ? "Details submitted! An admin needs to approve your account before you can log in - you'll be notified once that happens."
     : location.state?.passwordReset
       ? "Password reset! You can now log in with your new password."
       : "";

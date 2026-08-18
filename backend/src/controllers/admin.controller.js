@@ -10,7 +10,7 @@ const companySettingsService = require("../services/companySettings.service");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
 const notificationService = require("../services/notification.service");
-const { sendAdminAccessRemovedEmail } = require("../utils/email.util");
+const { sendAdminAccessRemovedEmail, sendAccountApprovalDecisionEmail } = require("../utils/email.util");
 const { UPLOAD_DIR } = require("../config/upload");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
@@ -76,6 +76,63 @@ const reactivateUser = asyncHandler(async (req, res) => {
   });
 
   new ApiResponse(200, "Account reactivated.", { user: toSafeUser(user) }).send(res);
+});
+
+// Only an account that's finished activation (password set) but hasn't been
+// decided on yet is awaiting approval - guards against approving/rejecting
+// someone who hasn't even set a password, or re-deciding one already decided.
+const getAwaitingApprovalOr400 = async (id) => {
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) {
+    throw ApiError.notFound("Account not found.");
+  }
+  if (!user.isPasswordSet || user.status !== USER_STATUS.PENDING) {
+    throw ApiError.badRequest("This account isn't awaiting approval.");
+  }
+  return user;
+};
+
+const notifyApprovalDecision = async (user, isApproved, decidedByName) => {
+  try {
+    await notificationService.notify({
+      userId: user.id,
+      type: notificationService.NOTIFICATION_TYPES.ACCOUNT_APPROVAL_DECIDED,
+      title: isApproved ? "Account approved" : "Account not approved",
+      message: isApproved
+        ? `Your account was approved by ${decidedByName}. You can now log in.`
+        : `Your account request was not approved by ${decidedByName}.`,
+    });
+  } catch (err) {
+    console.error(`Failed to create account ${isApproved ? "approved" : "rejected"} notification:`, err);
+  }
+
+  try {
+    await sendAccountApprovalDecisionEmail({ to: user.email, firstName: user.firstName, isApproved, decidedByName });
+  } catch (err) {
+    console.error(`Failed to send account ${isApproved ? "approved" : "rejected"} email:`, err);
+  }
+};
+
+const approveSignup = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  await getAwaitingApprovalOr400(id);
+
+  const user = await prisma.user.update({ where: { id }, data: { status: USER_STATUS.ACTIVE } });
+
+  new ApiResponse(200, "Account approved.", { user: toSafeUser(user) }).send(res);
+
+  await notifyApprovalDecision(user, true, `${req.user.firstName} ${req.user.lastName}`);
+});
+
+const rejectSignup = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  await getAwaitingApprovalOr400(id);
+
+  const user = await prisma.user.update({ where: { id }, data: { status: USER_STATUS.REJECTED } });
+
+  new ApiResponse(200, "Account rejected.", { user: toSafeUser(user) }).send(res);
+
+  await notifyApprovalDecision(user, false, `${req.user.firstName} ${req.user.lastName}`);
 });
 
 // Lets an admin set or correct anyone's manager, same effect as the
@@ -445,6 +502,8 @@ module.exports = {
   listUsers,
   createUser,
   reactivateUser,
+  approveSignup,
+  rejectSignup,
   updateUserManager,
   setAdminAccess,
   getUserTimesheet,

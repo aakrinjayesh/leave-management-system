@@ -7,6 +7,7 @@ import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
 import ApplyLeaveModal from "./ApplyLeaveModal";
 import LeaveBalanceCards from "../../components/common/LeaveBalanceCards";
+import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
 import { useAuth } from "../../context/AuthContext";
 import * as employeeLeaveApi from "../../api/employeeLeave.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -28,7 +29,7 @@ export default function MyLeaveRequestsPage() {
   const { user } = useAuth();
   const [filter, setFilter] = useState("");
   const [requests, setRequests] = useState(null);
-  const [balances, setBalances] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
   const [error, setError] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
@@ -44,11 +45,13 @@ export default function MyLeaveRequestsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
-  // Same balance data as the employee dashboard - shown here too since a
-  // manager's own "Dashboard" nav link goes to the team overview instead,
-  // which never surfaces their own leave balance otherwise.
+  // Balances + monthly accrual history used to live on the employee
+  // dashboard - moved here since this is where leave actually gets managed,
+  // and it's also where a manager lands for their own leave (their
+  // "Dashboard" nav link goes to the team overview instead, which never
+  // surfaced their own balance).
   useEffect(() => {
-    employeeLeaveApi.getMyBalances().then((data) => setBalances(data.balances));
+    employeeLeaveApi.getDashboardSummary().then(setSummary);
   }, []);
 
   const handleCancel = async (id) => {
@@ -67,6 +70,7 @@ export default function MyLeaveRequestsPage() {
   const handleApplySuccess = () => {
     setIsApplyOpen(false);
     loadRequests();
+    employeeLeaveApi.getDashboardSummary().then(setSummary);
   };
 
   const handleViewAttachment = async (id) => {
@@ -99,7 +103,8 @@ export default function MyLeaveRequestsPage() {
 
       <Alert type="error">{error}</Alert>
 
-      {balances && <LeaveBalanceCards balances={balances} />}
+      {summary && <LeaveBalanceCards balances={summary.balances} />}
+      {summary && <LeaveLedgerCard ledgers={summary.ledgers} />}
 
       <div className="filter-tabs">
         {FILTERS.map((f) => (
@@ -116,6 +121,7 @@ export default function MyLeaveRequestsPage() {
 
       <div className="card">
         <div className="card-section">
+          <span className="card-section-title">Recent Leave Requests</span>
           {requests === null ? (
             <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
               <Spinner size={26} />

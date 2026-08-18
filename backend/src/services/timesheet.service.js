@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { buildCsv, slugify } = require("../utils/csv.util");
+const leaveCalendarService = require("./leaveCalendar.service");
 
 const startOfUtcDay = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 
@@ -226,6 +227,132 @@ const getProjectHistoryForUser = async (userId) => {
   return buildProjectStints(submissions).map((stint, index) => ({ ...stint, isCurrent: index === 0 }));
 };
 
+const DEFAULT_HOURS_PER_DAY = 8;
+
+// Hours in a single working day for whichever project this week's
+// submission was against - falls back to the standard 8h day if there's no
+// submission yet this week (so no project to read hours from either).
+const getHoursPerDay = (project) => {
+  if (!project?.workStartTime || !project?.workEndTime) return DEFAULT_HOURS_PER_DAY;
+  const [startHour, startMinute] = project.workStartTime.split(":").map(Number);
+  const [endHour, endMinute] = project.workEndTime.split(":").map(Number);
+  const hours = endHour + endMinute / 60 - (startHour + startMinute / 60);
+  return hours > 0 ? hours : DEFAULT_HOURS_PER_DAY;
+};
+
+// How many of an employee's APPROVED leave days actually fall within
+// [weekStartDate, weekEndDate]. A leave request's own totalDays already
+// excludes weekends/holidays (see leaveCalendar.service's computeWorkingDays),
+// but the request itself can span outside the requested week partially or
+// entirely, so totalDays can't just be summed as-is.
+const getApprovedLeaveDaysInWeek = async (userId, weekStartDate, weekEndDate, weekendPolicies, holidayDateKeys) => {
+  const requests = await prisma.leaveRequest.findMany({
+    where: {
+      userId,
+      status: "APPROVED",
+      startDate: { lte: weekEndDate },
+      endDate: { gte: weekStartDate },
+    },
+    select: { startDate: true, endDate: true, totalDays: true },
+  });
+
+  let total = 0;
+  for (const request of requests) {
+    const fullyWithinWeek = request.startDate >= weekStartDate && request.endDate <= weekEndDate;
+    if (fullyWithinWeek) {
+      total += request.totalDays;
+      continue;
+    }
+    // Spans outside this week - recount just the overlapping days using the
+    // same weekend/holiday exclusion rules totalDays was originally computed with.
+    const overlapStart = request.startDate < weekStartDate ? weekStartDate : request.startDate;
+    const overlapEnd = request.endDate > weekEndDate ? weekEndDate : request.endDate;
+    for (const date of leaveCalendarService.eachDate(overlapStart, overlapEnd)) {
+      if (leaveCalendarService.isWeekendDate(date, weekendPolicies)) continue;
+      if (holidayDateKeys.has(leaveCalendarService.toDateKey(date))) continue;
+      total += 1;
+    }
+  }
+  return total;
+};
+
+// Per-employee weekly workload for the admin Report screen: how many days
+// this week were even working days (weekends aside), how many of those were
+// eaten by a mandatory holiday or the employee's own approved leave, and
+// what that leaves as actually billable - same breakdown in hours, using
+// whichever project's working hours applied that week.
+const getWeeklyWorkloadReport = async (weekStartDate, weekEndDate) => {
+  const [users, weekendPolicies, holidays, submissions] = await Promise.all([
+    prisma.user.findMany({
+      where: { status: "ACTIVE", userType: { in: ["EMPLOYEE", "MANAGER"] } },
+      select: { id: true },
+    }),
+    leaveCalendarService.getWeekendPolicies(),
+    leaveCalendarService.getHolidaysInRange(weekStartDate, weekEndDate),
+    prisma.timesheetSubmission.findMany({
+      where: { weekStartDate },
+      select: {
+        userId: true,
+        totalHours: true,
+        project: { select: { workStartTime: true, workEndTime: true } },
+      },
+    }),
+  ]);
+
+  // Only mandatory holidays reduce everyone's working days - an optional one
+  // only counts against a specific employee if they actually took it as
+  // their own approved leave (handled per-employee below, using the full
+  // holiday set so a leave day never double-counts a holiday date).
+  const mandatoryHolidayDateKeys = new Set(
+    holidays.filter((h) => !h.isOptional).map((h) => leaveCalendarService.toDateKey(h.holidayDate))
+  );
+  const allHolidayDateKeys = new Set(holidays.map((h) => leaveCalendarService.toDateKey(h.holidayDate)));
+
+  let totalWorkingDays = 0;
+  let holidayWorkingDays = 0;
+  for (const date of leaveCalendarService.eachDate(weekStartDate, weekEndDate)) {
+    if (leaveCalendarService.isWeekendDate(date, weekendPolicies)) continue;
+    totalWorkingDays += 1;
+    if (mandatoryHolidayDateKeys.has(leaveCalendarService.toDateKey(date))) holidayWorkingDays += 1;
+  }
+
+  const submissionByUserId = new Map(submissions.map((s) => [s.userId, s]));
+
+  const entries = await Promise.all(
+    users.map(async (user) => {
+      const submission = submissionByUserId.get(user.id);
+      const leaveDays = await getApprovedLeaveDaysInWeek(
+        user.id,
+        weekStartDate,
+        weekEndDate,
+        weekendPolicies,
+        allHolidayDateKeys
+      );
+
+      const leavesHolidaysDays = holidayWorkingDays + leaveDays;
+      const billableDays = Math.max(0, totalWorkingDays - leavesHolidaysDays);
+
+      const hoursPerDay = getHoursPerDay(submission?.project);
+      const totalWorkingHrs = totalWorkingDays * hoursPerDay;
+      const totalWorkedHrs = submission?.totalHours ?? 0;
+
+      return [
+        user.id,
+        {
+          totalWorkingDays,
+          leavesHolidaysDays,
+          billableDays,
+          totalWorkingHrs,
+          totalWorkedHrs,
+          billableHrs: totalWorkedHrs,
+        },
+      ];
+    })
+  );
+
+  return Object.fromEntries(entries);
+};
+
 module.exports = {
   startOfUtcDay,
   getWeekStart,
@@ -236,6 +363,7 @@ module.exports = {
   getLastProjectAssigned,
   getProjectAssignmentReport,
   getProjectHistoryForUser,
+  getWeeklyWorkloadReport,
   sumHours,
   buildEmployeeTimesheetCsv,
   buildPayrollCsv,

@@ -6,6 +6,8 @@ export const markAnniversaryCelebrationSeen = () => unwrap(axiosClient.put("/pro
 
 export const markBirthdayCelebrationSeen = () => unwrap(axiosClient.put("/profile/birthday-celebration-seen"));
 
+export const getMyPhoto = () => axiosClient.get("/profile/photo", { responseType: "blob" });
+
 export const getMyIncomeTaxComputation = (financialYear) =>
   unwrap(axiosClient.get("/profile/tax-computation", { params: { financialYear } }));
 
