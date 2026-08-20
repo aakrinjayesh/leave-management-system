@@ -72,16 +72,23 @@ const getSubmissionsOverlappingRange = (userId, start, end) =>
     orderBy: { weekStartDate: "asc" },
   });
 
-// The employee's most recent submission that has a project-assignment
-// choice recorded - used to pre-fill a fresh week's dropdown with whatever
-// they picked last time, so they only need to change it when it changes.
-const getLastProjectAssigned = async (userId) => {
-  const submission = await prisma.timesheetSubmission.findFirst({
-    where: { userId, projectAssigned: { not: null } },
+// Every distinct employee who has logged a timesheet week against this
+// project, most-recently-active first - shown as a hint in the admin's Edit
+// Project modal ("recently logged time on this project: ...") for projects
+// that had submissions before admin-assigned membership existed, so admin
+// can decide whether to formally add them as members.
+const getRecentProjectMembers = async (projectId) => {
+  const submissions = await prisma.timesheetSubmission.findMany({
+    where: { projectId },
     orderBy: { weekStartDate: "desc" },
-    select: { projectAssigned: true },
+    select: { userId: true, user: { select: { id: true, firstName: true, lastName: true, email: true } } },
   });
-  return submission?.projectAssigned ?? null;
+
+  const seen = new Map();
+  for (const submission of submissions) {
+    if (!seen.has(submission.userId)) seen.set(submission.userId, submission.user);
+  }
+  return [...seen.values()];
 };
 
 const toDateKey = (date) => new Date(date).toISOString().slice(0, 10);
@@ -149,14 +156,17 @@ const buildProjectStints = (submissions) => {
 };
 
 // Census for the admin Report tab: every active Employee/Manager, split by
-// their latest recorded Project Assigned choice (same "sticky" value used to
-// pre-fill the timesheet dropdown) - anyone who's never made a choice yet
-// falls into notAssigned, since the point of the report is to surface who
-// still needs a look, not to track timesheet-submission completeness.
+// their current project. Prefers actual timesheet submission history (has a
+// real "since" date); falls back to whatever admin has them assigned to
+// (Project.assignedEmployees) for anyone who hasn't submitted a timesheet
+// under it yet, so a fresh assignment shows up here immediately instead of
+// only once they submit their first week. Still falls into notAssigned if
+// neither exists.
 const getProjectAssignmentReport = async () => {
   const users = await prisma.user.findMany({
     where: { status: "ACTIVE", userType: { in: ["EMPLOYEE", "MANAGER"] } },
     orderBy: { firstName: "asc" },
+    include: { assignedProject: { select: { name: true, projectType: true } } },
   });
 
   // Full history (not just the latest row) so the current project's start
@@ -192,10 +202,12 @@ const getProjectAssignmentReport = async () => {
         employeeCode: user.employeeCode,
         email: user.email,
         managerId: user.managerId,
-        projectName: current?.projectName ?? null,
+        projectName: current?.projectName ?? user.assignedProject?.name ?? null,
+        // Only ever a real date once they've actually submitted a week under
+        // it - an admin assignment with no submissions yet has no "since".
         projectSince: current?.startDate ?? null,
       },
-      projectAssigned: latestSubmission?.projectAssigned ?? null,
+      projectAssigned: latestSubmission?.projectAssigned ?? user.assignedProject?.projectType ?? null,
     };
   };
 
@@ -360,7 +372,7 @@ module.exports = {
   getViewRange,
   getSubmittedEntriesInRange,
   getSubmissionsOverlappingRange,
-  getLastProjectAssigned,
+  getRecentProjectMembers,
   getProjectAssignmentReport,
   getProjectHistoryForUser,
   getWeeklyWorkloadReport,

@@ -6,6 +6,8 @@ const payrollService = require("../services/payroll.service");
 const { streamPayslipPdf } = require("../services/payslipPdf.service");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
+const { uploadToS3, deleteFromS3 } = require("../utils/s3.util");
 
 // Computes what a payslip would look like without saving it, so admin can
 // see the numbers before confirming.
@@ -34,7 +36,27 @@ const generatePayslip = asyncHandler(async (req, res) => {
 
   const payslip = await payrollService.generatePayslip(userId, year, month, { tds, annualBonusPay }, req.user.id);
 
-  new ApiResponse(200, "Payslip generated.", { payslip }).send(res);
+  const employee = await prisma.user.findUnique({ where: { id: userId } });
+  const ytd = await payrollService.getYtdTotals(userId, year, month);
+
+  const buffer = await renderPdfToBuffer(streamPayslipPdf, { payslip, employee, ytd });
+  const { url } = await uploadToS3(
+    {
+      buffer,
+      originalname: `payslip-${employee.firstName}-${year}-${String(month).padStart(2, "0")}.pdf`,
+      mimetype: "application/pdf",
+    },
+    "payslips"
+  );
+
+  // Re-generating the same month overwrites this same row (see the upsert
+  // above) - at this point payslip.pdfUrl still holds the PREVIOUS PDF, since
+  // the upsert doesn't touch it, so remove that one now that its replacement
+  // is safely uploaded.
+  await deleteFromS3(payslip.pdfUrl);
+  const updated = await prisma.payslip.update({ where: { id: payslip.id }, data: { pdfUrl: url } });
+
+  new ApiResponse(200, "Payslip generated.", { payslip: updated }).send(res);
 });
 
 const listPayslips = asyncHandler(async (req, res) => {
@@ -112,6 +134,11 @@ const downloadPayslipPdf = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Payslip not found.");
   }
 
+  if (payslip.pdfUrl) {
+    return res.redirect(payslip.pdfUrl);
+  }
+
+  // Legacy payslip generated before PDFs were stored to S3 - render on demand.
   const employee = await prisma.user.findUnique({ where: { id: payslip.userId } });
   const ytd = await payrollService.getYtdTotals(payslip.userId, payslip.year, payslip.month);
 

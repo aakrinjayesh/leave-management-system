@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/layout/ProtectedRoute";
+import Spinner from "../components/common/Spinner";
 import { useAuth } from "../context/AuthContext";
 import { getDashboardPath } from "../utils/roleRoutes";
 
@@ -43,7 +44,16 @@ const isManager = (user) => user.isManager;
 const isAdmin = (user) => user.userType === "ADMIN";
 
 function HomeRedirect() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isInitializing, user } = useAuth();
+
+  if (isInitializing) {
+    return (
+      <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center" }}>
+        <Spinner size={32} />
+      </div>
+    );
+  }
+
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <Navigate to={getDashboardPath(user)} replace />;
 }

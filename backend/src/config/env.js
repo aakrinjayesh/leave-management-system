@@ -30,6 +30,11 @@ const env = {
   EMAIL_HOST: process.env.EMAIL_HOST,
   EMAIL_PORT: process.env.EMAIL_PORT,
   EMAIL_SECURE: process.env.EMAIL_SECURE,
+
+  AWS_REGION: process.env.AWS_REGION,
+  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+  AWS_BUCKET_NAME: process.env.AWS_BUCKET_NAME,
 };
 
 const requiredInProduction = [
@@ -37,6 +42,10 @@ const requiredInProduction = [
   "JWT_REFRESH_SECRET",
   "JWT_OTP_FLOW_SECRET",
   "DATABASE_URL",
+  "AWS_REGION",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_BUCKET_NAME",
 ];
 
 for (const key of requiredInProduction) {

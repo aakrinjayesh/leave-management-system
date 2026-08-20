@@ -13,10 +13,6 @@ export const setAdminAccess = (id, grant) => unwrap(axiosClient.patch(`/admin/us
 
 export const reactivateUser = (id) => unwrap(axiosClient.patch(`/admin/users/${id}/reactivate`));
 
-export const approveSignup = (id) => unwrap(axiosClient.patch(`/admin/users/${id}/approve-signup`));
-
-export const rejectSignup = (id) => unwrap(axiosClient.patch(`/admin/users/${id}/reject-signup`));
-
 export const recordExit = (id, payload) => unwrap(axiosClient.post(`/admin/users/${id}/exit`, payload));
 
 export const listExitRecords = (id) => unwrap(axiosClient.get(`/admin/users/${id}/exit-records`));
@@ -66,6 +62,8 @@ export const updateProject = (id, payload) => unwrap(axiosClient.patch(`/admin/p
 export const deactivateProject = (id) => unwrap(axiosClient.patch(`/admin/projects/${id}/deactivate`));
 
 export const reactivateProject = (id) => unwrap(axiosClient.patch(`/admin/projects/${id}/reactivate`));
+
+export const getProjectRecentMembers = (id) => unwrap(axiosClient.get(`/admin/projects/${id}/recent-members`));
 
 export const listLeavePolicies = () => unwrap(axiosClient.get("/admin/leave-policies"));
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Calculator, Download, Eye, FileCheck2 } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { Calculator, Download, Eye, FileCheck2 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextInput from "../../components/common/TextInput";
 import MonthPicker from "../../components/common/MonthPicker";
@@ -69,7 +69,6 @@ export default function EmployeePayslipsPage() {
 }
 
 function EmployeePayslipsContent({ id }) {
-  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [history, setHistory] = useState(null);
   const [monthValue, setMonthValue] = useState(currentMonthValue());
@@ -231,11 +230,6 @@ function EmployeePayslipsContent({ id }) {
 
   return (
     <DashboardLayout title="Employee Payslips">
-      <button type="button" className="link-btn" style={{ marginBottom: 16 }} onClick={() => navigate("/admin/payslips")}>
-        <ArrowLeft size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-        Back to payslips
-      </button>
-
       <div className="page-header">
         <div>
           <h1>

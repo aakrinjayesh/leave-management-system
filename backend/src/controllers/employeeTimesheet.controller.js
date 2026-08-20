@@ -4,10 +4,10 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
-const projectService = require("../services/project.service");
 const { sendTimesheetSubmittedEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { uploadToS3, isS3Url } = require("../utils/s3.util");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const getMyEntries = asyncHandler(async (req, res) => {
@@ -15,7 +15,7 @@ const getMyEntries = asyncHandler(async (req, res) => {
   const weekStartDate = timesheetService.getWeekStart(anchor);
   const weekEndDate = timesheetService.getWeekEnd(weekStartDate);
 
-  const [entries, submission, lastProjectAssigned, lastProjectId] = await Promise.all([
+  const [entries, submission, assignedProject] = await Promise.all([
     prisma.timesheetEntry.findMany({
       where: { userId: req.user.id, date: { gte: weekStartDate, lte: weekEndDate } },
       orderBy: [{ date: "asc" }, { id: "asc" }],
@@ -24,8 +24,9 @@ const getMyEntries = asyncHandler(async (req, res) => {
       where: { userId_weekStartDate: { userId: req.user.id, weekStartDate } },
       include: { project: true },
     }),
-    timesheetService.getLastProjectAssigned(req.user.id),
-    projectService.getLastProjectId(req.user.id),
+    // The project is admin-assigned, not chosen per week - same project
+    // shown regardless of which week is being viewed.
+    req.user.assignedProjectId ? prisma.project.findUnique({ where: { id: req.user.assignedProjectId } }) : null,
   ]);
 
   new ApiResponse(200, "OK", {
@@ -33,16 +34,9 @@ const getMyEntries = asyncHandler(async (req, res) => {
     weekEndDate,
     entries,
     submission,
-    lastProjectAssigned,
-    lastProjectId,
+    assignedProject,
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
-});
-
-const listProjects = asyncHandler(async (req, res) => {
-  const projects = await projectService.listActiveProjects();
-
-  new ApiResponse(200, "OK", { projects }).send(res);
 });
 
 // One entry per user per date - saving a day creates it if it doesn't exist
@@ -107,14 +101,16 @@ const uploadAttachment = asyncHandler(async (req, res) => {
     throw ApiError.badRequest("Please choose a file to upload.");
   }
 
+  const { url } = await uploadToS3(req.file, "timesheet-attachments");
+
   new ApiResponse(201, "File uploaded.", {
-    attachmentStoredName: req.file.filename,
+    attachmentStoredName: url,
     attachmentOriginalName: req.file.originalname,
   }).send(res);
 });
 
 const submitWeek = asyncHandler(async (req, res) => {
-  const { weekStartDate: rawWeekStart, attachmentOriginalName, attachmentStoredName, projectId } = req.body;
+  const { weekStartDate: rawWeekStart, attachmentOriginalName, attachmentStoredName } = req.body;
   const weekStartDate = timesheetService.getWeekStart(rawWeekStart);
   const weekEndDate = timesheetService.getWeekEnd(weekStartDate);
 
@@ -122,14 +118,19 @@ const submitWeek = asyncHandler(async (req, res) => {
     throw ApiError.badRequest("Please set your manager in your profile before submitting a timesheet.");
   }
 
-  // Client vs internal is no longer a manual choice - it's read straight off
-  // the project admin already classified, so it can't drift from what the
-  // project itself says.
-  const project = await prisma.project.findFirst({ where: { id: projectId, isActive: true } });
+  // The project is no longer picked per submission - it's whatever admin has
+  // currently assigned this employee to (see Project.assignedEmployees).
+  // Client vs internal is read straight off that project's own admin-set
+  // type, so it can't drift from what the project itself says.
+  if (!req.user.assignedProjectId) {
+    throw ApiError.badRequest("You haven't been assigned a project yet. Please contact your admin.");
+  }
+  const project = await prisma.project.findFirst({ where: { id: req.user.assignedProjectId, isActive: true } });
   if (!project) {
-    throw ApiError.badRequest("Please select a valid, active project before submitting.");
+    throw ApiError.badRequest("Your assigned project is no longer active. Please contact your admin.");
   }
   const projectAssigned = project.projectType;
+  const projectId = project.id;
 
   const recipient = await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } });
   if (!recipient) {
@@ -267,6 +268,11 @@ const getSubmissionAttachment = asyncHandler(async (req, res) => {
     throw ApiError.notFound("No attachment found for this submission.");
   }
 
+  if (isS3Url(submission.attachmentStoredName)) {
+    return res.redirect(submission.attachmentStoredName);
+  }
+
+  // Legacy attachment uploaded before the S3 migration - still on local disk.
   const filePath = path.join(TIMESHEET_ATTACHMENT_DIR, path.basename(submission.attachmentStoredName));
   res.download(filePath, submission.attachmentOriginalName || submission.attachmentStoredName, (err) => {
     if (err && !res.headersSent) {
@@ -277,7 +283,6 @@ const getSubmissionAttachment = asyncHandler(async (req, res) => {
 
 module.exports = {
   getMyEntries,
-  listProjects,
   saveEntry,
   deleteEntry,
   uploadAttachment,

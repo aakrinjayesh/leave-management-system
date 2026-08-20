@@ -12,9 +12,9 @@ const submitWeekSchema = z.object({
   weekStartDate: z.coerce.date({ message: "Please choose a valid week." }),
   attachmentOriginalName: z.string().min(1, "Please upload this week's Excel sheet before submitting."),
   attachmentStoredName: z.string().min(1, "Please upload this week's Excel sheet before submitting."),
-  // projectAssigned is no longer taken from the client - it's derived from
-  // the selected project's own admin-set type (see submitWeek controller).
-  projectId: z.coerce.number().int().positive({ message: "Please select a project before submitting." }),
+  // Neither projectId nor projectAssigned come from the client anymore -
+  // both are derived from whichever project admin currently has this
+  // employee assigned to (see submitWeek controller).
 });
 
 const approveTimesheetSchema = z.object({

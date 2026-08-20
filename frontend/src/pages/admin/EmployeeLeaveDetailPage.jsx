@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarDays, ListChecks, Paperclip } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { CalendarDays, ListChecks, Paperclip } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatusBadge from "../../components/common/StatusBadge";
 import StatCard from "../../components/common/StatCard";
@@ -54,7 +54,6 @@ export default function EmployeeLeaveDetailPage() {
 }
 
 function EmployeeLeaveDetailContent({ id }) {
-  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const { year, month, goToPrevMonth, goToNextMonth } = useMonthNavigation();
@@ -95,11 +94,6 @@ function EmployeeLeaveDetailContent({ id }) {
 
   return (
     <DashboardLayout title="Employee Leave">
-      <button type="button" className="link-btn" style={{ marginBottom: 16 }} onClick={() => navigate("/admin/dashboard")}>
-        <ArrowLeft size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-        Back to accounts
-      </button>
-
       <div className="page-header">
         <div>
           <h1>

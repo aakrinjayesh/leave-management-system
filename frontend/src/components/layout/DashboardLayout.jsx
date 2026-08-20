@@ -73,7 +73,7 @@ const buildNavItems = (user) => {
     });
     items.push({
       to: "/manager/resignations",
-      label: "Resignations",
+      label: "Team Resignations",
       icon: FileWarning,
     });
   }
@@ -86,7 +86,7 @@ const buildNavItems = (user) => {
     });
     items.push({
       to: "/admin/reports",
-      label: "Report",
+      label: "Project",
       icon: BarChart3,
     });
     items.push({

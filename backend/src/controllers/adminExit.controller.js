@@ -5,6 +5,8 @@ const asyncHandler = require("../utils/asyncHandler");
 const { USER_STATUS } = require("../utils/constants");
 const { streamRelievingLetterPdf } = require("../services/relievingLetterPdf.service");
 const { sendExitNotificationEmail } = require("../utils/email.util");
+const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
+const { uploadToS3 } = require("../utils/s3.util");
 
 // Replaces the plain "deactivate" flow - records a permanent ExitRecord (so
 // the relieving letter can always be re-downloaded later, even across
@@ -29,7 +31,17 @@ const recordExit = asyncHandler(async (req, res) => {
     prisma.user.update({ where: { id }, data: { status: USER_STATUS.INACTIVE, exitDate } }),
   ]);
 
-  new ApiResponse(200, "Account exited.", { user, exitRecord }).send(res);
+  const buffer = await renderPdfToBuffer(streamRelievingLetterPdf, { employee: user, exitRecord });
+  const { url } = await uploadToS3(
+    { buffer, originalname: `relieving-letter-${user.firstName}-${user.lastName}.pdf`, mimetype: "application/pdf" },
+    "relieving-letters"
+  );
+  // Each exit record is its own permanent version (re-exiting/rehiring
+  // creates a new row rather than overwriting this one) - so unlike
+  // payslips, there's no previous version of THIS row's PDF to clean up here.
+  const updatedExitRecord = await prisma.exitRecord.update({ where: { id: exitRecord.id }, data: { pdfUrl: url } });
+
+  new ApiResponse(200, "Account exited.", { user, exitRecord: updatedExitRecord }).send(res);
 
   // Notify the exited employee, their manager, and every other active admin -
   // sent after the response so the acting admin doesn't wait on the email
@@ -85,6 +97,11 @@ const downloadRelievingLetterPdf = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Exit record not found.");
   }
 
+  if (exitRecord.pdfUrl) {
+    return res.redirect(exitRecord.pdfUrl);
+  }
+
+  // Legacy exit record created before PDFs were stored to S3 - render on demand.
   const employee = await prisma.user.findUnique({ where: { id: exitRecord.userId } });
 
   res.setHeader("Content-Type", "application/pdf");

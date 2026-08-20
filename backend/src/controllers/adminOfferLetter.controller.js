@@ -3,6 +3,8 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const { streamOfferLetterPdf } = require("../services/offerLetterPdf.service");
+const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
+const { uploadToS3 } = require("../utils/s3.util");
 
 // Every save creates a new version - nothing is ever overwritten, so a
 // regenerated letter (e.g. after a CTC negotiation) doesn't lose the earlier
@@ -20,7 +22,17 @@ const createOfferLetter = asyncHandler(async (req, res) => {
     data: { userId, offerDate, letterText, generatedById: req.user.id },
   });
 
-  new ApiResponse(201, "Offer letter saved.", { offerLetter }).send(res);
+  const buffer = await renderPdfToBuffer(streamOfferLetterPdf, { offerLetter });
+  const { url } = await uploadToS3(
+    { buffer, originalname: `offer-letter-${employee.firstName}-${employee.lastName}.pdf`, mimetype: "application/pdf" },
+    "offer-letters"
+  );
+  // Every save is its own permanent version (see the comment above) - so
+  // unlike payslips, there's no previous version of THIS row's PDF to clean
+  // up here.
+  const updated = await prisma.offerLetter.update({ where: { id: offerLetter.id }, data: { pdfUrl: url } });
+
+  new ApiResponse(201, "Offer letter saved.", { offerLetter: updated }).send(res);
 });
 
 const listOfferLetters = asyncHandler(async (req, res) => {
@@ -43,6 +55,11 @@ const downloadOfferLetterPdf = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Offer letter not found.");
   }
 
+  if (offerLetter.pdfUrl) {
+    return res.redirect(offerLetter.pdfUrl);
+  }
+
+  // Legacy offer letter generated before PDFs were stored to S3 - render on demand.
   const employee = await prisma.user.findUnique({ where: { id: offerLetter.userId } });
 
   res.setHeader("Content-Type", "application/pdf");

@@ -169,12 +169,19 @@ model User {
 
     managerId Int?
 
+    // The single project this employee currently works on, set by admin (see
+    // Project.assignedEmployees) - drives what their timesheet submissions get
+    // logged against; they no longer pick it themselves.
+    assignedProjectId Int?
+
     isPasswordSet Boolean @default(false)
 
     isRegistrationAllowed Boolean @default(true)
 
     manager   User?  @relation("ManagerEmployees", fields: [managerId], references: [id])
     employees User[] @relation("ManagerEmployees")
+
+    assignedProject Project? @relation("AssignedProjectEmployees", fields: [assignedProjectId], references: [id])
 
     createdAt      DateTime       @default(now())
     updatedAt      DateTime       @updatedAt
@@ -227,6 +234,7 @@ model ExitRecord {
 
     exitDate            DateTime
     relievingLetterText String   @db.Text
+    pdfUrl              String?
 
     recordedById Int
 
@@ -283,6 +291,7 @@ model OfferLetter {
 
     offerDate  DateTime
     letterText String   @db.Text
+    pdfUrl     String?
 
     generatedById Int
 
@@ -414,6 +423,8 @@ model IncomeTaxComputationGeneration {
     tdsDeductedSoFar Float
     taxPayable       Float @default(0)
     taxRefundable    Float @default(0)
+
+    pdfUrl String?
 
     user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
     generatedBy User @relation("IncomeTaxComputationGenerationsGeneratedBy", fields: [generatedById], references: [id])
@@ -690,6 +701,8 @@ model Payslip {
     grossDeductions  Float
     netPay           Float
 
+    pdfUrl String?
+
     generatedById Int
 
     generatedAt DateTime @default(now())
@@ -906,4 +919,5 @@ model Project {
     createdBy User @relation(fields: [createdById], references: [id])
 
     timesheetSubmissions TimesheetSubmission[]
+    assignedEmployees    User[]                @relation("AssignedProjectEmployees")
 }

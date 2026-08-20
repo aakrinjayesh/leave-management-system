@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Modal from "../../components/common/Modal";
 import TextInput from "../../components/common/TextInput";
 import FormSelect from "../../components/common/FormSelect";
+import TimeOfDayField from "../../components/common/TimeOfDayField";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
+import ProjectMembersField from "./ProjectMembersField";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { PROJECT_TYPE_OPTIONS, TIMEZONE_OPTIONS, toEditableTimezoneValue } from "../../utils/projectOptions";
@@ -18,8 +20,24 @@ const toForm = (project) => ({
 
 export default function EditProjectModal({ project, onClose, onSuccess }) {
   const [form, setForm] = useState(toForm(project));
+  const [memberIds, setMemberIds] = useState((project.assignedEmployees || []).map((e) => e.id));
+  const [recentMembers, setRecentMembers] = useState([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Employees who logged time on this project before admin-set membership
+  // existed - shown as a hint next to the (already-correct) checklist below,
+  // so admin can spot anyone still worth formally adding.
+  useEffect(() => {
+    adminApi
+      .getProjectRecentMembers(project.id)
+      .then((data) => {
+        const alreadyMembers = new Set(memberIds);
+        setRecentMembers(data.members.filter((m) => !alreadyMembers.has(m.id)));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
 
   const handleChange = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
@@ -38,7 +56,7 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
 
     setIsSubmitting(true);
     try {
-      await adminApi.updateProject(project.id, { ...form, name: form.name.trim() });
+      await adminApi.updateProject(project.id, { ...form, name: form.name.trim(), employeeIds: memberIds });
       onSuccess();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save this project. Please try again."));
@@ -77,24 +95,28 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
         </datalist>
 
         <div className="form-two-col">
-          <TextInput
+          <TimeOfDayField
             label="Working hours start"
-            type="time"
             value={form.workStartTime}
-            onChange={handleChange("workStartTime")}
+            onChange={(value) => setForm((prev) => ({ ...prev, workStartTime: value }))}
           />
-          <TextInput
+          <TimeOfDayField
             label="Working hours end"
-            type="time"
             value={form.workEndTime}
-            onChange={handleChange("workEndTime")}
+            onChange={(value) => setForm((prev) => ({ ...prev, workEndTime: value }))}
           />
         </div>
 
         <p className="helper-text">
-          Employees will see this project type, timezone and working hours automatically once they select this
-          project on their timesheet.
+          Employees will see this project type, timezone and working hours automatically once admin assigns them here.
         </p>
+
+        <ProjectMembersField
+          selectedIds={memberIds}
+          onChange={setMemberIds}
+          recentHint={recentMembers}
+          projectId={project.id}
+        />
 
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>

@@ -7,6 +7,7 @@ const timesheetService = require("../services/timesheet.service");
 const { sendTimesheetDecisionEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { isS3Url } = require("../utils/s3.util");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const listTeamSubmissions = asyncHandler(async (req, res) => {
@@ -62,6 +63,11 @@ const getEmployeeTimesheetAttachment = asyncHandler(async (req, res) => {
     throw ApiError.notFound("No attachment found for this submission.");
   }
 
+  if (isS3Url(submission.attachmentStoredName)) {
+    return res.redirect(submission.attachmentStoredName);
+  }
+
+  // Legacy attachment uploaded before the S3 migration - still on local disk.
   const filePath = path.join(TIMESHEET_ATTACHMENT_DIR, path.basename(submission.attachmentStoredName));
   res.download(filePath, submission.attachmentOriginalName || submission.attachmentStoredName, (err) => {
     if (err && !res.headersSent) {

@@ -233,13 +233,21 @@ const projectDetailsSchema = {
   workEndTime: z.string().regex(TIME_OF_DAY_REGEX, "Please enter a valid end time."),
 };
 
+// Optional/omittable on create (a brand-new project can start with no
+// members), but on rename it's how membership edits are submitted - an
+// explicit [] means "remove everyone", omitting the field entirely means
+// "leave membership as-is" (see renameProject in project.service.js).
+const employeeIdsSchema = z.array(z.coerce.number().int().positive()).optional();
+
 const createProjectSchema = z.object({
   name: z.string().trim().min(1, "Please enter a project name.").max(120),
+  employeeIds: employeeIdsSchema,
   ...projectDetailsSchema,
 });
 
 const renameProjectSchema = z.object({
   name: z.string().trim().min(1, "Please enter a project name.").max(120),
+  employeeIds: employeeIdsSchema,
   ...projectDetailsSchema,
 });
 

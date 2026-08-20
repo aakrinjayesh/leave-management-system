@@ -1,14 +1,14 @@
-const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 const multer = require("multer");
 const ApiError = require("../utils/ApiError");
 
-// Local disk storage, same pattern as leave attachments - separate folder so
-// employee HR documents and leave attachments never mix.
+// New uploads go to S3 (see adminEmployeeDocs.controller.js), but documents
+// uploaded before the S3 migration are still sitting here - download
+// endpoints fall back to this directory for those legacy filenames.
 const EMPLOYEE_DOCUMENT_DIR = path.join(__dirname, "..", "..", "uploads", "employee-documents");
-fs.mkdirSync(EMPLOYEE_DOCUMENT_DIR, { recursive: true });
 
+// In-memory storage - the file's buffer is handed straight to S3, nothing
+// touches local disk for new uploads.
 const ALLOWED_MIME_TYPES = [
   "application/pdf",
   "image/jpeg",
@@ -18,13 +18,7 @@ const ALLOWED_MIME_TYPES = [
 ];
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, EMPLOYEE_DOCUMENT_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${crypto.randomUUID()}${ext}`);
-  },
-});
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {

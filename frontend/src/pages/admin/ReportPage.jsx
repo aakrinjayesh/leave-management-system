@@ -20,11 +20,13 @@ import StatCard from "../../components/common/StatCard";
 import StatusBadge from "../../components/common/StatusBadge";
 import FormSelect from "../../components/common/FormSelect";
 import TextInput from "../../components/common/TextInput";
+import TimeOfDayField from "../../components/common/TimeOfDayField";
 import Spinner from "../../components/common/Spinner";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import EditProjectModal from "./EditProjectModal";
 import ProjectHistoryModal from "./ProjectHistoryModal";
+import ProjectMembersField from "./ProjectMembersField";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
@@ -189,6 +191,7 @@ function ManageProjectsCard() {
   const [projects, setProjects] = useState(null);
   const [error, setError] = useState("");
   const [newProject, setNewProject] = useState(DEFAULT_NEW_PROJECT);
+  const [newProjectMemberIds, setNewProjectMemberIds] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [actioningId, setActioningId] = useState(null);
@@ -229,8 +232,9 @@ function ManageProjectsCard() {
     setError("");
     setIsAdding(true);
     try {
-      await adminApi.createProject({ ...newProject, name: newProject.name.trim() });
+      await adminApi.createProject({ ...newProject, name: newProject.name.trim(), employeeIds: newProjectMemberIds });
       setNewProject(DEFAULT_NEW_PROJECT);
+      setNewProjectMemberIds([]);
       await loadProjects();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't add this project."));
@@ -314,17 +318,15 @@ function ManageProjectsCard() {
                   onChange={handleNewProjectChange("timezone")}
                 />
                 <div className="form-two-col" style={{ margin: 0 }}>
-                  <TextInput
+                  <TimeOfDayField
                     label="Hours start"
-                    type="time"
                     value={newProject.workStartTime}
-                    onChange={handleNewProjectChange("workStartTime")}
+                    onChange={(value) => setNewProject((prev) => ({ ...prev, workStartTime: value }))}
                   />
-                  <TextInput
+                  <TimeOfDayField
                     label="Hours end"
-                    type="time"
                     value={newProject.workEndTime}
-                    onChange={handleNewProjectChange("workEndTime")}
+                    onChange={(value) => setNewProject((prev) => ({ ...prev, workEndTime: value }))}
                   />
                 </div>
               </div>
@@ -333,10 +335,19 @@ function ManageProjectsCard() {
                   <option key={o.value} value={o.label} />
                 ))}
               </datalist>
-              <Button type="submit" isLoading={isAdding}>
-                <Plus size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
-                Add project
-              </Button>
+
+              <ProjectMembersField
+                selectedIds={newProjectMemberIds}
+                onChange={setNewProjectMemberIds}
+                refreshKey={projects}
+              />
+
+              <div style={{ marginTop: 16 }}>
+                <Button type="submit" isLoading={isAdding}>
+                  <Plus size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
+                  Add project
+                </Button>
+              </div>
             </form>
           </>
         )}
@@ -360,6 +371,7 @@ function ManageProjectsCard() {
                   <th>Project name</th>
                   <th>Type</th>
                   <th>Working hours</th>
+                  <th>Members</th>
                   <th>Status</th>
                   <th></th>
                 </tr>
@@ -370,6 +382,7 @@ function ManageProjectsCard() {
                     <td className="table-cell-primary">{project.name}</td>
                     <td className="table-cell-secondary">{formatProjectType(project.projectType)}</td>
                     <td className="table-cell-secondary">{formatWorkingHours(project)}</td>
+                    <td className="table-cell-secondary">{project.assignedEmployees?.length ?? 0}</td>
                     <td>
                       <StatusBadge status={project.isActive ? "ACTIVE" : "INACTIVE"} />
                     </td>

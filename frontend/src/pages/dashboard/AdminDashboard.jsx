@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
-  Check,
   Clock,
   Download,
   Eye,
@@ -16,7 +15,6 @@ import {
   UserPlus,
   Users,
   UserCog,
-  X,
 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
@@ -84,34 +82,6 @@ export default function AdminDashboard() {
       loadUsers();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't reactivate this account."));
-    } finally {
-      setActioningId(null);
-    }
-  };
-
-  const isAwaitingApproval = (targetUser) => targetUser.status === "PENDING" && targetUser.isPasswordSet;
-
-  const handleApproveSignup = async (targetUser) => {
-    setError("");
-    setActioningId(targetUser.id);
-    try {
-      await adminApi.approveSignup(targetUser.id);
-      loadUsers();
-    } catch (err) {
-      setError(getErrorMessage(err, "Couldn't approve this account."));
-    } finally {
-      setActioningId(null);
-    }
-  };
-
-  const handleRejectSignup = async (targetUser) => {
-    setError("");
-    setActioningId(targetUser.id);
-    try {
-      await adminApi.rejectSignup(targetUser.id);
-      loadUsers();
-    } catch (err) {
-      setError(getErrorMessage(err, "Couldn't reject this account."));
     } finally {
       setActioningId(null);
     }
@@ -275,37 +245,11 @@ export default function AdminDashboard() {
                       <td className="table-cell-secondary">{user.email}</td>
                       <td className="table-cell-secondary">{managerNameById(user.managerId)}</td>
                       <td>
-                        {isAwaitingApproval(user) ? (
-                          <span className="status-badge status-badge-pending">Awaiting approval</span>
-                        ) : (
-                          <StatusBadge status={user.status} />
-                        )}
+                        <StatusBadge status={user.status} />
                       </td>
                       <td className="table-cell-secondary">{user.exitDate ? formatDate(user.exitDate) : "—"}</td>
                       <td>
                         <div className="row-actions">
-                          {isAwaitingApproval(user) && (
-                            <>
-                              <button
-                                type="button"
-                                className="row-action-btn approve"
-                                disabled={actioningId === user.id}
-                                onClick={() => handleApproveSignup(user)}
-                              >
-                                <Check size={14} />
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                className="row-action-btn reject"
-                                disabled={actioningId === user.id}
-                                onClick={() => handleRejectSignup(user)}
-                              >
-                                <X size={14} />
-                                Reject
-                              </button>
-                            </>
-                          )}
                           <button
                             type="button"
                             className="row-action-btn"

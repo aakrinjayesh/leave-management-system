@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { setAccessToken, setOnUnauthorized } from "../api/axiosClient";
 import * as authApi from "../api/auth.api";
 
@@ -35,8 +35,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   // On first load, try to silently restore a session from the httpOnly refresh cookie.
+  // Guarded with a ref (not just relying on the effect running "once") because
+  // refresh-token rotates the cookie on every call - React StrictMode's
+  // dev-mode double-invoke would otherwise fire it twice and the second,
+  // now-stale call would 401 and log the just-restored session back out.
+  const didInitRef = useRef(false);
+
   useEffect(() => {
     setOnUnauthorized(clearSession);
+
+    if (didInitRef.current) return;
+    didInitRef.current = true;
 
     (async () => {
       try {

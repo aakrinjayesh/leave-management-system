@@ -9,6 +9,7 @@ const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.serv
 const { sendResignationSubmittedEmail, sendResignationWithdrawnEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { isS3Url } = require("../utils/s3.util");
 const { EMPLOYEE_DOCUMENT_DIR } = require("../config/employeeDocumentUpload");
 
 // Self-service version of admin's downloadUserDocument (type "photo" only) -
@@ -21,6 +22,11 @@ const getMyPhoto = asyncHandler(async (req, res) => {
     throw ApiError.notFound("No photo uploaded yet.");
   }
 
+  if (isS3Url(user.photoUrl)) {
+    return res.redirect(user.photoUrl);
+  }
+
+  // Legacy photo uploaded before the S3 migration - still on local disk.
   const filePath = path.join(EMPLOYEE_DOCUMENT_DIR, path.basename(user.photoUrl));
   res.sendFile(filePath, (err) => {
     if (err && !res.headersSent) {
@@ -114,6 +120,11 @@ const downloadMyIncomeTaxComputationPdf = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Income tax computation not found.");
   }
 
+  if (generation.pdfUrl) {
+    return res.redirect(generation.pdfUrl);
+  }
+
+  // Legacy generation created before PDFs were stored to S3 - render on demand.
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",

@@ -43,8 +43,6 @@ router.post("/users", validate(createUserSchema), controller.createUser);
 router.patch("/users/:id/manager", validate(updateManagerSchema), controller.updateUserManager);
 router.patch("/users/:id/admin-access", validate(setAdminAccessSchema), controller.setAdminAccess);
 router.patch("/users/:id/reactivate", controller.reactivateUser);
-router.patch("/users/:id/approve-signup", controller.approveSignup);
-router.patch("/users/:id/reject-signup", controller.rejectSignup);
 router.post("/users/:id/exit", validate(recordExitSchema), exitController.recordExit);
 router.get("/users/:id/exit-records", exitController.listExitRecords);
 router.get("/exit-records/:id/pdf", exitController.downloadRelievingLetterPdf);
@@ -67,6 +65,7 @@ router.get("/reports/timesheet-submissions", reportController.getWeekTimesheetSu
 router.get("/projects", reportController.listProjects);
 router.post("/projects", validate(createProjectSchema), reportController.createProject);
 router.patch("/projects/:id", validate(renameProjectSchema), reportController.renameProject);
+router.get("/projects/:id/recent-members", reportController.getProjectRecentMembers);
 router.patch("/projects/:id/deactivate", reportController.deactivateProject);
 router.patch("/projects/:id/reactivate", reportController.reactivateProject);
 router.get("/users/:id/leaves", controller.getUserLeaveDetail);

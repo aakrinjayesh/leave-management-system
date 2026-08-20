@@ -1,27 +1,21 @@
-const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 const multer = require("multer");
 const ApiError = require("../utils/ApiError");
 
-// Local disk storage, same pattern as leave attachments / employee documents
-// - separate folder so timesheet Excel sheets never mix with those uploads.
+// New uploads go to S3 (see uploadAttachment in employeeTimesheet.controller.js),
+// but attachments uploaded before the S3 migration are still sitting here -
+// download endpoints fall back to this directory for those legacy filenames.
 const TIMESHEET_ATTACHMENT_DIR = path.join(__dirname, "..", "..", "uploads", "timesheet-attachments");
-fs.mkdirSync(TIMESHEET_ATTACHMENT_DIR, { recursive: true });
 
+// In-memory storage - the file's buffer is handed straight to S3, nothing
+// touches local disk for new uploads.
 const ALLOWED_MIME_TYPES = [
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, TIMESHEET_ATTACHMENT_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${crypto.randomUUID()}${ext}`);
-  },
-});
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {

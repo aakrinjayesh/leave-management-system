@@ -9,6 +9,7 @@ const companySettingsService = require("../services/companySettings.service");
 const { sendLeaveDecisionEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { isS3Url } = require("../utils/s3.util");
 const { UPLOAD_DIR } = require("../config/upload");
 
 const startOfUtcDay = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -303,6 +304,11 @@ const getTeamLeaveRequestAttachment = asyncHandler(async (req, res) => {
     throw ApiError.notFound("No attachment found for this request.");
   }
 
+  if (isS3Url(leaveRequest.attachmentUrl)) {
+    return res.redirect(leaveRequest.attachmentUrl);
+  }
+
+  // Legacy attachment uploaded before the S3 migration - still on local disk.
   const filePath = path.join(UPLOAD_DIR, path.basename(leaveRequest.attachmentUrl));
   res.sendFile(filePath, (err) => {
     if (err && !res.headersSent) {

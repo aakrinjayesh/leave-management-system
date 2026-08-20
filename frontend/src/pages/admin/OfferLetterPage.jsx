@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download, Eye, ListChecks, Trash2 } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { Download, Eye, ListChecks, Trash2 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextArea from "../../components/common/TextArea";
 import Button from "../../components/common/Button";
@@ -24,7 +24,6 @@ const EMPTY_FIGURES = { offerDate: todayDateInputValue() };
 
 export default function OfferLetterPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [employee, setEmployee] = useState(null);
   const [offerLetters, setOfferLetters] = useState(null);
   const [figures] = useState(EMPTY_FIGURES);
@@ -138,16 +137,6 @@ export default function OfferLetterPage() {
 
   return (
     <DashboardLayout title="Offer Letter">
-      <button
-        type="button"
-        className="link-btn"
-        style={{ marginBottom: 16 }}
-        onClick={() => navigate(`/admin/users/${id}/details`)}
-      >
-        <ArrowLeft size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-        Back to employee
-      </button>
-
       <div className="page-header">
         <div>
           <h1>

@@ -43,17 +43,9 @@ export default function MyTimesheetPage() {
   const [attachment, setAttachment] = useState(null);
   const [attachmentError, setAttachmentError] = useState("");
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
-  const [projectId, setProjectId] = useState("");
-  const [projects, setProjects] = useState([]);
   const [downloadingId, setDownloadingId] = useState(null);
 
-  // preserveProjectId skips re-deriving the Project dropdown from the
-  // server's "sticky" default - used when reloading after saving/deleting an
-  // entry within the same week, so it doesn't stomp over a project the
-  // employee already picked but hasn't submitted yet. Switching weeks (or
-  // the initial load) still wants the sticky default, so that path leaves
-  // this false.
-  const loadWeek = (param, { preserveProjectId = false } = {}) =>
+  const loadWeek = (param) =>
     timesheetApi.getMyEntries(param || undefined).then((res) => {
       setData(res);
       // Rebuild each row's editable state from the loaded entries - one row
@@ -72,14 +64,6 @@ export default function MyTimesheetPage() {
         };
       });
       setRowState(nextRowState);
-      if (!preserveProjectId) {
-        // Sticky default: pre-fill from this week's own submission if it has
-        // one already (e.g. a rejected week being edited again), otherwise
-        // fall back to whatever the employee picked most recently. Project
-        // type/timezone/hours are no longer picked here - they're read off
-        // whichever project this resolves to.
-        setProjectId(res.submission?.projectId ?? res.lastProjectId ?? "");
-      }
     });
   const loadSubmissions = () => timesheetApi.getMySubmissions().then((res) => setSubmissions(res.submissions));
 
@@ -89,10 +73,6 @@ export default function MyTimesheetPage() {
     setAttachmentError("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekParam]);
-
-  useEffect(() => {
-    timesheetApi.listProjects().then((res) => setProjects(res.projects));
-  }, []);
 
   const handleAttachmentChange = async (e) => {
     const file = e.target.files[0];
@@ -181,10 +161,10 @@ export default function MyTimesheetPage() {
         )
       );
       setSuccessMessage("Week saved.");
-      await loadWeek(weekParam, { preserveProjectId: true });
+      await loadWeek(weekParam);
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save the week. Please try again."));
-      await loadWeek(weekParam, { preserveProjectId: true });
+      await loadWeek(weekParam);
     } finally {
       setSavingDate(null);
     }
@@ -198,7 +178,7 @@ export default function MyTimesheetPage() {
     setSavingDate(dateKey);
     try {
       await timesheetApi.deleteEntry(row.id);
-      await loadWeek(weekParam, { preserveProjectId: true });
+      await loadWeek(weekParam);
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't delete this entry."));
     } finally {
@@ -214,8 +194,8 @@ export default function MyTimesheetPage() {
       setError("Please upload this week's Excel sheet before submitting.");
       return;
     }
-    if (!projectId) {
-      setError("Please select a project before submitting.");
+    if (!data.assignedProject) {
+      setError("You haven't been assigned a project yet. Please contact your admin.");
       return;
     }
 
@@ -224,8 +204,7 @@ export default function MyTimesheetPage() {
       await timesheetApi.submitWeek(
         toDateInputValue(data.weekStartDate),
         attachment.attachmentOriginalName,
-        attachment.attachmentStoredName,
-        projectId
+        attachment.attachmentStoredName
       );
       setSuccessMessage("Timesheet submitted for approval.");
       setAttachment(null);
@@ -237,8 +216,6 @@ export default function MyTimesheetPage() {
       setSavingDate(null);
     }
   };
-
-  const selectedProject = projects.find((project) => String(project.id) === String(projectId));
 
   return (
     <DashboardLayout title="My Timesheet">
@@ -294,28 +271,29 @@ export default function MyTimesheetPage() {
               {(!data.submission || data.submission.status === "REJECTED") && (
                 <div className="form-three-col" style={{ marginBottom: 20 }}>
                   <div className="field">
-                    <label className="field-label">Project Name</label>
-                    <FormSelect value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                      <option value="">Select…</option>
-                      {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.name}
-                        </option>
-                      ))}
-                    </FormSelect>
+                    <label className="field-label">Project</label>
+                    {data.assignedProject ? (
+                      <p className="helper-text" style={{ marginTop: 8 }}>
+                        {data.assignedProject.name}
+                      </p>
+                    ) : (
+                      <p className="helper-text" style={{ marginTop: 8 }}>
+                        You haven't been assigned a project yet - contact your admin.
+                      </p>
+                    )}
                   </div>
 
                   <div className="field">
                     <label className="field-label">Project details</label>
-                    {selectedProject ? (
+                    {data.assignedProject ? (
                       <p className="helper-text" style={{ marginTop: 8 }}>
-                        {formatProjectType(selectedProject.projectType)}
+                        {formatProjectType(data.assignedProject.projectType)}
                         <br />
-                        {formatWorkingHours(selectedProject)}
+                        {formatWorkingHours(data.assignedProject)}
                       </p>
                     ) : (
                       <p className="helper-text" style={{ marginTop: 8 }}>
-                        Select a project to see its type, timezone and working hours.
+                        —
                       </p>
                     )}
                   </div>

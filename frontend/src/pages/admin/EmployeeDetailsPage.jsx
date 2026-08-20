@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextInput from "../../components/common/TextInput";
 import FormSelect from "../../components/common/FormSelect";
@@ -284,11 +284,6 @@ function EmployeeDetailsContent({ id }) {
 
   return (
     <DashboardLayout title="Employee Details">
-      <button type="button" className="link-btn" style={{ marginBottom: 16 }} onClick={() => navigate("/admin/dashboard")}>
-        <ArrowLeft size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-        Back to accounts
-      </button>
-
       <div className="page-header">
         <div>
           <h1>

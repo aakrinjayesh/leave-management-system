@@ -5,8 +5,6 @@ const unwrap = (promise) => promise.then((res) => res.data.data);
 export const getMyEntries = (weekStart) =>
   unwrap(axiosClient.get("/employee/timesheet/entries", { params: weekStart ? { weekStart } : {} }));
 
-export const listProjects = () => unwrap(axiosClient.get("/employee/timesheet/projects"));
-
 // One entry per day - creates it if it doesn't exist yet, updates it in
 // place if it does.
 export const saveEntry = (payload) => unwrap(axiosClient.post("/employee/timesheet/entries", payload));
@@ -19,13 +17,12 @@ export const uploadAttachment = (file) => {
   return unwrap(axiosClient.post("/employee/timesheet/attachment", formData));
 };
 
-export const submitWeek = (weekStartDate, attachmentOriginalName, attachmentStoredName, projectId) =>
+export const submitWeek = (weekStartDate, attachmentOriginalName, attachmentStoredName) =>
   unwrap(
     axiosClient.post("/employee/timesheet/submissions", {
       weekStartDate,
       attachmentOriginalName,
       attachmentStoredName,
-      projectId,
     })
   );
 

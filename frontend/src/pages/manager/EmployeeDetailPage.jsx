@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarPlus, Clock, ListChecks, Paperclip } from "lucide-react";
+import { CalendarPlus, Clock, ListChecks, Paperclip } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatusBadge from "../../components/common/StatusBadge";
 import Spinner from "../../components/common/Spinner";
@@ -64,11 +64,6 @@ function EmployeeDetailContent({ id }) {
 
   return (
     <DashboardLayout title="Employee">
-      <button type="button" className="link-btn" style={{ marginBottom: 16 }} onClick={() => navigate("/manager/employees")}>
-        <ArrowLeft size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-        Back to employees
-      </button>
-
       <div className="page-header">
         <div>
           <h1>

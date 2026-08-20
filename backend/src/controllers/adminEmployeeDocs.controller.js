@@ -1,10 +1,20 @@
-const fs = require("fs");
 const path = require("path");
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
+const { uploadToS3, deleteFromS3, isS3Url } = require("../utils/s3.util");
 const { EMPLOYEE_DOCUMENT_DIR } = require("../config/employeeDocumentUpload");
+
+// Legacy document uploaded before the S3 migration - still on local disk.
+const sendLegacyDocument = (res, filename) => {
+  const filePath = path.join(EMPLOYEE_DOCUMENT_DIR, path.basename(filename));
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ success: false, message: "Document file not found." });
+    }
+  });
+};
 
 const DOCUMENT_FIELD_BY_TYPE = {
   pan: "panDocumentUrl",
@@ -14,12 +24,15 @@ const DOCUMENT_FIELD_BY_TYPE = {
   document: "documentUrl",
 };
 
-const documentPath = (filename) => path.join(EMPLOYEE_DOCUMENT_DIR, path.basename(filename));
-
-// Best-effort delete - a missing/already-gone file shouldn't fail the request.
-const removeFileQuietly = (filename) => {
-  if (!filename) return;
-  fs.unlink(documentPath(filename), () => {});
+// Separate S3 subfolder per document type, rather than dumping every PAN,
+// Aadhaar, bank doc, and photo into one shared "employee-documents" folder -
+// keeps the bucket browsable instead of one long mixed list.
+const DOCUMENT_FOLDER_BY_TYPE = {
+  pan: "employee-documents/pan",
+  aadhar: "employee-documents/aadhar",
+  bank: "employee-documents/bank",
+  photo: "employee-documents/profile",
+  document: "employee-documents/documents",
 };
 
 // ---------- Fixed document slots (PAN / Aadhaar / Bank / Photo) ----------
@@ -39,8 +52,9 @@ const uploadUserDocument = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Account not found.");
   }
 
-  removeFileQuietly(user[field]);
-  const updated = await prisma.user.update({ where: { id }, data: { [field]: req.file.filename } });
+  const { url } = await uploadToS3(req.file, DOCUMENT_FOLDER_BY_TYPE[req.params.type]);
+  await deleteFromS3(user[field]);
+  const updated = await prisma.user.update({ where: { id }, data: { [field]: url } });
 
   new ApiResponse(200, "Document uploaded.", { [field]: updated[field] }).send(res);
 });
@@ -57,7 +71,7 @@ const deleteUserDocument = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Account not found.");
   }
 
-  removeFileQuietly(user[field]);
+  await deleteFromS3(user[field]);
   await prisma.user.update({ where: { id }, data: { [field]: null } });
 
   new ApiResponse(200, "Document removed.").send(res);
@@ -75,11 +89,11 @@ const downloadUserDocument = asyncHandler(async (req, res) => {
     throw ApiError.notFound("No document uploaded for this type.");
   }
 
-  res.sendFile(documentPath(user[field]), (err) => {
-    if (err && !res.headersSent) {
-      res.status(404).json({ success: false, message: "Document file not found." });
-    }
-  });
+  if (isS3Url(user[field])) {
+    return res.redirect(user[field]);
+  }
+
+  sendLegacyDocument(res, user[field]);
 });
 
 // ---------- Custom fields (repeatable, admin-defined) ----------
@@ -97,12 +111,14 @@ const createCustomField = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Account not found.");
   }
 
+  const documentUrl = req.file ? (await uploadToS3(req.file, "employee-documents/custom-fields")).url : null;
+
   const customField = await prisma.employeeCustomField.create({
     data: {
       userId,
       label: req.body.label,
       value: req.body.value || null,
-      documentUrl: req.file ? req.file.filename : null,
+      documentUrl,
     },
   });
 
@@ -118,8 +134,9 @@ const updateCustomField = asyncHandler(async (req, res) => {
 
   const data = { label: req.body.label, value: req.body.value || null };
   if (req.file) {
-    removeFileQuietly(existing.documentUrl);
-    data.documentUrl = req.file.filename;
+    const { url } = await uploadToS3(req.file, "employee-documents/custom-fields");
+    await deleteFromS3(existing.documentUrl);
+    data.documentUrl = url;
   }
 
   const customField = await prisma.employeeCustomField.update({ where: { id: fieldId }, data });
@@ -133,7 +150,7 @@ const deleteCustomField = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Field not found.");
   }
 
-  removeFileQuietly(existing.documentUrl);
+  await deleteFromS3(existing.documentUrl);
   await prisma.employeeCustomField.delete({ where: { id: fieldId } });
 
   new ApiResponse(200, "Field removed.").send(res);
@@ -146,11 +163,11 @@ const downloadCustomFieldDocument = asyncHandler(async (req, res) => {
     throw ApiError.notFound("No document uploaded for this field.");
   }
 
-  res.sendFile(documentPath(field.documentUrl), (err) => {
-    if (err && !res.headersSent) {
-      res.status(404).json({ success: false, message: "Document file not found." });
-    }
-  });
+  if (isS3Url(field.documentUrl)) {
+    return res.redirect(field.documentUrl);
+  }
+
+  sendLegacyDocument(res, field.documentUrl);
 });
 
 module.exports = {

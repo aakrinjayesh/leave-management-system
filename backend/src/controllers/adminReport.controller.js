@@ -74,7 +74,12 @@ const toProjectDetails = ({ projectType, timezone, workStartTime, workEndTime })
 });
 
 const createProject = asyncHandler(async (req, res) => {
-  const project = await projectService.createProject(req.body.name, req.user.id, toProjectDetails(req.body));
+  const project = await projectService.createProject(
+    req.body.name,
+    req.user.id,
+    toProjectDetails(req.body),
+    req.body.employeeIds
+  );
 
   new ApiResponse(201, "Project added.", { project }).send(res);
 
@@ -83,11 +88,21 @@ const createProject = asyncHandler(async (req, res) => {
 
 const renameProject = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const project = await projectService.renameProject(id, req.body.name, toProjectDetails(req.body));
+  const project = await projectService.renameProject(id, req.body.name, toProjectDetails(req.body), req.body.employeeIds);
 
   new ApiResponse(200, "Project updated.", { project }).send(res);
 
   await notifyAllOfProjectChange(`Project "${project.name}" has been updated.`);
+});
+
+// Every employee who has logged time against this project before admin-set
+// membership existed - shown as a hint in the Edit Project modal so admin
+// can decide whether to formally add them (see timesheetService.getRecentProjectMembers).
+const getProjectRecentMembers = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const members = await timesheetService.getRecentProjectMembers(id);
+
+  new ApiResponse(200, "OK", { members }).send(res);
 });
 
 const deactivateProject = asyncHandler(async (req, res) => {
@@ -111,6 +126,7 @@ const reactivateProject = asyncHandler(async (req, res) => {
 module.exports = {
   getProjectAssignmentReport,
   getProjectHistory,
+  getProjectRecentMembers,
   getWeekTimesheetSubmissions,
   listProjects,
   createProject,
