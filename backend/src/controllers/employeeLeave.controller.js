@@ -127,10 +127,14 @@ const applyLeave = asyncHandler(async (req, res) => {
     throw ApiError.badRequest("Future-dated leave requests aren't allowed.");
   }
 
+  // Sandwich rule (weekend between two leave-covered working days in the
+  // same request also gets charged) only applies to Casual Leave.
+  const applySandwichRule = leavePolicy.leaveName === "Casual Leave";
   const { totalDays, workingDates } = await leaveCalendarService.computeWorkingDays({
     startDate: requestStart,
     endDate: requestEnd,
     isHalfDay,
+    applySandwichRule,
   });
 
   // Attachment override: once a request is longer than attachmentRequiredAboveDays,
@@ -239,6 +243,7 @@ const applyLeave = asyncHandler(async (req, res) => {
         startDate: spec.startDate,
         endDate: spec.endDate,
         totalDays: spec.totalDays,
+        weekendsCountAsLeave: applySandwichRule,
         reason,
         status: "PENDING",
         attachmentUrl: attachmentUrl || null,

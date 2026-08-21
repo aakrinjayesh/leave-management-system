@@ -38,7 +38,15 @@ const isWeekendDate = (date, weekendPolicies) => {
 // Computes how many working days a leave request spans, excluding weekends
 // (per WeekendPolicy) and company holidays. Throws if the range contains no
 // working days at all (e.g. a request that's entirely a weekend/holiday).
-const computeWorkingDays = async ({ startDate, endDate, isHalfDay }) => {
+//
+// applySandwichRule (Casual Leave only - see the caller) additionally charges
+// a weekend date if it's "sandwiched": there's a real working day earlier in
+// this SAME request and another real working day later in it, i.e. the
+// employee's leave resumes on the other side of the weekend rather than just
+// ending at it. Scoped to one continuous request only - it never looks at
+// any other leave request. Holidays are never swept in this way even when
+// sandwiched, since they're a company-wide day off regardless of leave.
+const computeWorkingDays = async ({ startDate, endDate, isHalfDay, applySandwichRule = false }) => {
   if (isHalfDay && startDate.getTime() !== endDate.getTime()) {
     throw ApiError.badRequest("Half-day leave must have the same start and end date.");
   }
@@ -49,12 +57,23 @@ const computeWorkingDays = async ({ startDate, endDate, isHalfDay }) => {
   ]);
   const holidayDates = new Set(holidays.map((h) => toDateKey(h.holidayDate)));
 
-  const workingDates = [];
-  for (const date of eachDate(startDate, endDate)) {
-    if (isWeekendDate(date, weekendPolicies)) continue;
-    if (holidayDates.has(toDateKey(date))) continue;
-    workingDates.push(date);
-  }
+  const allDates = [...eachDate(startDate, endDate)];
+  const isHoliday = (date) => holidayDates.has(toDateKey(date));
+  const isWeekend = (date) => isWeekendDate(date, weekendPolicies);
+  const isRealWorkingDay = (date) => !isWeekend(date) && !isHoliday(date);
+
+  const isSandwichedWeekend = (index) => {
+    if (!applySandwichRule || isHoliday(allDates[index]) || !isWeekend(allDates[index])) return false;
+    const hasWorkingDayBefore = allDates.slice(0, index).some(isRealWorkingDay);
+    const hasWorkingDayAfter = allDates.slice(index + 1).some(isRealWorkingDay);
+    return hasWorkingDayBefore && hasWorkingDayAfter;
+  };
+
+  const workingDates = allDates.filter((date, index) => {
+    if (isHoliday(date)) return false;
+    if (isWeekend(date)) return isSandwichedWeekend(index);
+    return true;
+  });
 
   if (workingDates.length === 0) {
     throw ApiError.badRequest("The selected dates fall entirely on weekends or holidays.");

@@ -82,12 +82,16 @@ const toDateKey = (date) => date.toISOString().slice(0, 10);
 
 // Counts working days (excluding weekends/holidays) that an approved
 // Loss-of-Pay request actually spends inside the target month, clipping the
-// request's date range to the month's bounds first.
+// request's date range to the month's bounds first. A request created under
+// the sandwich rule (weekendsCountAsLeave - see leaveCalendar.service.js and
+// applyLeave) still has its weekends counted here too - holidays are always
+// excluded regardless, since the sandwich rule never sweeps those in.
 const countLopDaysInMonth = async (lopRequests, year, month) => {
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEnd = new Date(Date.UTC(year, month, 0));
   const { weekendDates, holidays } = await leaveCalendarService.getMonthCalendarData(year, month);
-  const excludedDates = new Set([...weekendDates, ...holidays.map((h) => h.date)]);
+  const weekendDateSet = new Set(weekendDates);
+  const holidayDateSet = new Set(holidays.map((h) => h.date));
 
   let total = 0;
   for (const request of lopRequests) {
@@ -98,7 +102,8 @@ const countLopDaysInMonth = async (lopRequests, year, month) => {
     const cursor = new Date(start);
     while (cursor <= end) {
       const key = toDateKey(cursor);
-      if (!excludedDates.has(key)) {
+      const isExcluded = holidayDateSet.has(key) || (!request.weekendsCountAsLeave && weekendDateSet.has(key));
+      if (!isExcluded) {
         total += isHalfDay ? 0.5 : 1;
       }
       cursor.setUTCDate(cursor.getUTCDate() + 1);

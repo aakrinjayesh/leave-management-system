@@ -149,10 +149,14 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
   const requestStart = startOfUtcDay(startDate);
   const requestEnd = startOfUtcDay(endDate);
 
+  // Sandwich rule (weekend between two leave-covered working days in the
+  // same request also gets charged) only applies to Casual Leave.
+  const applySandwichRule = leavePolicy.leaveName === "Casual Leave";
   const { totalDays, workingDates } = await leaveCalendarService.computeWorkingDays({
     startDate: requestStart,
     endDate: requestEnd,
     isHalfDay,
+    applySandwichRule,
   });
 
   const overlapping = await prisma.leaveRequest.findFirst({
@@ -220,6 +224,7 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
         startDate: spec.startDate,
         endDate: spec.endDate,
         totalDays: spec.totalDays,
+        weekendsCountAsLeave: applySandwichRule,
         reason,
         status: "APPROVED",
         approvedAt: new Date(),

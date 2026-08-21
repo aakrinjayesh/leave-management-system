@@ -602,6 +602,14 @@ model LeaveRequest {
 
     totalDays Float
 
+    // True only for a request created under the sandwich rule (Casual Leave
+    // spanning a weekend between two leave-covered working days) - payroll's
+    // LOP day count reads this instead of blindly excluding every weekend,
+    // since a plain re-walk of the date range can't tell a sandwiched
+    // weekend apart from a normal one once this is a standalone row (see
+    // payroll.service.js's countLopDaysInMonth).
+    weekendsCountAsLeave Boolean @default(false)
+
     reason String
 
     status LeaveStatus @default(PENDING)
