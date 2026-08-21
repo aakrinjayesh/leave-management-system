@@ -49,6 +49,7 @@ const getWeekTimesheetSubmissions = asyncHandler(async (req, res) => {
       select: {
         id: true,
         userId: true,
+        projectId: true,
         status: true,
         attachmentOriginalName: true,
         attachmentStoredName: true,

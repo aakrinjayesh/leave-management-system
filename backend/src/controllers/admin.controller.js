@@ -6,6 +6,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { USER_STATUS, USER_TYPE } = require("../utils/constants");
 const userManagerService = require("../services/userManager.service");
 const timesheetService = require("../services/timesheet.service");
+const projectService = require("../services/project.service");
 const companySettingsService = require("../services/companySettings.service");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
@@ -26,7 +27,6 @@ const toSafeUser = (user) => ({
   isPasswordSet: user.isPasswordSet,
   createdAt: user.createdAt,
   managerId: user.managerId,
-  assignedProjectId: user.assignedProjectId,
   salaryCtc: user.salaryCtc,
   hasDocument: Boolean(user.documentUrl),
 });
@@ -184,14 +184,25 @@ const getUserTimesheet = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Account not found.");
   }
 
+  // An employee assigned to several projects has a separate timesheet per
+  // project - default to whichever one was requested, or their first
+  // project if none was specified (e.g. following a plain "Timesheet" link
+  // rather than a specific project row).
+  const projects = await projectService.listProjectsForEmployee(employeeId);
+  const requestedProjectId = req.query.projectId ? Number(req.query.projectId) : null;
+  const projectId =
+    requestedProjectId && projects.some((p) => p.id === requestedProjectId) ? requestedProjectId : projects[0]?.id ?? null;
+
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
   const [entries, submissions] = await Promise.all([
-    timesheetService.getSubmittedEntriesInRange(employeeId, start, end),
-    timesheetService.getSubmissionsOverlappingRange(employeeId, start, end),
+    timesheetService.getSubmittedEntriesInRange(employeeId, start, end, projectId),
+    timesheetService.getSubmissionsOverlappingRange(employeeId, start, end, projectId),
   ]);
 
   new ApiResponse(200, "OK", {
     employee: { id: employee.id, firstName: employee.firstName, lastName: employee.lastName, email: employee.email },
+    projects,
+    projectId,
     view,
     rangeStart: start,
     rangeEnd: end,
@@ -418,8 +429,9 @@ const exportUserTimesheet = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Account not found.");
   }
 
+  const projectId = req.query.projectId ? Number(req.query.projectId) : null;
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
-  const entries = await timesheetService.getSubmittedEntriesInRange(employeeId, start, end);
+  const entries = await timesheetService.getSubmittedEntriesInRange(employeeId, start, end, projectId);
   const { csv, filename } = timesheetService.buildEmployeeTimesheetCsv({
     employee,
     view,

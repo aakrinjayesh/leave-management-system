@@ -42,13 +42,17 @@ const getViewRange = (view, anchorDate) => {
 };
 
 // Submitted (locked) entries only - draft/in-progress entries aren't visible
-// to a manager or admin until the employee submits the week.
-const getSubmittedEntriesInRange = (userId, start, end) =>
+// to a manager or admin until the employee submits the week. Scoped to one
+// project when given - an employee assigned to several projects has a
+// separate, independent set of entries for each, so viewing "their
+// timesheet" always means one specific project's, never all of them merged.
+const getSubmittedEntriesInRange = (userId, start, end, projectId) =>
   prisma.timesheetEntry.findMany({
     where: {
       userId,
       timesheetSubmissionId: { not: null },
       date: { gte: start, lte: end },
+      ...(projectId ? { projectId } : {}),
     },
     orderBy: { date: "asc" },
   });
@@ -57,10 +61,16 @@ const sumHours = (entries) => entries.reduce((sum, entry) => sum + entry.hoursWo
 
 // Submissions (weekly bundles) whose week overlaps the viewed [start, end]
 // range at all - used to surface each week's uploaded attachment alongside
-// the day/week/month entries breakdown.
-const getSubmissionsOverlappingRange = (userId, start, end) =>
+// the day/week/month entries breakdown. Scoped to one project when given,
+// same reasoning as getSubmittedEntriesInRange above.
+const getSubmissionsOverlappingRange = (userId, start, end, projectId) =>
   prisma.timesheetSubmission.findMany({
-    where: { userId, weekStartDate: { lte: end }, weekEndDate: { gte: start } },
+    where: {
+      userId,
+      weekStartDate: { lte: end },
+      weekEndDate: { gte: start },
+      ...(projectId ? { projectId } : {}),
+    },
     select: {
       id: true,
       weekStartDate: true,
@@ -155,24 +165,30 @@ const buildProjectStints = (submissions) => {
   return stints.reverse();
 };
 
-// Census for the admin Report tab: every active Employee/Manager, split by
-// their current project. Prefers actual timesheet submission history (has a
-// real "since" date); falls back to whatever admin has them assigned to
-// (Project.assignedEmployees) for anyone who hasn't submitted a timesheet
-// under it yet, so a fresh assignment shows up here immediately instead of
-// only once they submit their first week. Still falls into notAssigned if
-// neither exists.
+// Census for the admin Report tab: every active Employee/Manager, one row
+// per project they're actually assigned to (an employee on 2 projects shows
+// up twice, once per project) - "Since" is the real ProjectMembership.assignedAt
+// date. Anyone with no formal membership yet falls back to timesheet
+// submission history as a hint (same purpose as before this was
+// admin-assignable), and falls into notAssigned if neither exists.
 const getProjectAssignmentReport = async () => {
   const users = await prisma.user.findMany({
     where: { status: "ACTIVE", userType: { in: ["EMPLOYEE", "MANAGER"] } },
     orderBy: { firstName: "asc" },
-    include: { assignedProject: { select: { name: true, projectType: true } } },
+    include: {
+      projectMemberships: {
+        include: { project: { select: { id: true, name: true, projectType: true } } },
+        orderBy: { assignedAt: "desc" },
+      },
+    },
   });
 
-  // Full history (not just the latest row) so the current project's start
+  const usersWithoutMembership = users.filter((u) => u.projectMemberships.length === 0);
+
+  // Full history (not just the latest row) so a fallback project's start
   // date can be derived from where its run of consecutive weeks began.
   const allSubmissions = await prisma.timesheetSubmission.findMany({
-    where: { userId: { in: users.map((u) => u.id) }, projectAssigned: { not: null } },
+    where: { userId: { in: usersWithoutMembership.map((u) => u.id) }, projectAssigned: { not: null } },
     orderBy: { weekStartDate: "asc" },
     select: {
       userId: true,
@@ -190,32 +206,45 @@ const getProjectAssignmentReport = async () => {
     submissionsByUserId.get(submission.userId).push(submission);
   }
 
-  const toReportEntry = (user) => {
+  const assigned = [];
+  const notAssigned = [];
+
+  for (const user of users) {
+    const baseEntry = {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      employeeCode: user.employeeCode,
+      email: user.email,
+      managerId: user.managerId,
+    };
+
+    if (user.projectMemberships.length > 0) {
+      for (const membership of user.projectMemberships) {
+        const entry = {
+          ...baseEntry,
+          projectId: membership.project.id,
+          projectName: membership.project.name,
+          projectSince: membership.assignedAt,
+        };
+        (membership.project.projectType === "ASSIGNED" ? assigned : notAssigned).push(entry);
+      }
+      continue;
+    }
+
+    // No formal membership - fall back to timesheet history as a hint.
     const submissions = submissionsByUserId.get(user.id) ?? [];
     const [current] = buildProjectStints(submissions);
     const latestSubmission = submissions[submissions.length - 1];
-    return {
-      entry: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        employeeCode: user.employeeCode,
-        email: user.email,
-        managerId: user.managerId,
-        projectName: current?.projectName ?? user.assignedProject?.name ?? null,
-        // Only ever a real date once they've actually submitted a week under
-        // it - an admin assignment with no submissions yet has no "since".
-        projectSince: current?.startDate ?? null,
-      },
-      projectAssigned: latestSubmission?.projectAssigned ?? user.assignedProject?.projectType ?? null,
+    const entry = {
+      ...baseEntry,
+      projectId: current?.projectId ?? null,
+      projectName: current?.projectName ?? null,
+      // Only ever a real date once they've actually submitted a week under
+      // it - no membership and no submissions yet means there's no "since".
+      projectSince: current?.startDate ?? null,
     };
-  };
-
-  const assigned = [];
-  const notAssigned = [];
-  for (const user of users) {
-    const { entry, projectAssigned } = toReportEntry(user);
-    (projectAssigned === "ASSIGNED" ? assigned : notAssigned).push(entry);
+    (latestSubmission?.projectAssigned === "ASSIGNED" ? assigned : notAssigned).push(entry);
   }
 
   return {
@@ -288,11 +317,19 @@ const getApprovedLeaveDaysInWeek = async (userId, weekStartDate, weekEndDate, we
   return total;
 };
 
-// Per-employee weekly workload for the admin Report screen: how many days
-// this week were even working days (weekends aside), how many of those were
-// eaten by a mandatory holiday or the employee's own approved leave, and
-// what that leaves as actually billable - same breakdown in hours, using
-// whichever project's working hours applied that week.
+// Weekly workload for the admin Report screen, split into two pieces since
+// an employee can now be on several projects at once:
+//  - byUserId: how many days this week were even working days (weekends
+//    aside), how many were eaten by a mandatory holiday or the employee's
+//    own approved leave, and what that leaves as billable - genuinely
+//    per-employee facts (a leave day is a leave day regardless of which
+//    project row is being looked at), so every project row for the same
+//    employee shares the same figures here.
+//  - byUserProject: the hours actually submitted that week, and the
+//    working-hours-per-day used to compute them - both come from a specific
+//    project's own submission, so an employee with 2 projects (and 2
+//    separate submissions, possibly with different working hours) gets a
+//    separate entry per (user, project) pair here instead of one shared number.
 const getWeeklyWorkloadReport = async (weekStartDate, weekEndDate) => {
   const [users, weekendPolicies, holidays, submissions] = await Promise.all([
     prisma.user.findMany({
@@ -305,6 +342,7 @@ const getWeeklyWorkloadReport = async (weekStartDate, weekEndDate) => {
       where: { weekStartDate },
       select: {
         userId: true,
+        projectId: true,
         totalHours: true,
         project: { select: { workStartTime: true, workEndTime: true } },
       },
@@ -328,11 +366,8 @@ const getWeeklyWorkloadReport = async (weekStartDate, weekEndDate) => {
     if (mandatoryHolidayDateKeys.has(leaveCalendarService.toDateKey(date))) holidayWorkingDays += 1;
   }
 
-  const submissionByUserId = new Map(submissions.map((s) => [s.userId, s]));
-
-  const entries = await Promise.all(
+  const byUserIdEntries = await Promise.all(
     users.map(async (user) => {
-      const submission = submissionByUserId.get(user.id);
       const leaveDays = await getApprovedLeaveDaysInWeek(
         user.id,
         weekStartDate,
@@ -344,25 +379,22 @@ const getWeeklyWorkloadReport = async (weekStartDate, weekEndDate) => {
       const leavesHolidaysDays = holidayWorkingDays + leaveDays;
       const billableDays = Math.max(0, totalWorkingDays - leavesHolidaysDays);
 
-      const hoursPerDay = getHoursPerDay(submission?.project);
-      const totalWorkingHrs = totalWorkingDays * hoursPerDay;
-      const totalWorkedHrs = submission?.totalHours ?? 0;
-
-      return [
-        user.id,
-        {
-          totalWorkingDays,
-          leavesHolidaysDays,
-          billableDays,
-          totalWorkingHrs,
-          totalWorkedHrs,
-          billableHrs: totalWorkedHrs,
-        },
-      ];
+      return [user.id, { totalWorkingDays, leavesHolidaysDays, billableDays }];
     })
   );
 
-  return Object.fromEntries(entries);
+  const byUserProject = {};
+  for (const submission of submissions) {
+    if (submission.projectId == null) continue;
+    const hoursPerDay = getHoursPerDay(submission.project);
+    byUserProject[`${submission.userId}-${submission.projectId}`] = {
+      totalWorkingHrs: totalWorkingDays * hoursPerDay,
+      totalWorkedHrs: submission.totalHours,
+      billableHrs: submission.totalHours,
+    };
+  }
+
+  return { byUserId: Object.fromEntries(byUserIdEntries), byUserProject };
 };
 
 module.exports = {

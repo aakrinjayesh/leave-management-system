@@ -20,8 +20,8 @@ export default function EmployeeTimesheetPage() {
 
       <TimesheetDetailView
         key={id}
-        fetchTimesheet={(view, date) => managerTimesheetApi.getEmployeeTimesheet(id, view, date)}
-        exportTimesheet={(view, date) => managerTimesheetApi.exportEmployeeTimesheet(id, view, date)}
+        fetchTimesheet={(view, date, projectId) => managerTimesheetApi.getEmployeeTimesheet(id, view, date, projectId)}
+        exportTimesheet={(view, date, projectId) => managerTimesheetApi.exportEmployeeTimesheet(id, view, date, projectId)}
         downloadAttachment={(submissionId) => managerTimesheetApi.downloadSubmissionAttachment(submissionId)}
         onDataLoad={setEmployee}
       />

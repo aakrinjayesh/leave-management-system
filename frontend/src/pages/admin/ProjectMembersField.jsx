@@ -3,33 +3,24 @@ import * as adminApi from "../../api/admin.api";
 
 // Checkbox list of who's available to assign to a project - shared between
 // "Create project" and "Edit project" since both manage the exact same field
-// (Project.assignedEmployees). Only shows "remaining" employees: active,
-// non-admin, and not already locked into a *different* project (one project
-// per employee) - pass this project's own id (omit it when creating a brand
-// new project) so its own current members still show up, checked.
+// (Project.assignedEmployees). An employee can be on several projects at
+// once, so this always shows every active, non-admin employee - no
+// exclusivity filtering.
 //
 // The "Create project" form stays mounted continuously (unlike Edit, which
 // remounts fresh every time it's opened), so its own employee list would
-// otherwise go stale the moment some *other* project's membership changes
-// (e.g. deactivating a project frees its members up elsewhere) - refreshKey
-// lets the parent force a refetch by passing something that changes on every
-// project-list reload (e.g. the projects array itself).
-export default function ProjectMembersField({ selectedIds, onChange, recentHint, projectId, refreshKey }) {
+// otherwise go stale if an account is added/deactivated elsewhere while it's
+// open - refreshKey lets the parent force a refetch by passing something
+// that changes on every project-list reload (e.g. the projects array itself).
+export default function ProjectMembersField({ selectedIds, onChange, recentHint, refreshKey }) {
   const [employees, setEmployees] = useState(null);
 
   useEffect(() => {
     adminApi.listUsers().then((data) => {
-      setEmployees(
-        data.users.filter(
-          (u) =>
-            u.status === "ACTIVE" &&
-            u.userType !== "ADMIN" &&
-            (!u.assignedProjectId || u.assignedProjectId === projectId)
-        )
-      );
+      setEmployees(data.users.filter((u) => u.status === "ACTIVE" && u.userType !== "ADMIN"));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, refreshKey]);
+  }, [refreshKey]);
 
   const toggle = (id) => {
     onChange(selectedIds.includes(id) ? selectedIds.filter((existing) => existing !== id) : [...selectedIds, id]);
@@ -51,7 +42,7 @@ export default function ProjectMembersField({ selectedIds, onChange, recentHint,
       {!employees ? (
         <p className="helper-text">Loading employees…</p>
       ) : employees.length === 0 ? (
-        <p className="helper-text">No remaining employees - everyone active is already on another project.</p>
+        <p className="helper-text">No active employees to assign yet.</p>
       ) : (
         <div
           style={{

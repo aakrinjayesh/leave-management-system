@@ -12,6 +12,7 @@ const router = express.Router();
 // doesn't log a timesheet itself.
 router.use(authenticate, authorize(USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER));
 
+router.get("/projects", controller.listMyProjects);
 router.get("/entries", controller.getMyEntries);
 router.post("/entries", validate(saveEntrySchema), controller.saveEntry);
 router.delete("/entries/:id", controller.deleteEntry);

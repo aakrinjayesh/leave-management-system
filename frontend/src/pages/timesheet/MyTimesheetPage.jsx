@@ -33,6 +33,8 @@ const buildWeekDates = (weekStartDate) =>
   });
 
 export default function MyTimesheetPage() {
+  const [projects, setProjects] = useState(null);
+  const [activeProjectId, setActiveProjectId] = useState(null);
   const [weekParam, setWeekParam] = useState("");
   const [data, setData] = useState(null);
   const [submissions, setSubmissions] = useState(null);
@@ -45,8 +47,18 @@ export default function MyTimesheetPage() {
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
 
-  const loadWeek = (param) =>
-    timesheetApi.getMyEntries(param || undefined).then((res) => {
+  // Every project the employee is assigned to gets its own independent
+  // week grid, attachment, and submission - switching tabs just re-scopes
+  // the same page to a different project's data.
+  useEffect(() => {
+    timesheetApi.listMyProjects().then((res) => {
+      setProjects(res.projects);
+      if (res.projects.length > 0) setActiveProjectId(res.projects[0].id);
+    });
+  }, []);
+
+  const loadWeek = (param, projectId) =>
+    timesheetApi.getMyEntries(param || undefined, projectId).then((res) => {
       setData(res);
       // Rebuild each row's editable state from the loaded entries - one row
       // per calendar day, blank for days with nothing saved yet.
@@ -65,14 +77,17 @@ export default function MyTimesheetPage() {
       });
       setRowState(nextRowState);
     });
-  const loadSubmissions = () => timesheetApi.getMySubmissions().then((res) => setSubmissions(res.submissions));
+  const loadSubmissions = (projectId) =>
+    timesheetApi.getMySubmissions(undefined, projectId).then((res) => setSubmissions(res.submissions));
 
   useEffect(() => {
-    loadWeek(weekParam);
+    if (!activeProjectId) return;
+    loadWeek(weekParam, activeProjectId);
+    loadSubmissions(activeProjectId);
     setAttachment(null);
     setAttachmentError("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekParam]);
+  }, [weekParam, activeProjectId]);
 
   const handleAttachmentChange = async (e) => {
     const file = e.target.files[0];
@@ -103,10 +118,6 @@ export default function MyTimesheetPage() {
       setDownloadingId(null);
     }
   };
-
-  useEffect(() => {
-    loadSubmissions();
-  }, []);
 
   const goToPrevWeek = () => {
     const base = new Date(data.weekStartDate);
@@ -157,14 +168,14 @@ export default function MyTimesheetPage() {
     try {
       await Promise.all(
         toSave.map(({ dateKey, hoursWorked, description }) =>
-          timesheetApi.saveEntry({ date: dateKey, hoursWorked, description })
+          timesheetApi.saveEntry({ date: dateKey, hoursWorked, description, projectId: activeProjectId })
         )
       );
       setSuccessMessage("Week saved.");
-      await loadWeek(weekParam);
+      await loadWeek(weekParam, activeProjectId);
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save the week. Please try again."));
-      await loadWeek(weekParam);
+      await loadWeek(weekParam, activeProjectId);
     } finally {
       setSavingDate(null);
     }
@@ -178,7 +189,7 @@ export default function MyTimesheetPage() {
     setSavingDate(dateKey);
     try {
       await timesheetApi.deleteEntry(row.id);
-      await loadWeek(weekParam);
+      await loadWeek(weekParam, activeProjectId);
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't delete this entry."));
     } finally {
@@ -194,22 +205,19 @@ export default function MyTimesheetPage() {
       setError("Please upload this week's Excel sheet before submitting.");
       return;
     }
-    if (!data.assignedProject) {
-      setError("You haven't been assigned a project yet. Please contact your admin.");
-      return;
-    }
 
     setSavingDate("__submit__");
     try {
       await timesheetApi.submitWeek(
         toDateInputValue(data.weekStartDate),
         attachment.attachmentOriginalName,
-        attachment.attachmentStoredName
+        attachment.attachmentStoredName,
+        activeProjectId
       );
       setSuccessMessage("Timesheet submitted for approval.");
       setAttachment(null);
-      await loadWeek(weekParam);
-      await loadSubmissions();
+      await loadWeek(weekParam, activeProjectId);
+      await loadSubmissions(activeProjectId);
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't submit this week's timesheet."));
     } finally {
@@ -229,271 +237,290 @@ export default function MyTimesheetPage() {
       <Alert type="error">{error}</Alert>
       <Alert type="success">{successMessage}</Alert>
 
-      {!data ? (
+      {!projects ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
           <Spinner size={28} />
         </div>
+      ) : projects.length === 0 ? (
+        <div className="card">
+          <div className="card-section empty-state">
+            <span className="empty-state-icon">
+              <ListChecks size={22} />
+            </span>
+            <p>You haven't been assigned a project yet - contact your admin.</p>
+          </div>
+        </div>
       ) : (
         <>
-          <div className="card" style={{ marginBottom: 20 }}>
-            <div className="card-section">
-              <div className="section-flex-row">
-                <button type="button" className="link-btn" onClick={goToPrevWeek}>
-                  <ChevronLeft size={14} style={{ verticalAlign: "-2px" }} /> Previous week
-                </button>
-                <span className="card-section-title" style={{ marginBottom: 0 }}>
-                  Week of {formatDateRange(data.weekStartDate, data.weekEndDate)} — {formatHoursMinutes(data.totalHours)}
-                </span>
-                <button type="button" className="link-btn" onClick={goToNextWeek}>
-                  Next week <ChevronRight size={14} style={{ verticalAlign: "-2px" }} />
-                </button>
-              </div>
-
-              {data.submission && (
-                <div className="remarks-note">
-                  <StatusBadge status={data.submission.status} /> Submitted {formatDate(data.submission.submittedAt)}.
-                  {" Project Type: "}
-                  {formatProjectAssigned(data.submission.projectAssigned)}.
-                  {" Project Name: "}
-                  {data.submission.project?.name || "—"}.
-                  {data.submission.project && ` Working hours: ${formatWorkingHours(data.submission.project)}.`}
-                  {data.submission.managerRemarks ? ` Remarks: ${data.submission.managerRemarks}` : ""}
-                  {data.submission.status === "REJECTED" && " You can edit the entries below and submit this week again."}
-                </div>
-              )}
-            </div>
+          <div className="tabs" role="tablist" style={{ marginBottom: 16 }}>
+            {projects.map((project) => (
+              <button
+                key={project.id}
+                type="button"
+                role="tab"
+                aria-selected={activeProjectId === project.id}
+                className={`tab-btn ${activeProjectId === project.id ? "active" : ""}`}
+                onClick={() => setActiveProjectId(project.id)}
+              >
+                {project.name}
+              </button>
+            ))}
           </div>
 
-          <div className="card" style={{ marginBottom: 20 }}>
-            <div className="card-section">
-              <span className="card-section-title">This week</span>
-
-              {(!data.submission || data.submission.status === "REJECTED") && (
-                <div className="form-three-col" style={{ marginBottom: 20 }}>
-                  <div className="field">
-                    <label className="field-label">Project</label>
-                    {data.assignedProject ? (
-                      <p className="helper-text" style={{ marginTop: 8 }}>
-                        {data.assignedProject.name}
-                      </p>
-                    ) : (
-                      <p className="helper-text" style={{ marginTop: 8 }}>
-                        You haven't been assigned a project yet - contact your admin.
-                      </p>
-                    )}
+          {!data ? (
+            <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
+              <Spinner size={28} />
+            </div>
+          ) : (
+            <>
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div className="card-section">
+                  <div className="section-flex-row">
+                    <button type="button" className="link-btn" onClick={goToPrevWeek}>
+                      <ChevronLeft size={14} style={{ verticalAlign: "-2px" }} /> Previous week
+                    </button>
+                    <span className="card-section-title" style={{ marginBottom: 0 }}>
+                      Week of {formatDateRange(data.weekStartDate, data.weekEndDate)} — {formatHoursMinutes(data.totalHours)}
+                    </span>
+                    <button type="button" className="link-btn" onClick={goToNextWeek}>
+                      Next week <ChevronRight size={14} style={{ verticalAlign: "-2px" }} />
+                    </button>
                   </div>
 
-                  <div className="field">
-                    <label className="field-label">Project details</label>
-                    {data.assignedProject ? (
-                      <p className="helper-text" style={{ marginTop: 8 }}>
-                        {formatProjectType(data.assignedProject.projectType)}
-                        <br />
-                        {formatWorkingHours(data.assignedProject)}
-                      </p>
-                    ) : (
-                      <p className="helper-text" style={{ marginTop: 8 }}>
-                        —
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="field">
-                    <label className="field-label">This week's Excel sheet</label>
-
-                    {attachment ? (
-                      <div className="attachment-uploaded-row">
-                        <FileCheck size={16} />
-                        <span>{attachment.attachmentOriginalName}</span>
-                        <button type="button" className="link-btn" onClick={() => setAttachment(null)}>
-                          Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <input
-                        type="file"
-                        className="field-input"
-                        accept=".xls,.xlsx"
-                        onChange={handleAttachmentChange}
-                        disabled={isUploadingAttachment}
-                      />
-                    )}
-
-                    {isUploadingAttachment && (
-                      <p className="helper-text" style={{ marginTop: 0 }}>
-                        Uploading…
-                      </p>
-                    )}
-                    {attachmentError && <Alert type="error">{attachmentError}</Alert>}
-
-                    <p className="helper-text" style={{ marginTop: 0 }}>
-                      <Paperclip size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                      Required before submitting.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="data-table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Hours</th>
-                      <th>Minutes</th>
-                      <th>What did you work on? (optional)</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {buildWeekDates(data.weekStartDate).map((dateKey) => {
-                      const row = rowState[dateKey] || { hours: "0", minutes: "0", description: "", locked: false };
-                      const isBusy = savingDate === dateKey;
-
-                      return (
-                        <tr key={dateKey}>
-                          <td className="table-cell-primary">{formatDayLabel(dateKey)}</td>
-                          <td style={{ width: 100 }}>
-                            {row.locked ? (
-                              row.hours || "0"
-                            ) : (
-                              <FormSelect value={row.hours} onChange={(e) => updateRow(dateKey, "hours", e.target.value)}>
-                                {HOUR_OPTIONS.map((h) => (
-                                  <option key={h} value={h}>
-                                    {h}
-                                  </option>
-                                ))}
-                              </FormSelect>
-                            )}
-                          </td>
-                          <td style={{ width: 100 }}>
-                            {row.locked ? (
-                              row.minutes || "0"
-                            ) : (
-                              <FormSelect value={row.minutes} onChange={(e) => updateRow(dateKey, "minutes", e.target.value)}>
-                                {MINUTE_OPTIONS.map((m) => (
-                                  <option key={m} value={m}>
-                                    {m}
-                                  </option>
-                                ))}
-                              </FormSelect>
-                            )}
-                          </td>
-                          <td className="table-cell-secondary">
-                            {row.locked ? (
-                              row.description || "—"
-                            ) : (
-                              <TextInput
-                                type="text"
-                                placeholder="Optional"
-                                value={row.description}
-                                onChange={(e) => updateRow(dateKey, "description", e.target.value)}
-                              />
-                            )}
-                          </td>
-                          <td>
-                            {!row.locked && row.id && (
-                              <div className="row-actions">
-                                <button
-                                  type="button"
-                                  className="row-action-btn reject"
-                                  disabled={isBusy}
-                                  onClick={() => handleDeleteRow(dateKey)}
-                                >
-                                  <Trash2 size={14} />
-                                  Delete
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {(!data.submission || data.submission.status === "REJECTED") && (
-                <div className="modal-actions" style={{ marginTop: 20, justifyContent: "flex-start", gap: 10 }}>
-                  <Button variant="secondary" onClick={handleSaveWeek} isLoading={savingDate === "__week__"}>
-                    <Save size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
-                    Save week
-                  </Button>
-                  {data.entries.length > 0 && (
-                    <Button onClick={handleSubmitWeek} isLoading={savingDate === "__submit__"}>
-                      {data.submission?.status === "REJECTED" ? "Resubmit week" : "Submit week"}
-                    </Button>
+                  {data.submission && (
+                    <div className="remarks-note">
+                      <StatusBadge status={data.submission.status} /> Submitted {formatDate(data.submission.submittedAt)}.
+                      {" Project Type: "}
+                      {formatProjectAssigned(data.submission.projectAssigned)}.
+                      {" Project Name: "}
+                      {data.submission.project?.name || "—"}.
+                      {data.submission.project && ` Working hours: ${formatWorkingHours(data.submission.project)}.`}
+                      {data.submission.managerRemarks ? ` Remarks: ${data.submission.managerRemarks}` : ""}
+                      {data.submission.status === "REJECTED" && " You can edit the entries below and submit this week again."}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <div className="card">
-            <div className="card-section">
-              <span className="card-section-title">Past submissions</span>
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div className="card-section">
+                  <span className="card-section-title">This week</span>
 
-              {!submissions ? (
-                <div style={{ display: "flex", justifyContent: "center", padding: "24px 0" }}>
-                  <Spinner size={24} />
-                </div>
-              ) : submissions.length === 0 ? (
-                <div className="empty-state">
-                  <span className="empty-state-icon">
-                    <ListChecks size={22} />
-                  </span>
-                  <p>No timesheets submitted yet.</p>
-                </div>
-              ) : (
-                <div className="data-table-wrap">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Week</th>
-                        <th>Total hours</th>
-                        <th>Sent to</th>
-                        <th>Status</th>
-                        <th>Project Type</th>
-                        <th>Project Name</th>
-                        <th>Remarks</th>
-                        <th>Excel sheet</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {submissions.map((sub) => (
-                        <tr key={sub.id}>
-                          <td className="table-cell-primary">{formatDateRange(sub.weekStartDate, sub.weekEndDate)}</td>
-                          <td>{formatHoursMinutes(sub.totalHours)}</td>
-                          <td className="table-cell-secondary">
-                            {sub.routedTo ? `${sub.routedTo.firstName} ${sub.routedTo.lastName}` : "—"}
-                          </td>
-                          <td>
-                            <StatusBadge status={sub.status} />
-                          </td>
-                          <td className="table-cell-secondary">{formatProjectAssigned(sub.projectAssigned)}</td>
-                          <td className="table-cell-secondary">{sub.project?.name || "—"}</td>
-                          <td className="table-cell-secondary">{sub.managerRemarks || "—"}</td>
-                          <td>
-                            {sub.attachmentOriginalName && (
-                              <button
-                                type="button"
-                                className="link-btn"
-                                disabled={downloadingId === sub.id}
-                                onClick={() => handleDownloadSubmissionAttachment(sub)}
-                              >
-                                <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                                {downloadingId === sub.id ? "Downloading…" : "Download"}
-                              </button>
-                            )}
-                          </td>
+                  {(!data.submission || data.submission.status === "REJECTED") && (
+                    <div className="form-two-col" style={{ marginBottom: 20 }}>
+                      <div className="field">
+                        <label className="field-label">Project details</label>
+                        {data.project ? (
+                          <p className="helper-text" style={{ marginTop: 8 }}>
+                            {formatProjectType(data.project.projectType)}
+                            <br />
+                            {formatWorkingHours(data.project)}
+                          </p>
+                        ) : (
+                          <p className="helper-text" style={{ marginTop: 8 }}>
+                            —
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="field">
+                        <label className="field-label">This week's Excel sheet</label>
+
+                        {attachment ? (
+                          <div className="attachment-uploaded-row">
+                            <FileCheck size={16} />
+                            <span>{attachment.attachmentOriginalName}</span>
+                            <button type="button" className="link-btn" onClick={() => setAttachment(null)}>
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <input
+                            type="file"
+                            className="field-input"
+                            accept=".xls,.xlsx"
+                            onChange={handleAttachmentChange}
+                            disabled={isUploadingAttachment}
+                          />
+                        )}
+
+                        {isUploadingAttachment && (
+                          <p className="helper-text" style={{ marginTop: 0 }}>
+                            Uploading…
+                          </p>
+                        )}
+                        {attachmentError && <Alert type="error">{attachmentError}</Alert>}
+
+                        <p className="helper-text" style={{ marginTop: 0 }}>
+                          <Paperclip size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                          Required before submitting.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="data-table-wrap">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Hours</th>
+                          <th>Minutes</th>
+                          <th>What did you work on? (optional)</th>
+                          <th></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {buildWeekDates(data.weekStartDate).map((dateKey) => {
+                          const row = rowState[dateKey] || { hours: "0", minutes: "0", description: "", locked: false };
+                          const isBusy = savingDate === dateKey;
+
+                          return (
+                            <tr key={dateKey}>
+                              <td className="table-cell-primary">{formatDayLabel(dateKey)}</td>
+                              <td style={{ width: 100 }}>
+                                {row.locked ? (
+                                  row.hours || "0"
+                                ) : (
+                                  <FormSelect value={row.hours} onChange={(e) => updateRow(dateKey, "hours", e.target.value)}>
+                                    {HOUR_OPTIONS.map((h) => (
+                                      <option key={h} value={h}>
+                                        {h}
+                                      </option>
+                                    ))}
+                                  </FormSelect>
+                                )}
+                              </td>
+                              <td style={{ width: 100 }}>
+                                {row.locked ? (
+                                  row.minutes || "0"
+                                ) : (
+                                  <FormSelect value={row.minutes} onChange={(e) => updateRow(dateKey, "minutes", e.target.value)}>
+                                    {MINUTE_OPTIONS.map((m) => (
+                                      <option key={m} value={m}>
+                                        {m}
+                                      </option>
+                                    ))}
+                                  </FormSelect>
+                                )}
+                              </td>
+                              <td className="table-cell-secondary">
+                                {row.locked ? (
+                                  row.description || "—"
+                                ) : (
+                                  <TextInput
+                                    type="text"
+                                    placeholder="Optional"
+                                    value={row.description}
+                                    onChange={(e) => updateRow(dateKey, "description", e.target.value)}
+                                  />
+                                )}
+                              </td>
+                              <td>
+                                {!row.locked && row.id && (
+                                  <div className="row-actions">
+                                    <button
+                                      type="button"
+                                      className="row-action-btn reject"
+                                      disabled={isBusy}
+                                      onClick={() => handleDeleteRow(dateKey)}
+                                    >
+                                      <Trash2 size={14} />
+                                      Delete
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {(!data.submission || data.submission.status === "REJECTED") && (
+                    <div className="modal-actions" style={{ marginTop: 20, justifyContent: "flex-start", gap: 10 }}>
+                      <Button variant="secondary" onClick={handleSaveWeek} isLoading={savingDate === "__week__"}>
+                        <Save size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
+                        Save week
+                      </Button>
+                      {data.entries.length > 0 && (
+                        <Button onClick={handleSubmitWeek} isLoading={savingDate === "__submit__"}>
+                          {data.submission?.status === "REJECTED" ? "Resubmit week" : "Submit week"}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+
+              <div className="card">
+                <div className="card-section">
+                  <span className="card-section-title">Past submissions</span>
+
+                  {!submissions ? (
+                    <div style={{ display: "flex", justifyContent: "center", padding: "24px 0" }}>
+                      <Spinner size={24} />
+                    </div>
+                  ) : submissions.length === 0 ? (
+                    <div className="empty-state">
+                      <span className="empty-state-icon">
+                        <ListChecks size={22} />
+                      </span>
+                      <p>No timesheets submitted yet.</p>
+                    </div>
+                  ) : (
+                    <div className="data-table-wrap">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Week</th>
+                            <th>Total hours</th>
+                            <th>Sent to</th>
+                            <th>Status</th>
+                            <th>Project Type</th>
+                            <th>Project Name</th>
+                            <th>Remarks</th>
+                            <th>Excel sheet</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {submissions.map((sub) => (
+                            <tr key={sub.id}>
+                              <td className="table-cell-primary">{formatDateRange(sub.weekStartDate, sub.weekEndDate)}</td>
+                              <td>{formatHoursMinutes(sub.totalHours)}</td>
+                              <td className="table-cell-secondary">
+                                {sub.routedTo ? `${sub.routedTo.firstName} ${sub.routedTo.lastName}` : "—"}
+                              </td>
+                              <td>
+                                <StatusBadge status={sub.status} />
+                              </td>
+                              <td className="table-cell-secondary">{formatProjectAssigned(sub.projectAssigned)}</td>
+                              <td className="table-cell-secondary">{sub.project?.name || "—"}</td>
+                              <td className="table-cell-secondary">{sub.managerRemarks || "—"}</td>
+                              <td>
+                                {sub.attachmentOriginalName && (
+                                  <button
+                                    type="button"
+                                    className="link-btn"
+                                    disabled={downloadingId === sub.id}
+                                    onClick={() => handleDownloadSubmissionAttachment(sub)}
+                                  >
+                                    <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                                    {downloadingId === sub.id ? "Downloading…" : "Download"}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
     </DashboardLayout>

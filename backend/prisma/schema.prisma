@@ -38,7 +38,6 @@ enum ProjectAssignmentStatus {
     NOT_ASSIGNED
 }
 
-
 enum DayOfWeek {
     MONDAY
     TUESDAY
@@ -169,11 +168,6 @@ model User {
 
     managerId Int?
 
-    // The single project this employee currently works on, set by admin (see
-    // Project.assignedEmployees) - drives what their timesheet submissions get
-    // logged against; they no longer pick it themselves.
-    assignedProjectId Int?
-
     isPasswordSet Boolean @default(false)
 
     isRegistrationAllowed Boolean @default(true)
@@ -181,31 +175,31 @@ model User {
     manager   User?  @relation("ManagerEmployees", fields: [managerId], references: [id])
     employees User[] @relation("ManagerEmployees")
 
-    assignedProject Project? @relation("AssignedProjectEmployees", fields: [assignedProjectId], references: [id])
+    projectMemberships ProjectMembership[]
 
-    createdAt      DateTime       @default(now())
-    updatedAt      DateTime       @updatedAt
-    otps           OTP[]
-    refreshTokens  RefreshToken[]
-    leaveBalances  LeaveBalance[]
-    leaveRequests  LeaveRequest[] @relation("EmployeeLeaveRequests")
+    createdAt           DateTime       @default(now())
+    updatedAt           DateTime       @updatedAt
+    otps                OTP[]
+    refreshTokens       RefreshToken[]
+    leaveBalances       LeaveBalance[]
+    leaveRequests       LeaveRequest[] @relation("EmployeeLeaveRequests")
     routedLeaveRequests LeaveRequest[] @relation("RoutedLeaveRequests")
-    approvedLeaves LeaveRequest[] @relation("ManagerApprovedLeaves")
-    holidays       Holiday[]
-    notifications  Notification[]
+    approvedLeaves      LeaveRequest[] @relation("ManagerApprovedLeaves")
+    holidays            Holiday[]
+    notifications       Notification[]
 
-    timesheetEntries              TimesheetEntry[]
-    timesheetSubmissions          TimesheetSubmission[] @relation("EmployeeTimesheetSubmissions")
-    routedTimesheetSubmissions    TimesheetSubmission[] @relation("RoutedTimesheetSubmissions")
-    approvedTimesheetSubmissions  TimesheetSubmission[] @relation("ApprovedTimesheetSubmissions")
-    projects                      Project[]
+    timesheetEntries             TimesheetEntry[]
+    timesheetSubmissions         TimesheetSubmission[] @relation("EmployeeTimesheetSubmissions")
+    routedTimesheetSubmissions   TimesheetSubmission[] @relation("RoutedTimesheetSubmissions")
+    approvedTimesheetSubmissions TimesheetSubmission[] @relation("ApprovedTimesheetSubmissions")
+    projects                     Project[]
 
     payslips          Payslip[]
     generatedPayslips Payslip[] @relation("PayslipsGenerated")
 
     customFields EmployeeCustomField[]
 
-    salaryStructureHistory        SalaryStructureHistory[]
+    salaryStructureHistory         SalaryStructureHistory[]
     recordedSalaryStructureEntries SalaryStructureHistory[] @relation("SalaryStructureHistoryRecordedBy")
 
     exitRecords         ExitRecord[]
@@ -217,11 +211,11 @@ model User {
     taxDeclarations         TaxDeclaration[]
     recordedTaxDeclarations TaxDeclaration[] @relation("TaxDeclarationRecordedBy")
 
-    incomeTaxComputationGenerations         IncomeTaxComputationGeneration[]
+    incomeTaxComputationGenerations          IncomeTaxComputationGeneration[]
     generatedIncomeTaxComputationGenerations IncomeTaxComputationGeneration[] @relation("IncomeTaxComputationGenerationsGeneratedBy")
 
-    resignations         Resignation[]
-    decidedResignations  Resignation[] @relation("ResignationsDecidedBy")
+    resignations        Resignation[]
+    decidedResignations Resignation[] @relation("ResignationsDecidedBy")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
@@ -331,7 +325,7 @@ model SalaryStructureHistory {
     professionalTax                   Float
     professionalTaxThreshold          Float
 
-    createdAt   DateTime @default(now())
+    createdAt    DateTime @default(now())
     recordedById Int?
 
     user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -353,7 +347,7 @@ model TaxDeclaration {
 
     financialYear Int
 
-    rentPaidAnnual Float @default(0)
+    rentPaidAnnual Float   @default(0)
     isMetroCity    Boolean @default(false)
 
     section80C       Float @default(0)
@@ -538,7 +532,7 @@ model LeavePolicy {
     // a supporting document becomes mandatory to submit at all. Providing one
     // raises the per-request cap to maxLeavesPerRequestWithAttachment and lifts
     // the maxAdvanceBookingDays window for that request. Null means no such rule.
-    attachmentRequiredAboveDays Int?
+    attachmentRequiredAboveDays       Int?
     maxLeavesPerRequestWithAttachment Int?
 
     description String?
@@ -705,9 +699,9 @@ model Payslip {
     standardDays Float @default(0)
     daysWorked   Float @default(0)
 
-    grossPay         Float
-    grossDeductions  Float
-    netPay           Float
+    grossPay        Float
+    grossDeductions Float
+    netPay          Float
 
     pdfUrl String?
 
@@ -809,6 +803,13 @@ model TimesheetEntry {
 
     timesheetSubmissionId Int?
 
+    // Which project this entry's hours are logged against - each project an
+    // employee is assigned to has its own independent day-by-day grid, so
+    // the same calendar date can hold one entry per project. Nullable only
+    // for entries that predate per-project timesheets (every entry created
+    // from here on always has one).
+    projectId Int?
+
     createdAt DateTime @default(now())
 
     updatedAt DateTime @updatedAt
@@ -817,12 +818,16 @@ model TimesheetEntry {
 
     timesheetSubmission TimesheetSubmission? @relation(fields: [timesheetSubmissionId], references: [id], onDelete: SetNull)
 
-    // At most one entry per user per calendar day - the weekly grid UI edits
-    // a day's entry in place rather than allowing several per day.
-    @@unique([userId, date])
+    project Project? @relation(fields: [projectId], references: [id])
+
+    // At most one entry per user per calendar day per project - the weekly
+    // grid UI edits a day's entry in place rather than allowing several per
+    // day within the SAME project's grid.
+    @@unique([userId, date, projectId])
     @@index([userId])
     @@index([weekStartDate])
     @@index([timesheetSubmissionId])
+    @@index([projectId])
 }
 
 // The weekly bundle an employee submits for their manager's approval - same
@@ -860,11 +865,10 @@ model TimesheetSubmission {
     // employee's last choice so they only need to change it when it changes.
     projectAssigned ProjectAssignmentStatus?
 
-    // Which project this week's hours are against - independent of
-    // projectAssigned above (always required regardless of that choice).
-    // Same "sticky" pre-fill behavior. Relational (not free text) so renaming
-    // a project in the admin-managed list instantly reflects everywhere it's
-    // referenced instead of leaving stale duplicate spellings behind.
+    // Which project this week's submission is for - an employee assigned to
+    // several projects submits one of these per project per week, not one
+    // combined submission (see the unique constraint below). Nullable only
+    // for submissions that predate per-project timesheets.
     projectId Int?
 
     submittedAt DateTime @default(now())
@@ -887,7 +891,10 @@ model TimesheetSubmission {
 
     entries TimesheetEntry[]
 
-    @@unique([userId, weekStartDate])
+    // One submission per employee per week per project - not just per week -
+    // so an employee on 2 projects can have 2 independent submissions for
+    // the same week, each with its own approval.
+    @@unique([userId, weekStartDate, projectId])
     @@index([userId])
     @@index([routedToId])
     @@index([status])
@@ -927,5 +934,27 @@ model Project {
     createdBy User @relation(fields: [createdById], references: [id])
 
     timesheetSubmissions TimesheetSubmission[]
-    assignedEmployees    User[]                @relation("AssignedProjectEmployees")
+    timesheetEntries     TimesheetEntry[]
+    memberships          ProjectMembership[]
+}
+
+// One row per (employee, project) they're currently assigned to - an
+// employee can be on several projects at once, each with its own
+// independent timesheet (see TimesheetEntry/TimesheetSubmission.projectId).
+// assignedAt is what the admin Project report's "Since" column reads per
+// employee-project pairing, now that there can be more than one per employee.
+model ProjectMembership {
+    id Int @id @default(autoincrement())
+
+    userId    Int
+    projectId Int
+
+    assignedAt DateTime @default(now())
+
+    user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, projectId])
+    @@index([userId])
+    @@index([projectId])
 }

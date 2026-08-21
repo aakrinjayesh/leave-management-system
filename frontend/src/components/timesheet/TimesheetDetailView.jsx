@@ -19,25 +19,29 @@ const VIEWS = [
 
 // Shared by the manager and admin "view one person's timesheet" pages - only
 // difference between them is which API calls fetch/export the data, passed
-// in as `fetchTimesheet(view, dateString) => Promise`,
-// `exportTimesheet(view, dateString) => Promise<AxiosResponse>` (optional),
+// in as `fetchTimesheet(view, dateString, projectId) => Promise`,
+// `exportTimesheet(view, dateString, projectId) => Promise<AxiosResponse>` (optional),
 // and `downloadAttachment(submissionId) => Promise<AxiosResponse>` (optional)
 // for the Excel sheet the employee attached to a given week's submission.
 export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, downloadAttachment, onDataLoad }) {
   const [view, setView] = useState("week");
   const [anchorDate, setAnchorDate] = useState(toDateInputValue(new Date()));
+  // Null until the first response tells us which project the backend
+  // resolved (the employee's first project, unless one is picked below).
+  const [projectId, setProjectId] = useState(null);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
 
   useEffect(() => {
-    fetchTimesheet(view, anchorDate).then((res) => {
+    fetchTimesheet(view, anchorDate, projectId).then((res) => {
       setData(res);
+      if (res.projectId !== projectId) setProjectId(res.projectId);
       if (onDataLoad) onDataLoad(res.employee);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, anchorDate]);
+  }, [view, anchorDate, projectId]);
 
   const shiftAnchor = (direction) => {
     const date = new Date(anchorDate);
@@ -51,7 +55,7 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
     setError("");
     setIsExporting(true);
     try {
-      const response = await exportTimesheet(view, anchorDate);
+      const response = await exportTimesheet(view, anchorDate, projectId);
       downloadBlobAsFile(response.data, getFilenameFromResponse(response, "timesheet.csv"));
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't export this timesheet."));
@@ -81,9 +85,35 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
     );
   }
 
+  if (data.projects && data.projects.length === 0) {
+    return (
+      <div className="empty-state">
+        <span className="empty-state-icon">
+          <ListChecks size={22} />
+        </span>
+        <p>Not assigned to any project yet.</p>
+      </div>
+    );
+  }
+
   return (
     <>
       <Alert type="error">{error}</Alert>
+
+      {data.projects && data.projects.length > 1 && (
+        <div className="tabs" style={{ marginBottom: 16 }}>
+          {data.projects.map((project) => (
+            <button
+              key={project.id}
+              type="button"
+              className={`tab-btn ${projectId === project.id ? "active" : ""}`}
+              onClick={() => setProjectId(project.id)}
+            >
+              {project.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="filter-tabs">
         {VIEWS.map((v) => (

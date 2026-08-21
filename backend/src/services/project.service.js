@@ -1,13 +1,33 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 
-const MEMBER_SELECT = { id: true, firstName: true, lastName: true, email: true };
+const MEMBER_SELECT = {
+  userId: true,
+  assignedAt: true,
+  user: { select: { id: true, firstName: true, lastName: true, email: true } },
+};
 
-const listAllProjects = () =>
-  prisma.project.findMany({
+// Flattens a ProjectMembership row into the shape the frontend actually
+// wants to render (member fields alongside assignedAt, not nested under `user`).
+const toMemberView = (membership) => ({
+  id: membership.user.id,
+  firstName: membership.user.firstName,
+  lastName: membership.user.lastName,
+  email: membership.user.email,
+  assignedAt: membership.assignedAt,
+});
+
+const listAllProjects = async () => {
+  const projects = await prisma.project.findMany({
     orderBy: { name: "asc" },
-    include: { assignedEmployees: { select: MEMBER_SELECT, orderBy: { firstName: "asc" } } },
+    include: { memberships: { select: MEMBER_SELECT, orderBy: { user: { firstName: "asc" } } } },
   });
+  return projects.map((project) => ({
+    ...project,
+    assignedEmployees: project.memberships.map(toMemberView),
+    memberships: undefined,
+  }));
+};
 
 const assertNameAvailable = async (name, excludeId) => {
   const existing = await prisma.project.findUnique({ where: { name } });
@@ -16,27 +36,43 @@ const assertNameAvailable = async (name, excludeId) => {
   }
 };
 
-const getProjectWithMembers = (id) =>
-  prisma.project.findUnique({
+const getProjectWithMembers = async (id) => {
+  const project = await prisma.project.findUnique({
     where: { id },
-    include: { assignedEmployees: { select: MEMBER_SELECT, orderBy: { firstName: "asc" } } },
+    include: { memberships: { select: MEMBER_SELECT, orderBy: { user: { firstName: "asc" } } } },
   });
+  return { ...project, assignedEmployees: project.memberships.map(toMemberView), memberships: undefined };
+};
 
 // Sets this project's member list to exactly `employeeIds` - anyone
-// currently assigned here but left off the new list is unassigned (back to
-// no project), and everyone in the new list gets assignedProjectId pointed
-// at this project. Matches "one project per employee" - assigning someone
-// here silently moves them off whatever project they were on before.
+// currently on it but left off the new list is removed, everyone new in the
+// list is added (with a fresh assignedAt), and anyone already on it who's
+// still in the list is left untouched (keeps their original assignedAt).
+// Unlike the old single-project model, this never touches an employee's
+// membership on any OTHER project - one employee can be on several projects
+// at once.
 const setProjectMembers = async (projectId, employeeIds) => {
+  const existing = await prisma.projectMembership.findMany({
+    where: { projectId },
+    select: { userId: true },
+  });
+  const existingIds = new Set(existing.map((m) => m.userId));
+  const wantedIds = new Set(employeeIds);
+
+  const toRemove = [...existingIds].filter((id) => !wantedIds.has(id));
+  const toAdd = [...wantedIds].filter((id) => !existingIds.has(id));
+
   await prisma.$transaction([
-    prisma.user.updateMany({
-      where: { assignedProjectId: projectId, id: { notIn: employeeIds } },
-      data: { assignedProjectId: null },
-    }),
-    prisma.user.updateMany({
-      where: { id: { in: employeeIds } },
-      data: { assignedProjectId: projectId },
-    }),
+    ...(toRemove.length > 0
+      ? [prisma.projectMembership.deleteMany({ where: { projectId, userId: { in: toRemove } } })]
+      : []),
+    ...(toAdd.length > 0
+      ? [
+          prisma.projectMembership.createMany({
+            data: toAdd.map((userId) => ({ projectId, userId })),
+          }),
+        ]
+      : []),
   ]);
 };
 
@@ -72,17 +108,16 @@ const renameProject = async (id, name, details, employeeIds) => {
 
 const setProjectActive = async (id, isActive) => {
   await getProjectOr404(id);
-  const project = await prisma.project.update({ where: { id }, data: { isActive } });
-
-  // Deactivating frees up everyone on it immediately, rather than leaving
-  // them stuck "taken" by a dead project until admin manually unchecks them
-  // from its own edit screen (see ProjectMembersField's remaining-employees filter).
-  if (!isActive) {
-    await prisma.user.updateMany({ where: { assignedProjectId: id }, data: { assignedProjectId: null } });
-  }
-
-  return project;
+  return prisma.project.update({ where: { id }, data: { isActive } });
 };
+
+// Every project a given employee is currently a member of - used to build
+// their own timesheet's project switcher.
+const listProjectsForEmployee = (userId) =>
+  prisma.project.findMany({
+    where: { memberships: { some: { userId } } },
+    orderBy: { name: "asc" },
+  });
 
 module.exports = {
   listAllProjects,
@@ -90,4 +125,5 @@ module.exports = {
   renameProject,
   setProjectActive,
   setProjectMembers,
+  listProjectsForEmployee,
 };

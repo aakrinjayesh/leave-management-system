@@ -32,13 +32,13 @@ export const previewOfferLetterPdf = (id, letterText) =>
 
 export const deleteOfferLetter = (offerLetterId) => unwrap(axiosClient.delete(`/admin/offer-letters/${offerLetterId}`));
 
-export const getUserTimesheet = (userId, view, date) =>
-  unwrap(axiosClient.get(`/admin/users/${userId}/timesheet`, { params: { view, date } }));
+export const getUserTimesheet = (userId, view, date, projectId) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/timesheet`, { params: { view, date, projectId } }));
 
 // Raw response (not unwrapped) - caller needs the blob body and the
 // Content-Disposition header for the filename.
-export const exportUserTimesheet = (userId, view, date) =>
-  axiosClient.get(`/admin/users/${userId}/timesheet/export`, { params: { view, date }, responseType: "blob" });
+export const exportUserTimesheet = (userId, view, date, projectId) =>
+  axiosClient.get(`/admin/users/${userId}/timesheet/export`, { params: { view, date, projectId }, responseType: "blob" });
 
 export const exportPayrollTimesheet = (date) =>
   axiosClient.get("/admin/timesheets/export", { params: { date }, responseType: "blob" });

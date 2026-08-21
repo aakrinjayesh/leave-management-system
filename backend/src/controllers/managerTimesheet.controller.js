@@ -4,6 +4,7 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
+const projectService = require("../services/project.service");
 const { sendTimesheetDecisionEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
@@ -36,14 +37,24 @@ const getEmployeeTimesheet = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Employee not found.");
   }
 
+  // An employee assigned to several projects has a separate timesheet per
+  // project - default to whichever one was requested, or their first
+  // project if none was specified.
+  const projects = await projectService.listProjectsForEmployee(employeeId);
+  const requestedProjectId = req.query.projectId ? Number(req.query.projectId) : null;
+  const projectId =
+    requestedProjectId && projects.some((p) => p.id === requestedProjectId) ? requestedProjectId : projects[0]?.id ?? null;
+
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
   const [entries, submissions] = await Promise.all([
-    timesheetService.getSubmittedEntriesInRange(employeeId, start, end),
-    timesheetService.getSubmissionsOverlappingRange(employeeId, start, end),
+    timesheetService.getSubmittedEntriesInRange(employeeId, start, end, projectId),
+    timesheetService.getSubmissionsOverlappingRange(employeeId, start, end, projectId),
   ]);
 
   new ApiResponse(200, "OK", {
     employee: { id: employee.id, firstName: employee.firstName, lastName: employee.lastName, email: employee.email },
+    projects,
+    projectId,
     view,
     rangeStart: start,
     rangeEnd: end,
@@ -87,8 +98,9 @@ const exportEmployeeTimesheet = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Employee not found.");
   }
 
+  const projectId = req.query.projectId ? Number(req.query.projectId) : null;
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
-  const entries = await timesheetService.getSubmittedEntriesInRange(employeeId, start, end);
+  const entries = await timesheetService.getSubmittedEntriesInRange(employeeId, start, end, projectId);
   const { csv, filename } = timesheetService.buildEmployeeTimesheetCsv({
     employee,
     view,

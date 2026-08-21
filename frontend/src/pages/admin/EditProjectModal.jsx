@@ -111,12 +111,7 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
           Employees will see this project type, timezone and working hours automatically once admin assigns them here.
         </p>
 
-        <ProjectMembersField
-          selectedIds={memberIds}
-          onChange={setMemberIds}
-          recentHint={recentMembers}
-          projectId={project.id}
-        />
+        <ProjectMembersField selectedIds={memberIds} onChange={setMemberIds} recentHint={recentMembers} />
 
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>

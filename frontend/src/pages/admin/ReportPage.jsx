@@ -44,14 +44,15 @@ const formatNum = (value) => {
 function EmployeeListCard({
   title,
   employees,
-  weekSubmissionsByUserId,
+  weekSubmissionsByKey,
   workloadByUserId,
+  hoursByUserProject,
   downloadingId,
   onDownloadTimesheet,
   onViewHistory,
 }) {
   const navigate = useNavigate();
-  const showTimesheetColumn = Boolean(weekSubmissionsByUserId);
+  const showTimesheetColumn = Boolean(weekSubmissionsByKey);
   const showWorkloadColumns = Boolean(workloadByUserId);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
 
@@ -116,8 +117,9 @@ function EmployeeListCard({
               </thead>
               <tbody>
                 {visibleEmployees.map((employee) => {
-                  const submission = weekSubmissionsByUserId?.[employee.id];
-                  const workload = workloadByUserId?.[employee.id];
+                  const key = `${employee.id}-${employee.projectId}`;
+                  const submission = weekSubmissionsByKey?.[key];
+                  const workload = { ...workloadByUserId?.[employee.id], ...hoursByUserProject?.[key] };
                   return (
                     <tr
                       key={employee.id}
@@ -469,11 +471,21 @@ export default function ReportPage() {
     });
   };
 
-  const weekSubmissionsByUserId = effectiveWeekData
-    ? Object.fromEntries(effectiveWeekData.submissions.map((submission) => [submission.userId, submission]))
+  // Keyed by "userId-projectId", not just userId - an employee can have a
+  // separate submission for each project they're assigned to, so a plain
+  // per-user lookup would show the same submission on every one of their
+  // project rows regardless of which project it's actually for.
+  const weekSubmissionsByKey = effectiveWeekData
+    ? Object.fromEntries(
+        effectiveWeekData.submissions.map((submission) => [`${submission.userId}-${submission.projectId}`, submission])
+      )
     : null;
 
-  const workloadByUserId = effectiveWeekData?.workload ?? null;
+  // Calendar/leave figures (per-employee) and submitted-hours figures (per
+  // employee+project) come back as two separate maps - see
+  // timesheetService.getWeeklyWorkloadReport for why they can't be one.
+  const workloadByUserId = effectiveWeekData?.workload?.byUserId ?? null;
+  const hoursByUserProject = effectiveWeekData?.workload?.byUserProject ?? null;
 
   const handleDownloadTimesheet = async (submission) => {
     setError("");
@@ -554,8 +566,9 @@ export default function ReportPage() {
           <EmployeeListCard
             title="Client Project"
             employees={applyFilters(report.assigned)}
-            weekSubmissionsByUserId={weekSubmissionsByUserId}
+            weekSubmissionsByKey={weekSubmissionsByKey}
             workloadByUserId={workloadByUserId}
+            hoursByUserProject={hoursByUserProject}
             downloadingId={downloadingId}
             onDownloadTimesheet={handleDownloadTimesheet}
             onViewHistory={setHistoryEmployee}
@@ -563,8 +576,9 @@ export default function ReportPage() {
           <EmployeeListCard
             title="Internal Project"
             employees={applyFilters(report.notAssigned)}
-            weekSubmissionsByUserId={weekSubmissionsByUserId}
+            weekSubmissionsByKey={weekSubmissionsByKey}
             workloadByUserId={workloadByUserId}
+            hoursByUserProject={hoursByUserProject}
             downloadingId={downloadingId}
             onDownloadTimesheet={handleDownloadTimesheet}
             onViewHistory={setHistoryEmployee}
