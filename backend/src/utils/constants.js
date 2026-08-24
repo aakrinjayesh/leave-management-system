@@ -42,6 +42,11 @@ const RESIDENTIAL_STATUS = {
   RESIDENT_NOT_ORDINARILY_RESIDENT: "RESIDENT_NOT_ORDINARILY_RESIDENT",
 };
 
+// How many times an employee may use their own self-service profile edit
+// form per section (Personal/Statutory/Bank Information) before only admin
+// can change that section - see profile.controller.js's applySelfEdit.
+const SELF_PROFILE_EDIT_LIMIT = 3;
+
 const RESIGNATION_STATUS = {
   PENDING: "PENDING",
   ACCEPTED: "ACCEPTED",
@@ -59,4 +64,5 @@ module.exports = {
   TAX_REGIME,
   RESIDENTIAL_STATUS,
   RESIGNATION_STATUS,
+  SELF_PROFILE_EDIT_LIMIT,
 };

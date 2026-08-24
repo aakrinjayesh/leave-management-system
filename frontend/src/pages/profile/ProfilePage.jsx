@@ -10,6 +10,7 @@ import {
   Landmark,
   FileText,
   LogOut,
+  Pencil,
 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Button from "../../components/common/Button";
@@ -19,6 +20,9 @@ import StatCard from "../../components/common/StatCard";
 import StatusBadge from "../../components/common/StatusBadge";
 import AnniversaryCelebration from "../../components/common/AnniversaryCelebration";
 import ResignationModal from "./ResignationModal";
+import EditPersonalInfoModal from "./EditPersonalInfoModal";
+import EditStatutoryInfoModal from "./EditStatutoryInfoModal";
+import EditBankInfoModal from "./EditBankInfoModal";
 // Hidden for employees - admin-only feature for now. Uncomment to re-enable.
 // import MyIncomeTaxComputation from "./MyIncomeTaxComputation";
 // import MyIncomeTaxComputationHistory from "./MyIncomeTaxComputationHistory";
@@ -78,8 +82,16 @@ export default function ProfilePage() {
   const [showResignationModal, setShowResignationModal] = useState(false);
   const [resignationError, setResignationError] = useState("");
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [editingSection, setEditingSection] = useState(null); // "personal" | "statutory" | "bank" | null
+  const [profileMessage, setProfileMessage] = useState("");
 
   const isAdmin = user?.userType === "ADMIN";
+
+  const handleSectionSaved = async (label) => {
+    setEditingSection(null);
+    await refreshUser();
+    setProfileMessage(`${label} updated.`);
+  };
 
   const loadMyResignation = () =>
     profileApi
@@ -149,6 +161,8 @@ export default function ProfilePage() {
         )}
       </div>
 
+      <Alert type="success">{profileMessage}</Alert>
+
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">
           <span className="card-section-title">
@@ -182,7 +196,7 @@ export default function ProfilePage() {
           <div className="card-section">
             <span className="card-section-title">
               <Wallet size={15} className="profile-title-icon" />
-              Salary structure
+              Current salary structure
             </span>
             <p className="card-section-subtitle">
               How your CTC breaks down, as fixed by admin - effective from{" "}
@@ -298,12 +312,25 @@ export default function ProfilePage() {
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">
-          <span className="card-section-title">
-            <User size={15} className="profile-title-icon" />
-            Personal information
-          </span>
+          <div className="card-section-header">
+            <span className="card-section-title-text">
+              <User size={15} className="profile-title-icon" />
+              Personal information
+            </span>
+            {!isAdmin &&
+              (user?.personalInfoEditsRemaining > 0 ? (
+                <button type="button" className="link-btn" onClick={() => setEditingSection("personal")}>
+                  <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                  Edit
+                </button>
+              ) : (
+                <span className="card-section-header-note">No self-edits left - contact admin</span>
+              ))}
+          </div>
           <p className="card-section-subtitle">
-            These fields are managed by your admin - contact them to update any of these.
+            {isAdmin
+              ? "These fields are managed by your admin - contact them to update any of these."
+              : "Name, employee code, and email are managed by your admin - contact them to change those. Everything else you can edit yourself, up to 3 times."}
           </p>
 
           <div className="profile-detail-grid">
@@ -365,12 +392,24 @@ export default function ProfilePage() {
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">
-          <span className="card-section-title">
-            <CreditCard size={15} className="profile-title-icon" />
-            Statutory Information
-          </span>
+          <div className="card-section-header">
+            <span className="card-section-title-text">
+              <CreditCard size={15} className="profile-title-icon" />
+              Statutory Information
+            </span>
+            {!isAdmin &&
+              (user?.statutoryInfoEditsRemaining > 0 ? (
+                <button type="button" className="link-btn" onClick={() => setEditingSection("statutory")}>
+                  <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                  Edit
+                </button>
+              ) : (
+                <span className="card-section-header-note">No self-edits left - contact admin</span>
+              ))}
+          </div>
           <p className="card-section-subtitle">
             Sensitive numbers are shown masked. Uploaded documents are visible to admin only.
+            {!isAdmin && " PF number can only be changed by your admin - everything else you can edit yourself, up to 3 times."}
           </p>
 
           <div className="profile-detail-grid">
@@ -404,10 +443,26 @@ export default function ProfilePage() {
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">
-          <span className="card-section-title">
-            <Landmark size={15} className="profile-title-icon" />
-            Bank &amp; salary
-          </span>
+          <div className="card-section-header">
+            <span className="card-section-title-text">
+              <Landmark size={15} className="profile-title-icon" />
+              Bank &amp; salary
+            </span>
+            {!isAdmin &&
+              (user?.bankInfoEditsRemaining > 0 ? (
+                <button type="button" className="link-btn" onClick={() => setEditingSection("bank")}>
+                  <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                  Edit
+                </button>
+              ) : (
+                <span className="card-section-header-note">No self-edits left - contact admin</span>
+              ))}
+          </div>
+          {!isAdmin && (
+            <p className="card-section-subtitle">
+              Salary / CTC can only be changed by your admin - everything else you can edit yourself, up to 3 times.
+            </p>
+          )}
 
           <div className="profile-detail-grid">
             <div>
@@ -572,6 +627,33 @@ export default function ProfilePage() {
             setShowResignationModal(false);
             loadMyResignation();
           }}
+        />
+      )}
+
+      {editingSection === "personal" && (
+        <EditPersonalInfoModal
+          user={user}
+          editsRemaining={user?.personalInfoEditsRemaining ?? 0}
+          onClose={() => setEditingSection(null)}
+          onSaved={() => handleSectionSaved("Personal information")}
+        />
+      )}
+
+      {editingSection === "statutory" && (
+        <EditStatutoryInfoModal
+          user={user}
+          editsRemaining={user?.statutoryInfoEditsRemaining ?? 0}
+          onClose={() => setEditingSection(null)}
+          onSaved={() => handleSectionSaved("Statutory information")}
+        />
+      )}
+
+      {editingSection === "bank" && (
+        <EditBankInfoModal
+          user={user}
+          editsRemaining={user?.bankInfoEditsRemaining ?? 0}
+          onClose={() => setEditingSection(null)}
+          onSaved={() => handleSectionSaved("Bank information")}
         />
       )}
     </DashboardLayout>

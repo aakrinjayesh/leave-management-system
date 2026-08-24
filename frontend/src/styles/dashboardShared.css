@@ -108,6 +108,36 @@
   border-bottom: 1px solid #ede9fe;
 }
 
+/* Same look as .card-section-title, but as a flex row so an "Edit" link can
+   sit on the right (e.g. Profile page's self-editable sections) - the
+   border/padding/margin that used to live on the title itself moves here. */
+.card-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid #ede9fe;
+  flex-wrap: wrap;
+}
+
+.card-section-title-text {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 1.4px;
+  font-weight: 700;
+  color: #6b21a8;
+}
+
+.card-section-header-note {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
 .profile-title-icon {
   flex-shrink: 0;
   color: #6b21a8;
@@ -378,12 +408,69 @@
 }
 
 .remarks-note {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   background-color: var(--color-gray-50);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--color-primary-500);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+
+.remarks-note-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.remarks-note-date {
   font-size: 0.82rem;
   color: var(--text-secondary);
-  margin-top: 6px;
+}
+
+.remarks-note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+}
+
+.remarks-note-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.remarks-note-meta-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.remarks-note-meta-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.remarks-note-remarks {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.remarks-note-remarks strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.remarks-note-callout {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-warning-text);
 }
 
 .profile-detail-grid {
@@ -423,6 +510,95 @@
 .attachment-uploaded-row .link-btn {
   margin-left: auto;
   color: var(--color-danger-text, var(--color-primary-600));
+}
+
+.info-panel {
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: var(--color-gray-50);
+}
+
+.info-panel-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.info-panel-subtext {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.info-panel-empty {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.file-upload-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--color-primary-200);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-50);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.file-upload-box:hover {
+  border-color: var(--color-primary-400);
+  background-color: var(--color-primary-100);
+}
+
+.file-upload-box:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.file-upload-box-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-white);
+  color: var(--color-primary-600);
+}
+
+.file-upload-box-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.file-upload-box-text strong {
+  color: var(--color-primary-700);
+  font-weight: 600;
+}
+
+.file-upload-box-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.file-upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .logged-by-manager-tag {

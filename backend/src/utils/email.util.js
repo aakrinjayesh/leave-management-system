@@ -39,17 +39,17 @@ const sendViaForcehead = async ({ to, subject, html }) => {
 
 const otpEmailTemplates = {
   REGISTER: {
-    subject: "Activate your Aakrin Leave Management account",
+    subject: "Activate your Employee Portal account",
     heading: "Activate your account",
     intro: "Use the code below to verify your email and set up your password.",
   },
   LOGIN: {
-    subject: "Your Aakrin Leave Management login code",
+    subject: "Your Employee Portal login code",
     heading: "Confirm your login",
     intro: "Use the code below to finish signing in.",
   },
   FORGOT_PASSWORD: {
-    subject: "Reset your Aakrin Leave Management password",
+    subject: "Reset your Employee Portal password",
     heading: "Reset your password",
     intro: "Use the code below to verify it's you and set a new password.",
   },
@@ -64,7 +64,7 @@ const buildOtpEmailHtml = ({ heading, intro, otp, firstName, minutes }) => `
       ${otp}
     </div>
     <p>This code expires in ${minutes} minutes. If you didn't request this, you can safely ignore this email.</p>
-    <p style="margin-top: 32px; color: #6b7280; font-size: 13px;">Aakrin Leave Management</p>
+    <p style="margin-top: 32px; color: #6b7280; font-size: 13px;">Employee Portal</p>
   </div>
 `;
 
@@ -116,7 +116,7 @@ const buildLeaveEmailHtml = ({ heading, intro, detailsRows, footerNote }) => `
         .join("")}
     </table>
     ${footerNote ? `<p style="color: #6b7280; font-size: 13px;">${footerNote}</p>` : ""}
-    <p style="margin-top: 32px; color: #6b7280; font-size: 13px;">Aakrin Leave Management</p>
+    <p style="margin-top: 32px; color: #6b7280; font-size: 13px;">Employee Portal</p>
   </div>
 `;
 
@@ -152,7 +152,7 @@ const sendLeaveSubmittedEmail = async ({
       ["Reason", reason],
     ],
     footerNote:
-      "Log in to Aakrin Leave Management to approve or decline this request.",
+      "Log in to Employee Portal to approve or decline this request.",
   });
 
   return sendMail({
@@ -264,7 +264,7 @@ const buildSimpleEmailHtml = ({ heading, intro, footerNote }) => `
     <h2 style="margin-bottom: 8px;">${heading}</h2>
     <p>${intro}</p>
     ${footerNote ? `<p style="color: #6b7280; font-size: 13px;">${footerNote}</p>` : ""}
-    <p style="margin-top: 32px; color: #6b7280; font-size: 13px;">Aakrin Leave Management</p>
+    <p style="margin-top: 32px; color: #6b7280; font-size: 13px;">Employee Portal</p>
   </div>
 `;
 
@@ -380,7 +380,7 @@ const sendTimesheetSubmittedEmail = async ({
       ],
       ["Total hours", String(totalHours)],
     ],
-    footerNote: "Log in to Aakrin Leave Management to review it.",
+    footerNote: "Log in to Employee Portal to review it.",
   });
 
   return sendMail({
@@ -441,7 +441,7 @@ const sendResignationSubmittedEmail = async ({
       ["Proposed last working day", formatDateShort(proposedLastWorkingDate)],
       ["Reason", reason],
     ],
-    footerNote: "Log in to Aakrin Leave Management to accept or reject it.",
+    footerNote: "Log in to Employee Portal to accept or reject it.",
   });
 
   return sendMail({

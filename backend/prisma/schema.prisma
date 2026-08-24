@@ -120,7 +120,9 @@ model User {
     // it fires once per birthday instead of on every dashboard visit that day.
     lastBirthdayCelebratedYear Int?
 
-    // HR/payroll fields - admin-managed only, employees can view but not edit.
+    // HR/payroll fields - admin can always edit; employee can self-edit
+    // everything here except pfNumber and salaryCtc, up to statutoryInfoEditCount
+    // / bankInfoEditCount times each (see the counters below).
     pan               String?
     panHolderName     String?
     uan               String?
@@ -132,12 +134,21 @@ model User {
     pfNumber          String?
     salaryCtc         Float?
 
-    // Personal details - also admin-managed only.
+    // Personal details - admin can always edit; employee can self-edit these
+    // up to personalInfoEditCount times (see below).
     fatherName    String?
     spouseName    String?
     maritalStatus MaritalStatus?
     nationality   String?
     qualification String?
+
+    // How many times this employee has used their own self-service edit form
+    // for each profile section - each capped at 3 in the controller; once used
+    // up, only admin can change that section's fields. Admin edits never
+    // touch these counters and are never limited.
+    personalInfoEditCount  Int @default(0)
+    statutoryInfoEditCount Int @default(0)
+    bankInfoEditCount      Int @default(0)
 
     // Employment details shown on payslips.
     designation String?

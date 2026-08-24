@@ -37,6 +37,8 @@ export const getNotificationDestination = (type, user) => {
       return isAdmin ? "/admin/dashboard" : null;
     case "ACCOUNT_APPROVAL_DECIDED":
       return "/profile";
+    case "PROFILE_UPDATED":
+      return isAdmin ? "/admin/dashboard" : null;
     default:
       return null;
   }

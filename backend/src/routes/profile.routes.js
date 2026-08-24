@@ -1,12 +1,21 @@
 const express = require("express");
 const { authenticate } = require("../middlewares/auth.middleware");
 const validate = require("../middlewares/validate.middleware");
-const { submitResignationSchema } = require("../validators/profile.validator");
+const {
+  submitResignationSchema,
+  updateMyPersonalInfoSchema,
+  updateMyStatutoryInfoSchema,
+  updateMyBankInfoSchema,
+} = require("../validators/profile.validator");
 const controller = require("../controllers/profile.controller");
 
 const router = express.Router();
 
 router.use(authenticate);
+
+router.patch("/me/personal-info", validate(updateMyPersonalInfoSchema), controller.updateMyPersonalInfo);
+router.patch("/me/statutory-info", validate(updateMyStatutoryInfoSchema), controller.updateMyStatutoryInfo);
+router.patch("/me/bank-info", validate(updateMyBankInfoSchema), controller.updateMyBankInfo);
 
 router.put("/anniversary-celebration-seen", controller.markAnniversaryCelebrationSeen);
 router.put("/birthday-celebration-seen", controller.markBirthdayCelebrationSeen);

@@ -3,6 +3,7 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
+const { SELF_PROFILE_EDIT_LIMIT } = require("../utils/constants");
 const incomeTaxService = require("../services/incomeTax.service");
 const resignationService = require("../services/resignation.service");
 const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.service");
@@ -33,6 +34,66 @@ const getMyPhoto = asyncHandler(async (req, res) => {
       res.status(404).json({ success: false, message: "Photo file not found." });
     }
   });
+});
+
+// Lets every active admin know an employee changed their own profile - the
+// employee's edit applies immediately (no approval step), this is just a
+// heads-up so admin can review it if something looks off.
+const notifyAdminsOfProfileSelfEdit = async (employee, sectionLabel) => {
+  try {
+    const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" }, select: { id: true } });
+    await notificationService.notifyMany(
+      admins.map((admin) => admin.id),
+      {
+        type: notificationService.NOTIFICATION_TYPES.PROFILE_UPDATED,
+        title: "Employee updated their profile",
+        message: `${employee.firstName} ${employee.lastName} updated their ${sectionLabel}.`,
+      }
+    );
+  } catch (err) {
+    console.error("Failed to create profile self-edit notification:", err);
+  }
+};
+
+// Shared by all three updateMy*Info handlers below - checks the section's
+// edit count against SELF_PROFILE_EDIT_LIMIT, applies the (already-validated)
+// changes, and bumps the counter. Undefined fields in `data` are left
+// untouched by Prisma, so a field the employee didn't fill in on this save
+// just keeps its existing value.
+const applySelfEdit = async (userId, countField, data, sectionLabel) => {
+  const existing = await prisma.user.findUnique({ where: { id: userId } });
+  if (existing[countField] >= SELF_PROFILE_EDIT_LIMIT) {
+    throw ApiError.forbidden(
+      `You've used all ${SELF_PROFILE_EDIT_LIMIT} edits allowed for ${sectionLabel}. Contact your admin to make further changes.`
+    );
+  }
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { ...data, [countField]: { increment: 1 } },
+  });
+
+  await notifyAdminsOfProfileSelfEdit(user, sectionLabel);
+
+  return SELF_PROFILE_EDIT_LIMIT - user[countField];
+};
+
+const updateMyPersonalInfo = asyncHandler(async (req, res) => {
+  const editsRemaining = await applySelfEdit(req.user.id, "personalInfoEditCount", req.body, "Personal Information");
+
+  new ApiResponse(200, "Personal information updated.", { editsRemaining }).send(res);
+});
+
+const updateMyStatutoryInfo = asyncHandler(async (req, res) => {
+  const editsRemaining = await applySelfEdit(req.user.id, "statutoryInfoEditCount", req.body, "Statutory Information");
+
+  new ApiResponse(200, "Statutory information updated.", { editsRemaining }).send(res);
+});
+
+const updateMyBankInfo = asyncHandler(async (req, res) => {
+  const editsRemaining = await applySelfEdit(req.user.id, "bankInfoEditCount", req.body, "Bank Information");
+
+  new ApiResponse(200, "Bank information updated.", { editsRemaining }).send(res);
 });
 
 // Every active admin, plus this employee's own active manager if they have
@@ -237,6 +298,9 @@ const withdrawMyResignation = asyncHandler(async (req, res) => {
 module.exports = {
   markAnniversaryCelebrationSeen,
   markBirthdayCelebrationSeen,
+  updateMyPersonalInfo,
+  updateMyStatutoryInfo,
+  updateMyBankInfo,
   getMyPhoto,
   getMyIncomeTaxComputation,
   listMyIncomeTaxComputationGenerations,

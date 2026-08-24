@@ -4,7 +4,14 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const { hashPassword, comparePassword } = require("../utils/password.util");
-const { REFRESH_TOKEN_COOKIE, OTP_PURPOSE, USER_TYPE, USER_STATUS, RESIGNATION_STATUS } = require("../utils/constants");
+const {
+  REFRESH_TOKEN_COOKIE,
+  OTP_PURPOSE,
+  USER_TYPE,
+  USER_STATUS,
+  RESIGNATION_STATUS,
+  SELF_PROFILE_EDIT_LIMIT,
+} = require("../utils/constants");
 const { isEmployeeDomainEmail } = require("../utils/emailDomain.util");
 const otpService = require("../services/otp.service");
 const tokenService = require("../services/token.service");
@@ -89,6 +96,13 @@ const toSafeUser = async (user) => {
     ifscCode: user.ifscCode,
     pfNumber: user.pfNumber,
     salaryCtc: user.salaryCtc,
+    // How many more times this employee can use their own self-service edit
+    // form for each profile section (see profile.controller.js's
+    // updateMy{PersonalInfo,StatutoryInfo,BankInfo}) - 0 means only admin can
+    // change that section's fields from here on.
+    personalInfoEditsRemaining: Math.max(0, SELF_PROFILE_EDIT_LIMIT - user.personalInfoEditCount),
+    statutoryInfoEditsRemaining: Math.max(0, SELF_PROFILE_EDIT_LIMIT - user.statutoryInfoEditCount),
+    bankInfoEditsRemaining: Math.max(0, SELF_PROFILE_EDIT_LIMIT - user.bankInfoEditCount),
     salaryStructure: salaryStructure
       ? {
           id: salaryStructure.id,

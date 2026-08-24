@@ -21,6 +21,7 @@ const NOTIFICATION_TYPES = {
   PROJECT_UPDATED: "PROJECT_UPDATED",
   ACCOUNT_APPROVAL_REQUESTED: "ACCOUNT_APPROVAL_REQUESTED",
   ACCOUNT_APPROVAL_DECIDED: "ACCOUNT_APPROVAL_DECIDED",
+  PROFILE_UPDATED: "PROFILE_UPDATED",
 };
 
 const notify = ({ userId, type, title, message }) => prisma.notification.create({ data: { userId, type, title, message } });

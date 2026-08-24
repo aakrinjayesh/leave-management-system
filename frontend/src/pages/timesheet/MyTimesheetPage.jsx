@@ -289,14 +289,39 @@ export default function MyTimesheetPage() {
 
                   {data.submission && (
                     <div className="remarks-note">
-                      <StatusBadge status={data.submission.status} /> Submitted {formatDate(data.submission.submittedAt)}.
-                      {" Project Type: "}
-                      {formatProjectAssigned(data.submission.projectAssigned)}.
-                      {" Project Name: "}
-                      {data.submission.project?.name || "—"}.
-                      {data.submission.project && ` Working hours: ${formatWorkingHours(data.submission.project)}.`}
-                      {data.submission.managerRemarks ? ` Remarks: ${data.submission.managerRemarks}` : ""}
-                      {data.submission.status === "REJECTED" && " You can edit the entries below and submit this week again."}
+                      <div className="remarks-note-header">
+                        <StatusBadge status={data.submission.status} />
+                        <span className="remarks-note-date">Submitted {formatDate(data.submission.submittedAt)}</span>
+                      </div>
+
+                      <div className="remarks-note-meta">
+                        <div className="remarks-note-meta-item">
+                          <span className="remarks-note-meta-label">Project Type</span>
+                          <span className="remarks-note-meta-value">
+                            {formatProjectAssigned(data.submission.projectAssigned)}
+                          </span>
+                        </div>
+                        <div className="remarks-note-meta-item">
+                          <span className="remarks-note-meta-label">Project Name</span>
+                          <span className="remarks-note-meta-value">{data.submission.project?.name || "—"}</span>
+                        </div>
+                        {data.submission.project && (
+                          <div className="remarks-note-meta-item">
+                            <span className="remarks-note-meta-label">Working Hours</span>
+                            <span className="remarks-note-meta-value">{formatWorkingHours(data.submission.project)}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {data.submission.managerRemarks && (
+                        <p className="remarks-note-remarks">
+                          <strong>Remarks:</strong> {data.submission.managerRemarks}
+                        </p>
+                      )}
+
+                      {data.submission.status === "REJECTED" && (
+                        <p className="remarks-note-callout">You can edit the entries below and submit this week again.</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -311,15 +336,14 @@ export default function MyTimesheetPage() {
                       <div className="field">
                         <label className="field-label">Project details</label>
                         {data.project ? (
-                          <p className="helper-text" style={{ marginTop: 8 }}>
-                            {formatProjectType(data.project.projectType)}
-                            <br />
-                            {formatWorkingHours(data.project)}
-                          </p>
+                          <div className="info-panel">
+                            <p className="info-panel-title">{formatProjectType(data.project.projectType)}</p>
+                            <p className="info-panel-subtext">{formatWorkingHours(data.project)}</p>
+                          </div>
                         ) : (
-                          <p className="helper-text" style={{ marginTop: 8 }}>
-                            —
-                          </p>
+                          <div className="info-panel">
+                            <p className="info-panel-empty">—</p>
+                          </div>
                         )}
                       </div>
 
@@ -335,23 +359,32 @@ export default function MyTimesheetPage() {
                             </button>
                           </div>
                         ) : (
-                          <input
-                            type="file"
-                            className="field-input"
-                            accept=".xls,.xlsx"
-                            onChange={handleAttachmentChange}
-                            disabled={isUploadingAttachment}
-                          />
+                          <label className="file-upload-box">
+                            <span className="file-upload-box-icon">
+                              <Paperclip size={16} />
+                            </span>
+                            <span className="file-upload-box-text">
+                              <strong>Click to upload</strong> your Excel sheet
+                              <span className="file-upload-box-hint">.xls or .xlsx</span>
+                            </span>
+                            <input
+                              type="file"
+                              className="file-upload-input"
+                              accept=".xls,.xlsx"
+                              onChange={handleAttachmentChange}
+                              disabled={isUploadingAttachment}
+                            />
+                          </label>
                         )}
 
                         {isUploadingAttachment && (
-                          <p className="helper-text" style={{ marginTop: 0 }}>
+                          <p className="helper-text" style={{ marginTop: 8 }}>
                             Uploading…
                           </p>
                         )}
                         {attachmentError && <Alert type="error">{attachmentError}</Alert>}
 
-                        <p className="helper-text" style={{ marginTop: 0 }}>
+                        <p className="helper-text" style={{ marginTop: 8, marginBottom: 0 }}>
                           <Paperclip size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
                           Required before submitting.
                         </p>
