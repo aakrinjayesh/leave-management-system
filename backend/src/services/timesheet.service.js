@@ -20,6 +20,26 @@ const getWeekEnd = (weekStart) => {
   return sunday;
 };
 
+// 1st of the calendar month `date` falls in.
+const getMonthStart = (date) => {
+  const day = startOfUtcDay(date);
+  return new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 1));
+};
+
+const getMonthEnd = (monthStart) => new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0));
+
+// Start/end of whichever submission period a project uses - Monday-Sunday
+// week for WEEKLY projects (the original, still-default behavior), a full
+// calendar month for MONTHLY ones. Every place that used to call
+// getWeekStart/getWeekEnd directly to group entries into one submission now
+// goes through these instead, keyed off the project's own
+// submissionFrequency, so the exact same TimesheetEntry.weekStartDate /
+// TimesheetSubmission.weekStartDate columns keep working unchanged - they
+// just hold a week's Monday or a month's 1st depending on the project.
+const getPeriodStart = (date, frequency) => (frequency === "MONTHLY" ? getMonthStart(date) : getWeekStart(date));
+
+const getPeriodEnd = (periodStart, frequency) => (frequency === "MONTHLY" ? getMonthEnd(periodStart) : getWeekEnd(periodStart));
+
 // Computes the [start, end] date range a manager/admin view request is
 // asking about, given a view mode (day/week/month) and an anchor date.
 const getViewRange = (view, anchorDate) => {
@@ -401,6 +421,10 @@ module.exports = {
   startOfUtcDay,
   getWeekStart,
   getWeekEnd,
+  getMonthStart,
+  getMonthEnd,
+  getPeriodStart,
+  getPeriodEnd,
   getViewRange,
   getSubmittedEntriesInRange,
   getSubmissionsOverlappingRange,

@@ -17,6 +17,7 @@ export const getNotificationDestination = (type, user) => {
       if (isManager) return "/manager/timesheets";
       return isAdmin ? "/admin/reports" : null;
     case "TIMESHEET_DECIDED":
+    case "TIMESHEET_MONTH_END_REMINDER":
       return "/timesheet";
     case "RESIGNATION_SUBMITTED":
     case "RESIGNATION_WITHDRAWN":

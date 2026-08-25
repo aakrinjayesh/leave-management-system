@@ -601,6 +601,36 @@
   border: 0;
 }
 
+/* One small card per project an employee is on (e.g. manager's Employees
+   list) - stacked when someone's on more than one. */
+.project-chip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.project-chip {
+  padding: 6px 10px;
+  background-color: var(--color-primary-50);
+  border: 1px solid var(--color-primary-100);
+  border-radius: var(--radius-sm);
+}
+
+.project-chip-name {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-primary-700);
+}
+
+.project-chip-meta {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
 .logged-by-manager-tag {
   display: inline-block;
   margin-left: 8px;

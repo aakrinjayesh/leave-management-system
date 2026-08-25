@@ -375,6 +375,10 @@ export default function ProfilePage() {
               <div className="profile-detail-value">{user?.fatherName || "Not set"}</div>
             </div>
             <div>
+              <div className="profile-detail-label">Father/Mother Ph. number</div>
+              <div className="profile-detail-value">{user?.fatherMotherPhone || "Not set"}</div>
+            </div>
+            <div>
               <div className="profile-detail-label">Spouse name</div>
               <div className="profile-detail-value">{user?.spouseName || "Not set"}</div>
             </div>

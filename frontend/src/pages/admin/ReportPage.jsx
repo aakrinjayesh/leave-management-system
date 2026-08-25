@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Search,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
@@ -31,7 +32,14 @@ import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
-import { PROJECT_TYPE_OPTIONS, TIMEZONE_OPTIONS, formatProjectType, formatWorkingHours } from "../../utils/projectOptions";
+import {
+  PROJECT_TYPE_OPTIONS,
+  TIMEZONE_OPTIONS,
+  SUBMISSION_FREQUENCY_OPTIONS,
+  formatProjectType,
+  formatWorkingHours,
+  formatSubmissionFrequency,
+} from "../../utils/projectOptions";
 import "../../styles/dashboardShared.css";
 
 // Trims to 1 decimal only when it's not a whole number - "5" instead of
@@ -54,14 +62,23 @@ function EmployeeListCard({
   const navigate = useNavigate();
   const showTimesheetColumn = Boolean(weekSubmissionsByKey);
   const showWorkloadColumns = Boolean(workloadByUserId);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
 
   // Scoped to just this card's own list (e.g. only the 10 people on Internal
   // Project), not every employee company-wide - a quick jump-to-person
-  // picker for when that list itself is too long to scroll through.
-  const visibleEmployees = selectedEmployeeId
-    ? employees.filter((employee) => String(employee.id) === selectedEmployeeId)
+  // picker for when that list itself is too long to scroll through. Matched
+  // by email (unique per person, same as the DB's own constraint) rather
+  // than name, since two employees could share the same name.
+  const visibleEmployees = selectedEmployeeEmail
+    ? employees.filter((employee) => employee.email === selectedEmployeeEmail)
     : employees;
+
+  // One option per person, not per row - an employee on several projects has
+  // one row per project (same email repeated), so mapping `employees`
+  // directly would render duplicate <option> elements sharing the same
+  // key/value, which confuses the <select>'s reconciliation and can leave
+  // the wrong rows showing after picking someone.
+  const employeeOptions = [...new Map(employees.map((employee) => [employee.email, employee])).values()];
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -72,10 +89,10 @@ function EmployeeListCard({
           </span>
           {employees.length > 0 && (
             <div className="field" style={{ maxWidth: 280, marginBottom: 0 }}>
-              <FormSelect value={selectedEmployeeId} onChange={(e) => setSelectedEmployeeId(e.target.value)}>
+              <FormSelect value={selectedEmployeeEmail} onChange={(e) => setSelectedEmployeeEmail(e.target.value)}>
                 <option value="">All {employees.length} members</option>
-                {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
+                {employeeOptions.map((employee) => (
+                  <option key={employee.email} value={employee.email}>
                     {employee.firstName} {employee.lastName} ({employee.email})
                   </option>
                 ))}
@@ -186,6 +203,9 @@ const DEFAULT_NEW_PROJECT = {
   timezone: "",
   workStartTime: "",
   workEndTime: "",
+  startDate: "",
+  endDate: "",
+  submissionFrequency: "",
 };
 
 function ManageProjectsCard() {
@@ -218,6 +238,10 @@ function ManageProjectsCard() {
       setError("Please select a project type.");
       return;
     }
+    if (!newProject.submissionFrequency) {
+      setError("Please select whether timesheets are submitted weekly or monthly.");
+      return;
+    }
     if (!newProject.timezone.trim()) {
       setError("Please enter a timezone.");
       return;
@@ -230,11 +254,24 @@ function ManageProjectsCard() {
       setError("End time must be after the start time.");
       return;
     }
+    if (!newProject.startDate) {
+      setError("Please set a project start date.");
+      return;
+    }
+    if (newProject.endDate && newProject.endDate < newProject.startDate) {
+      setError("End date can't be before the start date.");
+      return;
+    }
 
     setError("");
     setIsAdding(true);
     try {
-      await adminApi.createProject({ ...newProject, name: newProject.name.trim(), employeeIds: newProjectMemberIds });
+      await adminApi.createProject({
+        ...newProject,
+        name: newProject.name.trim(),
+        endDate: newProject.endDate || null,
+        employeeIds: newProjectMemberIds,
+      });
       setNewProject(DEFAULT_NEW_PROJECT);
       setNewProjectMemberIds([]);
       await loadProjects();
@@ -295,7 +332,7 @@ function ManageProjectsCard() {
             <Alert type="error">{error}</Alert>
 
             <form onSubmit={handleAdd} style={{ marginTop: 16, marginBottom: 16 }}>
-              <div className="form-two-col">
+              <div className="form-three-col">
                 <TextInput
                   label="Project name"
                   placeholder="New project name"
@@ -310,8 +347,22 @@ function ManageProjectsCard() {
                     </option>
                   ))}
                 </FormSelect>
+                <div className="form-two-col" style={{ margin: 0 }}>
+                  <TextInput
+                    label="Start date"
+                    type="date"
+                    value={newProject.startDate}
+                    onChange={handleNewProjectChange("startDate")}
+                  />
+                  <TextInput
+                    label="End date"
+                    type="date"
+                    value={newProject.endDate}
+                    onChange={handleNewProjectChange("endDate")}
+                  />
+                </div>
               </div>
-              <div className="form-two-col">
+              <div className="form-three-col">
                 <TextInput
                   label="Timezone"
                   list="timezone-suggestions"
@@ -331,6 +382,18 @@ function ManageProjectsCard() {
                     onChange={(value) => setNewProject((prev) => ({ ...prev, workEndTime: value }))}
                   />
                 </div>
+                <FormSelect
+                  label="Timesheet submission"
+                  value={newProject.submissionFrequency}
+                  onChange={handleNewProjectChange("submissionFrequency")}
+                >
+                  <option value="" hidden></option>
+                  {SUBMISSION_FREQUENCY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </FormSelect>
               </div>
               <datalist id="timezone-suggestions">
                 {TIMEZONE_OPTIONS.map((o) => (
@@ -373,6 +436,9 @@ function ManageProjectsCard() {
                   <th>Project name</th>
                   <th>Type</th>
                   <th>Working hours</th>
+                  <th>Start date</th>
+                  <th>End date</th>
+                  <th>Submission</th>
                   <th>Members</th>
                   <th>Status</th>
                   <th></th>
@@ -384,6 +450,9 @@ function ManageProjectsCard() {
                     <td className="table-cell-primary">{project.name}</td>
                     <td className="table-cell-secondary">{formatProjectType(project.projectType)}</td>
                     <td className="table-cell-secondary">{formatWorkingHours(project)}</td>
+                    <td className="table-cell-secondary">{formatDate(project.startDate)}</td>
+                    <td className="table-cell-secondary">{project.endDate ? formatDate(project.endDate) : "Ongoing"}</td>
+                    <td className="table-cell-secondary">{formatSubmissionFrequency(project.submissionFrequency)}</td>
                     <td className="table-cell-secondary">{project.assignedEmployees?.length ?? 0}</td>
                     <td>
                       <StatusBadge status={project.isActive ? "ACTIVE" : "INACTIVE"} />
@@ -549,12 +618,27 @@ export default function ReportPage() {
             </div>
 
             <div className="field" style={{ maxWidth: 320, marginBottom: 20 }}>
-              <TextInput
-                label="Week of"
-                type="date"
-                value={weekDate}
-                onChange={(e) => setWeekDate(e.target.value)}
-              />
+              <label className="field-label">Week of</label>
+              <div className="field-input-wrap">
+                <input
+                  type="date"
+                  className="field-input"
+                  style={weekDate ? { paddingRight: 66 } : undefined}
+                  value={weekDate}
+                  onChange={(e) => setWeekDate(e.target.value)}
+                />
+                {weekDate && (
+                  <button
+                    type="button"
+                    className="field-toggle"
+                    style={{ right: 34 }}
+                    onClick={() => setWeekDate("")}
+                    aria-label="Clear week filter"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
               {effectiveWeekData && (
                 <p className="helper-text" style={{ marginTop: 0 }}>
                   {formatDateRange(effectiveWeekData.weekStartDate, effectiveWeekData.weekEndDate)}

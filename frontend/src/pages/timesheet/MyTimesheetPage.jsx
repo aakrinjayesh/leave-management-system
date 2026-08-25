@@ -24,13 +24,19 @@ const formatDayLabel = (date) => DAY_LABEL_FORMATTER.format(new Date(date));
 const HOUR_OPTIONS = Array.from({ length: 25 }, (_, i) => i); // 0..24
 const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => i * 5); // 0,5,10,...,55
 
-// The 7 calendar dates (Mon-Sun) for the week starting at weekStartDate.
-const buildWeekDates = (weekStartDate) =>
-  Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStartDate);
-    d.setUTCDate(d.getUTCDate() + i);
-    return toDateInputValue(d);
-  });
+// Every calendar date from periodStart to periodEnd inclusive - 7 dates for
+// a WEEKLY project's Monday-Sunday grid, ~28-31 for a MONTHLY project's
+// full-month grid. Same table either way, just a longer or shorter list.
+const buildPeriodDates = (periodStart, periodEnd) => {
+  const dates = [];
+  const cursor = new Date(periodStart);
+  const end = new Date(periodEnd);
+  while (cursor <= end) {
+    dates.push(toDateInputValue(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+};
 
 export default function MyTimesheetPage() {
   const [projects, setProjects] = useState(null);
@@ -57,14 +63,18 @@ export default function MyTimesheetPage() {
     });
   }, []);
 
-  const loadWeek = (param, projectId) =>
+  // Whether the currently active project submits weekly or monthly - drives
+  // the grid length, nav step, and labels below.
+  const isMonthly = data?.project?.submissionFrequency === "MONTHLY";
+
+  const loadPeriod = (param, projectId) =>
     timesheetApi.getMyEntries(param || undefined, projectId).then((res) => {
       setData(res);
       // Rebuild each row's editable state from the loaded entries - one row
       // per calendar day, blank for days with nothing saved yet.
       const entriesByDate = Object.fromEntries(res.entries.map((e) => [toDateInputValue(e.date), e]));
       const nextRowState = {};
-      buildWeekDates(res.weekStartDate).forEach((dateKey) => {
+      buildPeriodDates(res.weekStartDate, res.weekEndDate).forEach((dateKey) => {
         const entry = entriesByDate[dateKey];
         const { hours, minutes } = entry ? splitHoursMinutes(entry.hoursWorked) : { hours: 0, minutes: 0 };
         nextRowState[dateKey] = {
@@ -82,7 +92,7 @@ export default function MyTimesheetPage() {
 
   useEffect(() => {
     if (!activeProjectId) return;
-    loadWeek(weekParam, activeProjectId);
+    loadPeriod(weekParam, activeProjectId);
     loadSubmissions(activeProjectId);
     setAttachment(null);
     setAttachmentError("");
@@ -119,15 +129,17 @@ export default function MyTimesheetPage() {
     }
   };
 
-  const goToPrevWeek = () => {
+  const goToPrevPeriod = () => {
     const base = new Date(data.weekStartDate);
-    base.setUTCDate(base.getUTCDate() - 7);
+    if (isMonthly) base.setUTCMonth(base.getUTCMonth() - 1);
+    else base.setUTCDate(base.getUTCDate() - 7);
     setWeekParam(toDateInputValue(base));
   };
 
-  const goToNextWeek = () => {
+  const goToNextPeriod = () => {
     const base = new Date(data.weekStartDate);
-    base.setUTCDate(base.getUTCDate() + 7);
+    if (isMonthly) base.setUTCMonth(base.getUTCMonth() + 1);
+    else base.setUTCDate(base.getUTCDate() + 7);
     setWeekParam(toDateInputValue(base));
   };
 
@@ -135,11 +147,11 @@ export default function MyTimesheetPage() {
     setRowState((prev) => ({ ...prev, [dateKey]: { ...prev[dateKey], [field]: value } }));
   };
 
-  const handleSaveWeek = async () => {
+  const handleSaveEntries = async () => {
     setError("");
     setSuccessMessage("");
 
-    const dateKeys = buildWeekDates(data.weekStartDate);
+    const dateKeys = buildPeriodDates(data.weekStartDate, data.weekEndDate);
     const toSave = [];
     for (const dateKey of dateKeys) {
       const row = rowState[dateKey];
@@ -164,18 +176,18 @@ export default function MyTimesheetPage() {
       return;
     }
 
-    setSavingDate("__week__");
+    setSavingDate("__period__");
     try {
       await Promise.all(
         toSave.map(({ dateKey, hoursWorked, description }) =>
           timesheetApi.saveEntry({ date: dateKey, hoursWorked, description, projectId: activeProjectId })
         )
       );
-      setSuccessMessage("Week saved.");
-      await loadWeek(weekParam, activeProjectId);
+      setSuccessMessage("Entries saved.");
+      await loadPeriod(weekParam, activeProjectId);
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't save the week. Please try again."));
-      await loadWeek(weekParam, activeProjectId);
+      setError(getErrorMessage(err, "Couldn't save your entries. Please try again."));
+      await loadPeriod(weekParam, activeProjectId);
     } finally {
       setSavingDate(null);
     }
@@ -189,7 +201,7 @@ export default function MyTimesheetPage() {
     setSavingDate(dateKey);
     try {
       await timesheetApi.deleteEntry(row.id);
-      await loadWeek(weekParam, activeProjectId);
+      await loadPeriod(weekParam, activeProjectId);
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't delete this entry."));
     } finally {
@@ -197,12 +209,12 @@ export default function MyTimesheetPage() {
     }
   };
 
-  const handleSubmitWeek = async () => {
+  const handleSubmitPeriod = async () => {
     setError("");
     setSuccessMessage("");
 
     if (!attachment) {
-      setError("Please upload this week's Excel sheet before submitting.");
+      setError(`Please upload ${isMonthly ? "this month's" : "this week's"} Excel sheet before submitting.`);
       return;
     }
 
@@ -216,10 +228,10 @@ export default function MyTimesheetPage() {
       );
       setSuccessMessage("Timesheet submitted for approval.");
       setAttachment(null);
-      await loadWeek(weekParam, activeProjectId);
+      await loadPeriod(weekParam, activeProjectId);
       await loadSubmissions(activeProjectId);
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't submit this week's timesheet."));
+      setError(getErrorMessage(err, "Couldn't submit this timesheet."));
     } finally {
       setSavingDate(null);
     }
@@ -230,7 +242,7 @@ export default function MyTimesheetPage() {
       <div className="page-header">
         <div>
           <h1>My Timesheet</h1>
-          <p>Log what you worked on each day, then submit the week for approval.</p>
+          <p>Log what you worked on each day, then submit for approval.</p>
         </div>
       </div>
 
@@ -276,14 +288,15 @@ export default function MyTimesheetPage() {
               <div className="card" style={{ marginBottom: 20 }}>
                 <div className="card-section">
                   <div className="section-flex-row">
-                    <button type="button" className="link-btn" onClick={goToPrevWeek}>
-                      <ChevronLeft size={14} style={{ verticalAlign: "-2px" }} /> Previous week
+                    <button type="button" className="link-btn" onClick={goToPrevPeriod}>
+                      <ChevronLeft size={14} style={{ verticalAlign: "-2px" }} /> Previous {isMonthly ? "month" : "week"}
                     </button>
                     <span className="card-section-title" style={{ marginBottom: 0 }}>
-                      Week of {formatDateRange(data.weekStartDate, data.weekEndDate)} — {formatHoursMinutes(data.totalHours)}
+                      {isMonthly ? "Month" : "Week"} of {formatDateRange(data.weekStartDate, data.weekEndDate)} —{" "}
+                      {formatHoursMinutes(data.totalHours)}
                     </span>
-                    <button type="button" className="link-btn" onClick={goToNextWeek}>
-                      Next week <ChevronRight size={14} style={{ verticalAlign: "-2px" }} />
+                    <button type="button" className="link-btn" onClick={goToNextPeriod}>
+                      Next {isMonthly ? "month" : "week"} <ChevronRight size={14} style={{ verticalAlign: "-2px" }} />
                     </button>
                   </div>
 
@@ -320,7 +333,9 @@ export default function MyTimesheetPage() {
                       )}
 
                       {data.submission.status === "REJECTED" && (
-                        <p className="remarks-note-callout">You can edit the entries below and submit this week again.</p>
+                        <p className="remarks-note-callout">
+                          You can edit the entries below and submit this {isMonthly ? "month" : "week"} again.
+                        </p>
                       )}
                     </div>
                   )}
@@ -329,7 +344,7 @@ export default function MyTimesheetPage() {
 
               <div className="card" style={{ marginBottom: 20 }}>
                 <div className="card-section">
-                  <span className="card-section-title">This week</span>
+                  <span className="card-section-title">{isMonthly ? "This month" : "This week"}</span>
 
                   {(!data.submission || data.submission.status === "REJECTED") && (
                     <div className="form-two-col" style={{ marginBottom: 20 }}>
@@ -339,6 +354,11 @@ export default function MyTimesheetPage() {
                           <div className="info-panel">
                             <p className="info-panel-title">{formatProjectType(data.project.projectType)}</p>
                             <p className="info-panel-subtext">{formatWorkingHours(data.project)}</p>
+                            <p className="info-panel-subtext">
+                              {data.project.endDate
+                                ? formatDateRange(data.project.startDate, data.project.endDate)
+                                : `${formatDate(data.project.startDate)} – Ongoing`}
+                            </p>
                           </div>
                         ) : (
                           <div className="info-panel">
@@ -348,7 +368,7 @@ export default function MyTimesheetPage() {
                       </div>
 
                       <div className="field">
-                        <label className="field-label">This week's Excel sheet</label>
+                        <label className="field-label">{isMonthly ? "This month's" : "This week's"} Excel sheet</label>
 
                         {attachment ? (
                           <div className="attachment-uploaded-row">
@@ -404,7 +424,7 @@ export default function MyTimesheetPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {buildWeekDates(data.weekStartDate).map((dateKey) => {
+                        {buildPeriodDates(data.weekStartDate, data.weekEndDate).map((dateKey) => {
                           const row = rowState[dateKey] || { hours: "0", minutes: "0", description: "", locked: false };
                           const isBusy = savingDate === dateKey;
 
@@ -473,13 +493,13 @@ export default function MyTimesheetPage() {
 
                   {(!data.submission || data.submission.status === "REJECTED") && (
                     <div className="modal-actions" style={{ marginTop: 20, justifyContent: "flex-start", gap: 10 }}>
-                      <Button variant="secondary" onClick={handleSaveWeek} isLoading={savingDate === "__week__"}>
+                      <Button variant="secondary" onClick={handleSaveEntries} isLoading={savingDate === "__period__"}>
                         <Save size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
-                        Save week
+                        Save entries
                       </Button>
                       {data.entries.length > 0 && (
-                        <Button onClick={handleSubmitWeek} isLoading={savingDate === "__submit__"}>
-                          {data.submission?.status === "REJECTED" ? "Resubmit week" : "Submit week"}
+                        <Button onClick={handleSubmitPeriod} isLoading={savingDate === "__submit__"}>
+                          {data.submission?.status === "REJECTED" ? "Resubmit for approval" : "Submit for approval"}
                         </Button>
                       )}
                     </div>
@@ -507,7 +527,7 @@ export default function MyTimesheetPage() {
                       <table className="data-table">
                         <thead>
                           <tr>
-                            <th>Week</th>
+                            <th>Period</th>
                             <th>Total hours</th>
                             <th>Sent to</th>
                             <th>Status</th>

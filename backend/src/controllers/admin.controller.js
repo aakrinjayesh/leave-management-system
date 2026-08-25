@@ -347,6 +347,7 @@ const toFullUserDetails = (user) => ({
   exitDate: user.exitDate,
   gender: user.gender,
   fatherName: user.fatherName,
+  fatherMotherPhone: user.fatherMotherPhone,
   spouseName: user.spouseName,
   maritalStatus: user.maritalStatus,
   nationality: user.nationality,

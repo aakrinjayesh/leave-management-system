@@ -19,9 +19,19 @@ export const TIMEZONE_OPTIONS = [
   { value: "SINGAPORE", label: "Singapore (SGT, UTC+8)" },
 ];
 
+// Whether employees on a project submit one timesheet per week or per
+// calendar month - drives the grid, nav buttons, and labels on their own
+// timesheet page (see MyTimesheetPage.jsx).
+export const SUBMISSION_FREQUENCY_OPTIONS = [
+  { value: "WEEKLY", label: "Weekly" },
+  { value: "MONTHLY", label: "Monthly" },
+];
+
 const findLabel = (options, value) => options.find((o) => o.value === value)?.label || value;
 
 export const formatProjectType = (value) => findLabel(PROJECT_TYPE_OPTIONS, value);
+
+export const formatSubmissionFrequency = (value) => findLabel(SUBMISSION_FREQUENCY_OPTIONS, value);
 
 export const formatProjectTimezone = (value) => findLabel(TIMEZONE_OPTIONS, value);
 

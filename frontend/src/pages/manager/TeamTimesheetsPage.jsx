@@ -141,6 +141,7 @@ export default function TeamTimesheetsPage() {
                 <thead>
                   <tr>
                     <th>Employee</th>
+                    <th>Project</th>
                     <th>Week</th>
                     <th>Submitted on</th>
                     <th>Total hours</th>
@@ -158,6 +159,7 @@ export default function TeamTimesheetsPage() {
                       <td className="table-cell-primary">
                         {submission.user.firstName} {submission.user.lastName}
                       </td>
+                      <td className="table-cell-secondary">{submission.project?.name || "—"}</td>
                       <td>{formatDateRange(submission.weekStartDate, submission.weekEndDate)}</td>
                       <td className="table-cell-secondary">{formatDate(submission.submittedAt)}</td>
                       <td>{formatHoursMinutes(submission.totalHours)}</td>

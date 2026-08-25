@@ -67,11 +67,14 @@ const listProjects = asyncHandler(async (req, res) => {
   new ApiResponse(200, "OK", { projects }).send(res);
 });
 
-const toProjectDetails = ({ projectType, timezone, workStartTime, workEndTime }) => ({
+const toProjectDetails = ({ projectType, timezone, workStartTime, workEndTime, startDate, endDate, submissionFrequency }) => ({
   projectType,
   timezone,
   workStartTime,
   workEndTime,
+  startDate,
+  endDate,
+  submissionFrequency,
 });
 
 const createProject = asyncHandler(async (req, res) => {

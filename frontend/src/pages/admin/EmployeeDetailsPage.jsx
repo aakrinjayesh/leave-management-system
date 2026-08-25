@@ -68,6 +68,7 @@ const toForm = (user) => ({
   joiningDate: toDateInputValue(user.joiningDate),
   gender: user.gender ?? "",
   fatherName: user.fatherName ?? "",
+  fatherMotherPhone: user.fatherMotherPhone ?? "",
   spouseName: user.spouseName ?? "",
   maritalStatus: user.maritalStatus ?? "",
   nationality: user.nationality ?? "",
@@ -160,6 +161,7 @@ function EmployeeDetailsContent({ id }) {
         joiningDate: form.joiningDate || null,
         gender: form.gender || null,
         fatherName: form.fatherName.trim() || null,
+        fatherMotherPhone: form.fatherMotherPhone.trim() || null,
         spouseName: form.spouseName.trim() || null,
         maritalStatus: form.maritalStatus || null,
         nationality: form.nationality.trim() || null,
@@ -351,11 +353,19 @@ function EmployeeDetailsContent({ id }) {
 
             <div className="form-two-col">
               <TextInput label="Father's name" value={form.fatherName} onChange={handleChange("fatherName")} />
-              <TextInput label="Spouse name" value={form.spouseName} onChange={handleChange("spouseName")} />
+              <TextInput
+                label="Father/Mother Ph. number"
+                value={form.fatherMotherPhone}
+                onChange={handleChange("fatherMotherPhone")}
+              />
             </div>
 
             <div className="form-two-col">
+              <TextInput label="Spouse name" value={form.spouseName} onChange={handleChange("spouseName")} />
               <TextInput label="Nationality" value={form.nationality} onChange={handleChange("nationality")} />
+            </div>
+
+            <div className="form-two-col">
               <TextInput label="Qualification" value={form.qualification} onChange={handleChange("qualification")} />
             </div>
           </div>

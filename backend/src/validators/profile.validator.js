@@ -39,6 +39,7 @@ const updateMyPersonalInfoSchema = z.object({
   gender: z.enum([GENDER.MALE, GENDER.FEMALE, GENDER.OTHER]).optional(),
   maritalStatus: z.enum([MARITAL_STATUS.SINGLE, MARITAL_STATUS.MARRIED, MARITAL_STATUS.OTHER]).optional(),
   fatherName: nullableString(150),
+  fatherMotherPhone: nullableString(20),
   spouseName: nullableString(150),
   nationality: nullableString(100),
   qualification: nullableString(150),

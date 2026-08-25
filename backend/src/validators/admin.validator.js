@@ -130,6 +130,7 @@ const updateUserDetailsSchema = z.object({
   ifscCode: nullablePattern(IFSC_REGEX, "IFSC code must be in the format ABCD0123456.", 11, { uppercase: true }),
   pfNumber: nullablePattern(PF_NUMBER_REGEX, "PF number can only contain letters, numbers, and slashes.", 30),
   fatherName: nullableString(150),
+  fatherMotherPhone: nullableString(20),
   spouseName: nullableString(150),
   maritalStatus: z.enum([MARITAL_STATUS.SINGLE, MARITAL_STATUS.MARRIED, MARITAL_STATUS.OTHER]).nullable().optional(),
   nationality: nullableString(100),
@@ -227,11 +228,26 @@ const TIME_OF_DAY_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const projectDetailsSchema = {
   projectType: z.enum(["ASSIGNED", "NOT_ASSIGNED"], { message: "Please select whether this is a client or internal project." }),
+  submissionFrequency: z.enum(["WEEKLY", "MONTHLY"], {
+    message: "Please select whether timesheets on this project are submitted weekly or monthly.",
+  }),
   // Free text - admin can pick a suggested timezone or type any other label.
   timezone: z.string().trim().min(1, "Please enter a timezone.").max(100),
   workStartTime: z.string().regex(TIME_OF_DAY_REGEX, "Please enter a valid start time."),
   workEndTime: z.string().regex(TIME_OF_DAY_REGEX, "Please enter a valid end time."),
+  startDate: z.coerce.date({ errorMap: () => ({ message: "Please choose a project start date." }) }),
+  // Optional - a project may still be ongoing with no planned end date yet.
+  endDate: z.coerce.date().nullable().optional(),
 };
+
+// Both createProjectSchema and renameProjectSchema get this same
+// cross-field check - shared here so the two definitions below don't have to
+// repeat it. Skipped entirely when there's no end date to compare.
+const withDateRangeCheck = (schema) =>
+  schema.refine((data) => !data.endDate || data.endDate >= data.startDate, {
+    message: "End date can't be before the start date.",
+    path: ["endDate"],
+  });
 
 // Optional/omittable on create (a brand-new project can start with no
 // members), but on rename it's how membership edits are submitted - an
@@ -239,17 +255,21 @@ const projectDetailsSchema = {
 // "leave membership as-is" (see renameProject in project.service.js).
 const employeeIdsSchema = z.array(z.coerce.number().int().positive()).optional();
 
-const createProjectSchema = z.object({
-  name: z.string().trim().min(1, "Please enter a project name.").max(120),
-  employeeIds: employeeIdsSchema,
-  ...projectDetailsSchema,
-});
+const createProjectSchema = withDateRangeCheck(
+  z.object({
+    name: z.string().trim().min(1, "Please enter a project name.").max(120),
+    employeeIds: employeeIdsSchema,
+    ...projectDetailsSchema,
+  })
+);
 
-const renameProjectSchema = z.object({
-  name: z.string().trim().min(1, "Please enter a project name.").max(120),
-  employeeIds: employeeIdsSchema,
-  ...projectDetailsSchema,
-});
+const renameProjectSchema = withDateRangeCheck(
+  z.object({
+    name: z.string().trim().min(1, "Please enter a project name.").max(120),
+    employeeIds: employeeIdsSchema,
+    ...projectDetailsSchema,
+  })
+);
 
 module.exports = {
   createUserSchema,

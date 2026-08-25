@@ -16,6 +16,7 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
     gender: user?.gender || "",
     maritalStatus: user?.maritalStatus || "",
     fatherName: user?.fatherName || "",
+    fatherMotherPhone: user?.fatherMotherPhone || "",
     spouseName: user?.spouseName || "",
     nationality: user?.nationality || "",
     qualification: user?.qualification || "",
@@ -93,6 +94,14 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
             value={form.fatherName}
             onChange={(e) => update("fatherName", e.target.value)}
           />
+          <TextInput
+            label="Father/Mother Ph. number"
+            value={form.fatherMotherPhone}
+            onChange={(e) => update("fatherMotherPhone", e.target.value)}
+          />
+        </div>
+
+        <div className="form-two-col">
           <TextInput
             label="Spouse name"
             value={form.spouseName}

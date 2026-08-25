@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as adminApi from "../../api/admin.api";
+import { formatDate } from "../../utils/formatDate";
 
 // Checkbox list of who's available to assign to a project - shared between
 // "Create project" and "Edit project" since both manage the exact same field
@@ -14,11 +15,28 @@ import * as adminApi from "../../api/admin.api";
 // that changes on every project-list reload (e.g. the projects array itself).
 export default function ProjectMembersField({ selectedIds, onChange, recentHint, refreshKey }) {
   const [employees, setEmployees] = useState(null);
+  const [projectsByEmployeeId, setProjectsByEmployeeId] = useState({});
 
   useEffect(() => {
     adminApi.listUsers().then((data) => {
       setEmployees(data.users.filter((u) => u.status === "ACTIVE" && u.userType !== "ADMIN"));
     });
+
+    // What each employee is currently working on - shown under their name so
+    // admin can see at a glance who's already on a project (and since when)
+    // before assigning them to another one.
+    adminApi
+      .getProjectAssignmentReport()
+      .then((report) => {
+        const byEmployeeId = {};
+        [...report.assigned, ...report.notAssigned].forEach((row) => {
+          if (!row.projectName) return;
+          if (!byEmployeeId[row.id]) byEmployeeId[row.id] = [];
+          byEmployeeId[row.id].push({ projectName: row.projectName, projectSince: row.projectSince });
+        });
+        setProjectsByEmployeeId(byEmployeeId);
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
@@ -53,16 +71,31 @@ export default function ProjectMembersField({ selectedIds, onChange, recentHint,
             padding: "8px 12px",
           }}
         >
-          {employees.map((employee) => (
-            <label key={employee.id} className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(employee.id)}
-                onChange={() => toggle(employee.id)}
-              />
-              {employee.firstName} {employee.lastName} — {employee.email}
-            </label>
-          ))}
+          {employees.map((employee) => {
+            const currentProjects = projectsByEmployeeId[employee.id] || [];
+            return (
+              <label key={employee.id} className="checkbox-row" style={{ alignItems: "flex-start", margin: "6px 0" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(employee.id)}
+                  onChange={() => toggle(employee.id)}
+                  style={{ marginTop: 3 }}
+                />
+                <span>
+                  <span>
+                    {employee.firstName} {employee.lastName}
+                  </span>
+                  <span className="helper-text" style={{ display: "block", margin: "2px 0 0" }}>
+                    {currentProjects.length > 0
+                      ? currentProjects
+                          .map((p) => `${p.projectName} (since ${formatDate(p.projectSince)})`)
+                          .join(", ")
+                      : "Not currently on a project"}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
         </div>
       )}
     </div>

@@ -6,7 +6,6 @@ import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import * as profileApi from "../../api/profile.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
-import { formatDate } from "../../utils/formatDate";
 
 // Earliest date the picker allows - "YYYY-MM-DD". Only rules out the past;
 // no minimum notice period is enforced on the date itself.
@@ -54,10 +53,6 @@ export default function ResignationModal({ user, onClose, onSubmitted }) {
           <div>
             <div className="profile-detail-label">Employee code</div>
             <div className="profile-detail-value">{user?.employeeCode || "Not set"}</div>
-          </div>
-          <div>
-            <div className="profile-detail-label">Date of joining</div>
-            <div className="profile-detail-value">{user?.joiningDate ? formatDate(user.joiningDate) : "Not set"}</div>
           </div>
         </div>
 

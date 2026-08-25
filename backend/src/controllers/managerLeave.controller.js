@@ -45,6 +45,13 @@ const listEmployees = asyncHandler(async (req, res) => {
     include: {
       leaveBalances: { where: { year: fiscalYear }, include: { leavePolicy: true } },
       leaveRequests: { where: { status: "PENDING" }, select: { id: true } },
+      // Every project this employee is currently on - each membership's
+      // assignedAt is when THEY joined that project, separate from the
+      // project's own startDate (when the project itself began).
+      projectMemberships: {
+        include: { project: { select: { name: true, startDate: true, endDate: true } } },
+        orderBy: { assignedAt: "desc" },
+      },
     },
   });
 
@@ -66,6 +73,12 @@ const listEmployees = asyncHandler(async (req, res) => {
         allocatedLeaves: b.allocatedLeaves,
         usedLeaves: b.usedLeaves,
         remainingLeaves: b.remainingLeaves,
+      })),
+      projects: employee.projectMemberships.map((m) => ({
+        projectName: m.project.name,
+        projectStartDate: m.project.startDate,
+        projectEndDate: m.project.endDate,
+        assignedAt: m.assignedAt,
       })),
     };
   });

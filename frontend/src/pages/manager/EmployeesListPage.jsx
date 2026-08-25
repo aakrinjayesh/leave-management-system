@@ -5,6 +5,7 @@ import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
 import StatCard from "../../components/common/StatCard";
 import * as managerLeaveApi from "../../api/managerLeave.api";
+import { formatDate } from "../../utils/formatDate";
 import "../../styles/dashboardShared.css";
 
 export default function EmployeesListPage() {
@@ -58,6 +59,7 @@ export default function EmployeesListPage() {
                 <thead>
                   <tr>
                     <th>Employee</th>
+                    <th>Project</th>
                     <th>Days used</th>
                     <th>Days remaining</th>
                     <th>Pending requests</th>
@@ -73,6 +75,25 @@ export default function EmployeesListPage() {
                     >
                       <td className="table-cell-primary">
                         {employee.firstName} {employee.lastName}
+                      </td>
+                      <td
+                        style={{ whiteSpace: "normal", minWidth: 220, cursor: "default" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {employee.projects.length === 0 ? (
+                          <span className="table-cell-secondary">Not on a project</span>
+                        ) : (
+                          <div className="project-chip-list">
+                            {employee.projects.map((p, i) => (
+                              <div key={i} className="project-chip">
+                                <span className="project-chip-name">{p.projectName}</span>
+                                <span className="project-chip-meta">
+                                  Started {formatDate(p.projectStartDate)} · Assigned {formatDate(p.assignedAt)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td>{employee.totalUsed}</td>
                       <td>{employee.totalRemaining}</td>

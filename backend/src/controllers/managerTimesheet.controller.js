@@ -18,6 +18,7 @@ const listTeamSubmissions = asyncHandler(async (req, res) => {
     where: { routedToId: req.user.id, ...(status ? { status } : {}) },
     include: {
       user: { select: { id: true, firstName: true, lastName: true, employeeCode: true } },
+      project: { select: { id: true, name: true } },
     },
     orderBy: [{ status: "asc" }, { weekStartDate: "desc" }],
   });

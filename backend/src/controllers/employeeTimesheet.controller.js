@@ -34,15 +34,14 @@ const resolveProjectForRequest = async (userId, requestedProjectId) => {
 
 const getMyEntries = asyncHandler(async (req, res) => {
   const anchor = req.query.weekStart ? new Date(req.query.weekStart) : new Date();
-  const weekStartDate = timesheetService.getWeekStart(anchor);
-  const weekEndDate = timesheetService.getWeekEnd(weekStartDate);
 
   const { project, projects } = await resolveProjectForRequest(req.user.id, req.query.projectId);
 
   if (!project) {
+    const weekStartDate = timesheetService.getWeekStart(anchor);
     return new ApiResponse(200, "OK", {
       weekStartDate,
-      weekEndDate,
+      weekEndDate: timesheetService.getWeekEnd(weekStartDate),
       entries: [],
       submission: null,
       project: null,
@@ -50,6 +49,11 @@ const getMyEntries = asyncHandler(async (req, res) => {
       totalHours: 0,
     }).send(res);
   }
+
+  // The submission period this grid/upload covers - a Monday-Sunday week or
+  // a full calendar month, depending on this project's own setting.
+  const weekStartDate = timesheetService.getPeriodStart(anchor, project.submissionFrequency);
+  const weekEndDate = timesheetService.getPeriodEnd(weekStartDate, project.submissionFrequency);
 
   const [entries, submission] = await Promise.all([
     prisma.timesheetEntry.findMany({
@@ -80,23 +84,25 @@ const getMyEntries = asyncHandler(async (req, res) => {
 const saveEntry = asyncHandler(async (req, res) => {
   const { date, hoursWorked, description, projectId } = req.body;
   const entryDate = timesheetService.startOfUtcDay(date);
-  const weekStartDate = timesheetService.getWeekStart(entryDate);
 
   const membership = await prisma.projectMembership.findUnique({
     where: { userId_projectId: { userId: req.user.id, projectId } },
+    include: { project: { select: { submissionFrequency: true } } },
   });
   if (!membership) {
     throw ApiError.badRequest("You aren't assigned to this project.");
   }
 
+  const weekStartDate = timesheetService.getPeriodStart(entryDate, membership.project.submissionFrequency);
+
   // A rejected submission no longer blocks editing - its entries were
-  // already unlocked when it was rejected, and the week stays open until a
+  // already unlocked when it was rejected, and the period stays open until a
   // fresh submission is created.
   const existingSubmission = await prisma.timesheetSubmission.findUnique({
     where: { userId_weekStartDate_projectId: { userId: req.user.id, weekStartDate, projectId } },
   });
   if (existingSubmission && existingSubmission.status !== "REJECTED") {
-    throw ApiError.badRequest("This week has already been submitted and can no longer be edited.");
+    throw ApiError.badRequest("This period has already been submitted and can no longer be edited.");
   }
 
   const entry = await prisma.timesheetEntry.upsert({
@@ -154,8 +160,6 @@ const uploadAttachment = asyncHandler(async (req, res) => {
 
 const submitWeek = asyncHandler(async (req, res) => {
   const { weekStartDate: rawWeekStart, attachmentOriginalName, attachmentStoredName, projectId } = req.body;
-  const weekStartDate = timesheetService.getWeekStart(rawWeekStart);
-  const weekEndDate = timesheetService.getWeekEnd(weekStartDate);
 
   if (!req.user.managerId) {
     throw ApiError.badRequest("Please set your manager in your profile before submitting a timesheet.");
@@ -163,8 +167,8 @@ const submitWeek = asyncHandler(async (req, res) => {
 
   // Every submission is scoped to one specific project the employee is
   // actually assigned to - an employee on 2 projects submits a separate
-  // timesheet per project, per week. Client vs internal is read straight off
-  // that project's own admin-set type, so it can't drift from what the
+  // timesheet per project, per period. Client vs internal is read straight
+  // off that project's own admin-set type, so it can't drift from what the
   // project itself says.
   if (!projectId) {
     throw ApiError.badRequest("Please choose which project this timesheet is for.");
@@ -181,6 +185,11 @@ const submitWeek = asyncHandler(async (req, res) => {
   }
   const projectAssigned = project.projectType;
 
+  // The submission period this covers - a Monday-Sunday week or a full
+  // calendar month, depending on this project's own setting.
+  const weekStartDate = timesheetService.getPeriodStart(rawWeekStart, project.submissionFrequency);
+  const weekEndDate = timesheetService.getPeriodEnd(weekStartDate, project.submissionFrequency);
+
   const recipient = await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } });
   if (!recipient) {
     throw ApiError.badRequest("Your assigned manager's account isn't active. Please update your manager in your profile.");
@@ -190,14 +199,14 @@ const submitWeek = asyncHandler(async (req, res) => {
     where: { userId_weekStartDate_projectId: { userId: req.user.id, weekStartDate, projectId } },
   });
   if (existingSubmission && existingSubmission.status !== "REJECTED") {
-    throw ApiError.badRequest("This week has already been submitted for this project.");
+    throw ApiError.badRequest("This period has already been submitted for this project.");
   }
 
   const draftEntries = await prisma.timesheetEntry.findMany({
     where: { userId: req.user.id, projectId, weekStartDate, timesheetSubmissionId: null },
   });
   if (draftEntries.length === 0) {
-    throw ApiError.badRequest("There are no entries to submit for this week.");
+    throw ApiError.badRequest("There are no entries to submit for this period.");
   }
 
   const totalHours = timesheetService.sumHours(draftEntries);
@@ -272,9 +281,9 @@ const submitWeek = asyncHandler(async (req, res) => {
           userId: person.id,
           type: notificationService.NOTIFICATION_TYPES.TIMESHEET_SUBMITTED,
           title: "Timesheet submitted",
-          message: `${employeeName} submitted their timesheet for the week of ${formatDateShort(
-            weekStartDate
-          )} - ${formatDateShort(weekEndDate)}.`,
+          message: `${employeeName} submitted their timesheet for ${formatDateShort(weekStartDate)} - ${formatDateShort(
+            weekEndDate
+          )}.`,
         });
       } catch (err) {
         console.error("Failed to create timesheet submitted notification:", err);

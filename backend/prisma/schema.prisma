@@ -38,6 +38,11 @@ enum ProjectAssignmentStatus {
     NOT_ASSIGNED
 }
 
+enum SubmissionFrequency {
+    WEEKLY
+    MONTHLY
+}
+
 enum DayOfWeek {
     MONDAY
     TUESDAY
@@ -136,11 +141,12 @@ model User {
 
     // Personal details - admin can always edit; employee can self-edit these
     // up to personalInfoEditCount times (see below).
-    fatherName    String?
-    spouseName    String?
-    maritalStatus MaritalStatus?
-    nationality   String?
-    qualification String?
+    fatherName        String?
+    fatherMotherPhone String?
+    spouseName        String?
+    maritalStatus     MaritalStatus?
+    nationality       String?
+    qualification     String?
 
     // How many times this employee has used their own self-service edit form
     // for each profile section - each capped at 3 in the controller; once used
@@ -935,6 +941,21 @@ model Project {
     timezone      String                  @default("IST")
     workStartTime String                  @default("09:00")
     workEndTime   String                  @default("18:00")
+
+    // Set by admin on create, editable later - shown automatically on the
+    // employee's own timesheet alongside project type/working hours.
+    // endDate is nullable - a project may still be ongoing with no planned
+    // end date yet.
+    startDate DateTime
+    endDate   DateTime?
+
+    // Whether employees on this project fill in and submit one timesheet per
+    // week or per calendar month - drives both the grid on their own
+    // timesheet page and how TimesheetEntry/TimesheetSubmission group days
+    // together (see timesheetService.getPeriodStart/getPeriodEnd). Defaults
+    // to WEEKLY so every project created before this field existed keeps
+    // behaving exactly as it always has.
+    submissionFrequency SubmissionFrequency @default(WEEKLY)
 
     createdById Int
 

@@ -3,6 +3,7 @@ const env = require("./src/config/env");
 const prisma = require("./src/config/prisma");
 const { startBirthdayCronJob } = require("./src/jobs/birthday.job");
 const { startAnniversaryCronJob } = require("./src/jobs/anniversary.job");
+const { startTimesheetReminderCronJob } = require("./src/jobs/timesheetReminder.job");
 
 // const start = async () => {
 //   await prisma.$connect();
@@ -30,6 +31,7 @@ const start = async () => {
 
     startBirthdayCronJob();
     startAnniversaryCronJob();
+    startTimesheetReminderCronJob();
 
     console.log("Cron jobs started");
   } catch (err) {
