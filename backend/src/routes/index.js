@@ -9,6 +9,7 @@ const profileRoutes = require("./profile.routes");
 const employeeTimesheetRoutes = require("./employeeTimesheet.routes");
 const managerTimesheetRoutes = require("./managerTimesheet.routes");
 const notificationRoutes = require("./notification.routes");
+const employeeWfhRoutes = require("./employeeWfh.routes");
 
 const router = express.Router();
 
@@ -22,5 +23,6 @@ router.use("/profile", profileRoutes);
 router.use("/employee/timesheet", employeeTimesheetRoutes);
 router.use("/manager/timesheets", managerTimesheetRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/employee/wfh", employeeWfhRoutes);
 
 module.exports = router;

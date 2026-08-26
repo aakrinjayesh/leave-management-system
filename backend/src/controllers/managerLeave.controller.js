@@ -18,11 +18,14 @@ const getOverview = asyncHandler(async (req, res) => {
   const managerId = req.user.id;
   const today = startOfUtcDay(new Date());
 
-  const [totalEmployees, pendingRequestsCount, onLeaveTodayCount] = await Promise.all([
+  const [totalEmployees, pendingRequestsCount, onLeaveTodayCount, wfhTodayCount] = await Promise.all([
     prisma.user.count({ where: { managerId } }),
     prisma.leaveRequest.count({ where: { routedToId: managerId, status: "PENDING" } }),
     prisma.leaveRequest.count({
       where: { routedToId: managerId, status: "APPROVED", startDate: { lte: today }, endDate: { gte: today } },
+    }),
+    prisma.wfhRequest.count({
+      where: { user: { managerId }, status: "APPROVED", startDate: { lte: today }, endDate: { gte: today } },
     }),
   ]);
 
@@ -30,6 +33,7 @@ const getOverview = asyncHandler(async (req, res) => {
     totalEmployees,
     pendingRequestsCount,
     onLeaveTodayCount,
+    wfhTodayCount,
   }).send(res);
 });
 
@@ -458,7 +462,7 @@ const getTeamCalendar = asyncHandler(async (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();
   const month = Number(req.query.month) || new Date().getMonth() + 1;
 
-  const [calendar, teamLeaves] = await Promise.all([
+  const [calendar, teamLeaves, teamWfh] = await Promise.all([
     leaveCalendarService.getMonthCalendarData(year, month),
     // Current team's leave, regardless of which manager originally handled the
     // request - the calendar follows the current org chart.
@@ -471,9 +475,19 @@ const getTeamCalendar = asyncHandler(async (req, res) => {
       },
       include: { leavePolicy: true, user: { select: { firstName: true, lastName: true } } },
     }),
+    // Approved only - matches the same rule as the employee's own calendar.
+    prisma.wfhRequest.findMany({
+      where: {
+        user: { managerId: req.user.id },
+        status: "APPROVED",
+        startDate: { lte: new Date(Date.UTC(year, month, 0)) },
+        endDate: { gte: new Date(Date.UTC(year, month - 1, 1)) },
+      },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    }),
   ]);
 
-  new ApiResponse(200, "OK", { ...calendar, teamLeaves }).send(res);
+  new ApiResponse(200, "OK", { ...calendar, teamLeaves, teamWfh }).send(res);
 });
 
 module.exports = {

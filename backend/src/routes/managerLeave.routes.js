@@ -4,6 +4,7 @@ const validate = require("../middlewares/validate.middleware");
 const { createLeaveForEmployeeSchema, approveLeaveSchema, rejectLeaveSchema } = require("../validators/leave.validator");
 const controller = require("../controllers/managerLeave.controller");
 const resignationController = require("../controllers/managerResignation.controller");
+const wfhController = require("../controllers/managerWfh.controller");
 
 const router = express.Router();
 
@@ -27,5 +28,6 @@ router.patch("/leave-requests/:id/reject", validate(rejectLeaveSchema), controll
 router.get("/calendar", controller.getTeamCalendar);
 
 router.get("/resignations", resignationController.listTeamResignations);
+router.get("/wfh-requests", wfhController.listTeamWfhRequests);
 
 module.exports = router;

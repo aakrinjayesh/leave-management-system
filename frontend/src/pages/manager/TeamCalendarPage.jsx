@@ -21,6 +21,12 @@ export default function TeamCalendarPage() {
     label: `${leave.user.firstName} · ${leave.leavePolicy.leaveName}`,
   }));
 
+  const wfhEntries = (calendarData?.teamWfh || []).map((wfh) => ({
+    startDate: wfh.startDate,
+    endDate: wfh.endDate,
+    label: `${wfh.user.firstName} · WFH`,
+  }));
+
   return (
     <DashboardLayout title="Team calendar">
       <div className="page-header">
@@ -41,6 +47,7 @@ export default function TeamCalendarPage() {
           weekendDates={calendarData.weekendDates}
           holidays={calendarData.holidays}
           leaveEntries={leaveEntries}
+          wfhEntries={wfhEntries}
           onPrevMonth={goToPrevMonth}
           onNextMonth={goToNextMonth}
         />

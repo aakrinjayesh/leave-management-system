@@ -22,6 +22,7 @@ const {
   createOfferLetterSchema,
   previewOfferLetterSchema,
 } = require("../validators/admin.validator");
+const { rejectWfhRequestSchema } = require("../validators/wfh.validator");
 const controller = require("../controllers/admin.controller");
 const leaveController = require("../controllers/adminLeave.controller");
 const payrollController = require("../controllers/adminPayroll.controller");
@@ -31,6 +32,7 @@ const taxController = require("../controllers/adminTax.controller");
 const reportController = require("../controllers/adminReport.controller");
 const offerLetterController = require("../controllers/adminOfferLetter.controller");
 const resignationController = require("../controllers/adminResignation.controller");
+const wfhController = require("../controllers/adminWfh.controller");
 const { uploadSingleEmployeeDocument } = require("../config/employeeDocumentUpload");
 const { USER_TYPE } = require("../utils/constants");
 
@@ -141,5 +143,9 @@ router.get("/custom-fields/:fieldId/document", employeeDocsController.downloadCu
 router.get("/resignations", resignationController.listResignations);
 router.patch("/resignations/:id/accept", resignationController.acceptResignation);
 router.patch("/resignations/:id/reject", resignationController.rejectResignation);
+
+router.get("/wfh-requests", wfhController.listWfhRequests);
+router.patch("/wfh-requests/:id/approve", wfhController.approveWfhRequest);
+router.patch("/wfh-requests/:id/reject", validate(rejectWfhRequestSchema), wfhController.rejectWfhRequest);
 
 module.exports = router;

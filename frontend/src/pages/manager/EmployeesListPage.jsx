@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, ClockAlert, CalendarOff, Users } from "lucide-react";
+import { Clock, ClockAlert, CalendarOff, Home, Users } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
 import StatCard from "../../components/common/StatCard";
@@ -37,6 +37,12 @@ export default function EmployeesListPage() {
             onClick={() => navigate("/manager/leave-requests")}
           />
           <StatCard icon={<CalendarOff size={20} />} label="On leave today" value={overview.onLeaveTodayCount} />
+          <StatCard
+            icon={<Home size={20} />}
+            label="WFH today"
+            value={overview.wfhTodayCount}
+            onClick={() => navigate("/manager/wfh-requests")}
+          />
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import "./Calendar.css";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -19,16 +19,17 @@ const MONTH_LABELS = [
 
 const toDateKey = (input) => new Date(input).toISOString().slice(0, 10);
 
-// A leave's stored startDate/endDate is the raw calendar range the employee
-// picked - weekends and holidays inside that range were never counted as
-// leave days (see computeWorkingDays on the backend), so they shouldn't be
-// painted as leave here either.
-const buildLeaveByDate = (leaveEntries, year, month, weekendSet, holidayByDate) => {
+// A leave's (or approved WFH's) stored startDate/endDate is the raw calendar
+// range the employee picked - weekends and holidays inside that range were
+// never counted as leave days (see computeWorkingDays on the backend), so
+// they shouldn't be painted here either. Shared by both leave and WFH
+// entries since both are just { startDate, endDate, label } ranges.
+const buildEntriesByDate = (entries, year, month, weekendSet, holidayByDate) => {
   const map = new Map();
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEnd = new Date(Date.UTC(year, month, 0));
 
-  for (const entry of leaveEntries) {
+  for (const entry of entries) {
     const start = new Date(entry.startDate) < monthStart ? monthStart : new Date(entry.startDate);
     const end = new Date(entry.endDate) > monthEnd ? monthEnd : new Date(entry.endDate);
     const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
@@ -48,10 +49,20 @@ const buildLeaveByDate = (leaveEntries, year, month, weekendSet, holidayByDate) 
   return map;
 };
 
-export default function Calendar({ year, month, weekendDates = [], holidays = [], leaveEntries = [], onPrevMonth, onNextMonth }) {
+export default function Calendar({
+  year,
+  month,
+  weekendDates = [],
+  holidays = [],
+  leaveEntries = [],
+  wfhEntries = [],
+  onPrevMonth,
+  onNextMonth,
+}) {
   const weekendSet = new Set(weekendDates);
   const holidayByDate = new Map(holidays.map((h) => [h.date, h]));
-  const leaveByDate = buildLeaveByDate(leaveEntries, year, month, weekendSet, holidayByDate);
+  const leaveByDate = buildEntriesByDate(leaveEntries, year, month, weekendSet, holidayByDate);
+  const wfhByDate = buildEntriesByDate(wfhEntries, year, month, weekendSet, holidayByDate);
 
   const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -98,6 +109,7 @@ export default function Calendar({ year, month, weekendDates = [], holidays = []
           const isWeekend = weekendSet.has(key);
           const holiday = holidayByDate.get(key);
           const leaves = leaveByDate.get(key) || [];
+          const wfhs = wfhByDate.get(key) || [];
 
           return (
             <div
@@ -112,6 +124,13 @@ export default function Calendar({ year, month, weekendDates = [], holidays = []
                 </span>
               ))}
               {leaves.length > 2 && <span className="calendar-holiday-tag">+{leaves.length - 2} more</span>}
+              {wfhs.slice(0, 2).map((wfh, i) => (
+                <span key={`wfh-${i}`} className="calendar-wfh-tag">
+                  <Home size={9} style={{ verticalAlign: "-1px", marginRight: 2 }} />
+                  {wfh.label}
+                </span>
+              ))}
+              {wfhs.length > 2 && <span className="calendar-holiday-tag">+{wfhs.length - 2} more WFH</span>}
             </div>
           );
         })}
@@ -129,6 +148,10 @@ export default function Calendar({ year, month, weekendDates = [], holidays = []
         <span className="calendar-legend-item">
           <span className="calendar-legend-dot" style={{ backgroundColor: "var(--color-primary-600)" }} />
           Holiday
+        </span>
+        <span className="calendar-legend-item">
+          <span className="calendar-legend-dot" style={{ backgroundColor: "#1d4ed8" }} />
+          Approved WFH
         </span>
         <span className="calendar-legend-item">
           <span className="calendar-legend-dot" style={{ backgroundColor: "var(--color-gray-400)" }} />

@@ -184,3 +184,11 @@ export const listResignations = () => unwrap(axiosClient.get("/admin/resignation
 export const acceptResignation = (id) => unwrap(axiosClient.patch(`/admin/resignations/${id}/accept`));
 
 export const rejectResignation = (id) => unwrap(axiosClient.patch(`/admin/resignations/${id}/reject`));
+
+export const listWfhRequests = (status) =>
+  unwrap(axiosClient.get("/admin/wfh-requests", { params: status ? { status } : {} }));
+
+export const approveWfhRequest = (id) => unwrap(axiosClient.patch(`/admin/wfh-requests/${id}/approve`));
+
+export const rejectWfhRequest = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/wfh-requests/${id}/reject`, { remarks }));

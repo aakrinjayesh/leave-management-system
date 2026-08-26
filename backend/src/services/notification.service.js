@@ -23,6 +23,8 @@ const NOTIFICATION_TYPES = {
   ACCOUNT_APPROVAL_DECIDED: "ACCOUNT_APPROVAL_DECIDED",
   PROFILE_UPDATED: "PROFILE_UPDATED",
   TIMESHEET_MONTH_END_REMINDER: "TIMESHEET_MONTH_END_REMINDER",
+  WFH_SUBMITTED: "WFH_SUBMITTED",
+  WFH_DECIDED: "WFH_DECIDED",
 };
 
 const notify = ({ userId, type, title, message }) => prisma.notification.create({ data: { userId, type, title, message } });

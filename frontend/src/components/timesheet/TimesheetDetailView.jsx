@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Download, ListChecks } from "lucide-react";
 import Spinner from "../common/Spinner";
 import Alert from "../common/Alert";
@@ -24,8 +25,11 @@ const VIEWS = [
 // and `downloadAttachment(submissionId) => Promise<AxiosResponse>` (optional)
 // for the Excel sheet the employee attached to a given week's submission.
 export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, downloadAttachment, onDataLoad }) {
+  // A caller can deep-link straight to a specific week/day via ?date=... in
+  // the URL (e.g. from a WFH request row) - defaults to today when absent.
+  const [searchParams] = useSearchParams();
   const [view, setView] = useState("week");
-  const [anchorDate, setAnchorDate] = useState(toDateInputValue(new Date()));
+  const [anchorDate, setAnchorDate] = useState(searchParams.get("date") || toDateInputValue(new Date()));
   // Null until the first response tells us which project the backend
   // resolved (the employee's first project, unless one is picked below).
   const [projectId, setProjectId] = useState(null);

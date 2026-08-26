@@ -40,6 +40,11 @@ export const getNotificationDestination = (type, user) => {
       return "/profile";
     case "PROFILE_UPDATED":
       return isAdmin ? "/admin/dashboard" : null;
+    case "WFH_SUBMITTED":
+      if (isAdmin) return "/admin/wfh-requests";
+      return isManager ? "/manager/wfh-requests" : null;
+    case "WFH_DECIDED":
+      return isManager ? "/manager/wfh-requests" : "/wfh";
     default:
       return null;
   }

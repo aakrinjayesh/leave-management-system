@@ -25,6 +25,7 @@ import TeamCalendarPage from "../pages/manager/TeamCalendarPage";
 import TeamTimesheetsPage from "../pages/manager/TeamTimesheetsPage";
 import ManagerEmployeeTimesheetPage from "../pages/manager/EmployeeTimesheetPage";
 import TeamResignationsPage from "../pages/manager/TeamResignationsPage";
+import TeamWfhPage from "../pages/manager/TeamWfhPage";
 
 import AdminEmployeeTimesheetPage from "../pages/admin/EmployeeTimesheetPage";
 import EmployeeLeaveDetailPage from "../pages/admin/EmployeeLeaveDetailPage";
@@ -35,9 +36,11 @@ import PayslipsPage from "../pages/admin/PayslipsPage";
 import EmployeePayslipsPage from "../pages/admin/EmployeePayslipsPage";
 import ReportPage from "../pages/admin/ReportPage";
 import ResignationsPage from "../pages/admin/ResignationsPage";
+import WfhRequestsPage from "../pages/admin/WfhRequestsPage";
 
 import ProfilePage from "../pages/profile/ProfilePage";
 import MyTimesheetPage from "../pages/timesheet/MyTimesheetPage";
+import MyWfhPage from "../pages/wfh/MyWfhPage";
 
 const isNotAdmin = (user) => user.userType !== "ADMIN";
 const isManager = (user) => user.isManager;
@@ -77,6 +80,7 @@ export default function AppRoutes() {
         <Route path="/employee/leave-requests" element={<MyLeaveRequestsPage />} />
         <Route path="/employee/calendar" element={<LeaveCalendarPage />} />
         <Route path="/timesheet" element={<MyTimesheetPage />} />
+        <Route path="/wfh" element={<MyWfhPage />} />
       </Route>
 
       {/* Profile - available to every authenticated account, Admin included
@@ -97,6 +101,7 @@ export default function AppRoutes() {
         <Route path="/manager/timesheets" element={<TeamTimesheetsPage />} />
         <Route path="/manager/timesheets/employees/:id" element={<ManagerEmployeeTimesheetPage />} />
         <Route path="/manager/resignations" element={<TeamResignationsPage />} />
+        <Route path="/manager/wfh-requests" element={<TeamWfhPage />} />
       </Route>
 
       <Route element={<ProtectedRoute check={isAdmin} />}>
@@ -110,6 +115,7 @@ export default function AppRoutes() {
         <Route path="/admin/payslips" element={<PayslipsPage />} />
         <Route path="/admin/users/:id/payslips" element={<EmployeePayslipsPage />} />
         <Route path="/admin/resignations" element={<ResignationsPage />} />
+        <Route path="/admin/wfh-requests" element={<WfhRequestsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

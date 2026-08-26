@@ -233,6 +233,9 @@ model User {
 
     resignations        Resignation[]
     decidedResignations Resignation[] @relation("ResignationsDecidedBy")
+
+    wfhRequests        WfhRequest[]
+    decidedWfhRequests WfhRequest[] @relation("WfhRequestsDecidedBy")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
@@ -286,6 +289,44 @@ model Resignation {
 
     user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
     decidedBy User? @relation("ResignationsDecidedBy", fields: [decidedById], references: [id])
+
+    @@index([userId])
+    @@index([status])
+}
+
+// Employee-submitted request to work from home for a date range - routed to
+// admin for approval (not the manager, who only gets a view-only notice,
+// same pattern as Resignation). Reuses LeaveStatus
+// (PENDING/APPROVED/REJECTED/CANCELLED) rather than a dedicated enum, same
+// as TimesheetSubmission already does.
+//
+// Deliberately has no projectId of its own - which project(s) this employee
+// is on is already set by admin via ProjectMembership, and can change over
+// time, so every place this request is shown (employee's own page, admin
+// and manager review tables) just reads the user's CURRENT
+// projectMemberships live rather than freezing a choice at submission time.
+model WfhRequest {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    startDate DateTime
+    endDate   DateTime
+
+    reason String @db.Text
+
+    status LeaveStatus @default(PENDING)
+
+    adminRemarks String?
+
+    decidedById Int?
+    decidedAt   DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+    decidedBy User? @relation("WfhRequestsDecidedBy", fields: [decidedById], references: [id])
 
     @@index([userId])
     @@index([status])

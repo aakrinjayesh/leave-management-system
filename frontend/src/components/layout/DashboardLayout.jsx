@@ -12,6 +12,7 @@ import {
   FileText,
   BarChart3,
   FileWarning,
+  Home,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -52,6 +53,7 @@ const buildNavItems = (user) => {
       icon: CalendarDays,
     });
     items.push({ to: "/timesheet", label: "Timesheet", icon: Clock });
+    items.push({ to: "/wfh", label: "WFH", icon: Home });
   }
 
   if (user?.isManager) {
@@ -76,6 +78,11 @@ const buildNavItems = (user) => {
       label: "Team Resignations",
       icon: FileWarning,
     });
+    items.push({
+      to: "/manager/wfh-requests",
+      label: "Team WFH",
+      icon: Home,
+    });
   }
 
   if (isAdmin) {
@@ -99,6 +106,11 @@ const buildNavItems = (user) => {
       to: "/admin/resignations",
       label: "Resignations",
       icon: FileWarning,
+    });
+    items.push({
+      to: "/admin/wfh-requests",
+      label: "WFH Requests",
+      icon: Home,
     });
   }
   items.push({ to: "/profile", label: "Profile", icon: UserCog });

@@ -427,7 +427,7 @@ const getMyCalendar = asyncHandler(async (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();
   const month = Number(req.query.month) || new Date().getMonth() + 1;
 
-  const [calendar, myLeaves] = await Promise.all([
+  const [calendar, myLeaves, myWfh] = await Promise.all([
     leaveCalendarService.getMonthCalendarData(year, month),
     prisma.leaveRequest.findMany({
       where: {
@@ -438,9 +438,19 @@ const getMyCalendar = asyncHandler(async (req, res) => {
       },
       include: { leavePolicy: true },
     }),
+    // Approved only - a pending WFH request isn't confirmed yet, so it
+    // shouldn't show on the calendar the way a pending leave does.
+    prisma.wfhRequest.findMany({
+      where: {
+        userId: req.user.id,
+        status: "APPROVED",
+        startDate: { lte: new Date(Date.UTC(year, month, 0)) },
+        endDate: { gte: new Date(Date.UTC(year, month - 1, 1)) },
+      },
+    }),
   ]);
 
-  new ApiResponse(200, "OK", { ...calendar, myLeaves }).send(res);
+  new ApiResponse(200, "OK", { ...calendar, myLeaves, myWfh }).send(res);
 });
 
 module.exports = {

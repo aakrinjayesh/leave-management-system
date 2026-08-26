@@ -21,6 +21,12 @@ export default function LeaveCalendarPage() {
     label: leave.leavePolicy.leaveName,
   }));
 
+  const wfhEntries = (calendarData?.myWfh || []).map((wfh) => ({
+    startDate: wfh.startDate,
+    endDate: wfh.endDate,
+    label: "WFH",
+  }));
+
   return (
     <DashboardLayout title="Calendar">
       <div className="page-header">
@@ -41,6 +47,7 @@ export default function LeaveCalendarPage() {
           weekendDates={calendarData.weekendDates}
           holidays={calendarData.holidays}
           leaveEntries={leaveEntries}
+          wfhEntries={wfhEntries}
           onPrevMonth={goToPrevMonth}
           onNextMonth={goToNextMonth}
         />
