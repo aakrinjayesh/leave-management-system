@@ -20,6 +20,33 @@
   padding: 28px;
 }
 
+.modal-panel-wide {
+  max-width: 660px;
+}
+
+/* Small uppercase section label inside a modal form, splitting a long form
+   into clearly separated groups (e.g. EditProjectModal's Details/Schedule/
+   Members) - lighter weight than .card-section-title since it lives inside
+   an already-boxed modal panel rather than a full card. */
+.modal-section-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-primary-700);
+  margin: 22px 0 12px;
+}
+
+.modal-section-title:first-child {
+  margin-top: 0;
+}
+
+.modal-section-divider {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 20px 0;
+}
+
 .modal-header {
   display: flex;
   align-items: flex-start;

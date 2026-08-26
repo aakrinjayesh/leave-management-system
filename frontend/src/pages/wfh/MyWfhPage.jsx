@@ -192,6 +192,7 @@ export default function MyWfhPage() {
                   <table className="data-table">
                     <thead>
                       <tr>
+                        <th>Sent to</th>
                         <th>Dates</th>
                         <th>Reason</th>
                         <th>Status</th>
@@ -203,6 +204,7 @@ export default function MyWfhPage() {
                     <tbody>
                       {requests.map((request) => (
                         <tr key={request.id}>
+                          <td className="table-cell-secondary">Admin</td>
                           <td className="table-cell-primary">{formatDateRange(request.startDate, request.endDate)}</td>
                           <td className="table-cell-secondary">{request.reason}</td>
                           <td>

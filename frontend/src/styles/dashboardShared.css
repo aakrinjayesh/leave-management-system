@@ -601,6 +601,147 @@
   border: 0;
 }
 
+/* Checkbox list of employees to assign to a project (Create/Edit project) -
+   one row per person, each row's own projects shown as small chips instead
+   of a long comma-joined string. */
+.member-list {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: var(--color-white);
+}
+
+/* Section labels splitting the list into "already assigned" vs "everyone
+   else" - .member-list's own border-radius + overflow-y:auto clips these
+   to match its rounded corners wherever one lands at the very top. */
+.member-list-group-label {
+  padding: 8px 14px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background-color: var(--color-gray-50);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.member-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color var(--transition-fast);
+}
+
+.member-list > div:last-child .member-row {
+  border-bottom: none;
+}
+
+.member-row:hover {
+  background-color: var(--color-gray-50);
+}
+
+.member-row.is-checked {
+  background-color: var(--color-primary-50);
+}
+
+.member-row input[type="checkbox"] {
+  margin-top: 3px;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary-600);
+  cursor: pointer;
+}
+
+.member-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-row-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.member-row-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.member-row-label {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.member-row-empty {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.member-project-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.member-project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+  white-space: nowrap;
+}
+
+.member-project-chip-date {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* Shown only on a checked row - lets admin set/backdate this person's own
+   start date on THIS project (and optionally an end date), separate from
+   the "Currently working on" chips above which are about their OTHER
+   projects. */
+.member-row-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.member-row-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.member-row-date-field input[type="date"] {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-white);
+}
+
 /* One small card per project an employee is on (e.g. manager's Employees
    list) - stacked when someone's on more than one. */
 .project-chip-list {

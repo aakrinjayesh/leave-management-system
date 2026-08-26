@@ -1022,7 +1022,13 @@ model ProjectMembership {
     userId    Int
     projectId Int
 
-    assignedAt DateTime @default(now())
+    // The employee's actual start date on this project - defaults to "now"
+    // when admin just checks a box, but admin can override it to backdate
+    // someone who was already working on the project before being formally
+    // added here. endDate is a purely historical note (e.g. they've since
+    // moved off it) - it doesn't automatically remove the membership.
+    assignedAt DateTime  @default(now())
+    endDate    DateTime?
 
     user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
     project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

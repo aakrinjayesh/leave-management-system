@@ -252,13 +252,29 @@ const withDateRangeCheck = (schema) =>
 // Optional/omittable on create (a brand-new project can start with no
 // members), but on rename it's how membership edits are submitted - an
 // explicit [] means "remove everyone", omitting the field entirely means
-// "leave membership as-is" (see renameProject in project.service.js).
-const employeeIdsSchema = z.array(z.coerce.number().int().positive()).optional();
+// "leave membership as-is" (see renameProject in project.service.js). Each
+// member carries their own startDate (required - defaults to today on the
+// frontend, but admin can backdate it) and endDate (optional, historical
+// only - see the ProjectMembership model comment).
+const membersSchema = z
+  .array(
+    z
+      .object({
+        userId: z.coerce.number().int().positive(),
+        startDate: z.coerce.date({ message: "Please choose a start date for this member." }),
+        endDate: z.coerce.date().nullable().optional(),
+      })
+      .refine((data) => !data.endDate || data.endDate >= data.startDate, {
+        message: "A member's end date can't be before their start date.",
+        path: ["endDate"],
+      })
+  )
+  .optional();
 
 const createProjectSchema = withDateRangeCheck(
   z.object({
     name: z.string().trim().min(1, "Please enter a project name.").max(120),
-    employeeIds: employeeIdsSchema,
+    members: membersSchema,
     ...projectDetailsSchema,
   })
 );
@@ -266,7 +282,7 @@ const createProjectSchema = withDateRangeCheck(
 const renameProjectSchema = withDateRangeCheck(
   z.object({
     name: z.string().trim().min(1, "Please enter a project name.").max(120),
-    employeeIds: employeeIdsSchema,
+    members: membersSchema,
     ...projectDetailsSchema,
   })
 );

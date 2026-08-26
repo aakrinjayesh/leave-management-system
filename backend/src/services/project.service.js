@@ -4,17 +4,20 @@ const ApiError = require("../utils/ApiError");
 const MEMBER_SELECT = {
   userId: true,
   assignedAt: true,
+  endDate: true,
   user: { select: { id: true, firstName: true, lastName: true, email: true } },
 };
 
 // Flattens a ProjectMembership row into the shape the frontend actually
-// wants to render (member fields alongside assignedAt, not nested under `user`).
+// wants to render (member fields alongside assignedAt/endDate, not nested
+// under `user`).
 const toMemberView = (membership) => ({
   id: membership.user.id,
   firstName: membership.user.firstName,
   lastName: membership.user.lastName,
   email: membership.user.email,
   assignedAt: membership.assignedAt,
+  endDate: membership.endDate,
 });
 
 const listAllProjects = async () => {
@@ -44,43 +47,42 @@ const getProjectWithMembers = async (id) => {
   return { ...project, assignedEmployees: project.memberships.map(toMemberView), memberships: undefined };
 };
 
-// Sets this project's member list to exactly `employeeIds` - anyone
-// currently on it but left off the new list is removed, everyone new in the
-// list is added (with a fresh assignedAt), and anyone already on it who's
-// still in the list is left untouched (keeps their original assignedAt).
-// Unlike the old single-project model, this never touches an employee's
-// membership on any OTHER project - one employee can be on several projects
-// at once.
-const setProjectMembers = async (projectId, employeeIds) => {
+// Sets this project's member list to exactly `members` - anyone currently on
+// it but left off the new list is removed; everyone in the list is
+// upserted with the given startDate/endDate, so admin can both add someone
+// new with a backdated start date AND correct an existing member's dates
+// later, in the same save. Unlike the old single-project model, this never
+// touches an employee's membership on any OTHER project - one employee can
+// be on several projects at once.
+const setProjectMembers = async (projectId, members) => {
   const existing = await prisma.projectMembership.findMany({
     where: { projectId },
     select: { userId: true },
   });
   const existingIds = new Set(existing.map((m) => m.userId));
-  const wantedIds = new Set(employeeIds);
+  const wantedIds = new Set(members.map((m) => m.userId));
 
   const toRemove = [...existingIds].filter((id) => !wantedIds.has(id));
-  const toAdd = [...wantedIds].filter((id) => !existingIds.has(id));
 
   await prisma.$transaction([
     ...(toRemove.length > 0
       ? [prisma.projectMembership.deleteMany({ where: { projectId, userId: { in: toRemove } } })]
       : []),
-    ...(toAdd.length > 0
-      ? [
-          prisma.projectMembership.createMany({
-            data: toAdd.map((userId) => ({ projectId, userId })),
-          }),
-        ]
-      : []),
+    ...members.map(({ userId, startDate, endDate }) =>
+      prisma.projectMembership.upsert({
+        where: { userId_projectId: { userId, projectId } },
+        update: { assignedAt: startDate, endDate: endDate ?? null },
+        create: { userId, projectId, assignedAt: startDate, endDate: endDate ?? null },
+      })
+    ),
   ]);
 };
 
-const createProject = async (name, createdById, details, employeeIds = []) => {
+const createProject = async (name, createdById, details, members = []) => {
   await assertNameAvailable(name);
   const project = await prisma.project.create({ data: { name, createdById, ...details } });
-  if (employeeIds.length > 0) {
-    await setProjectMembers(project.id, employeeIds);
+  if (members.length > 0) {
+    await setProjectMembers(project.id, members);
   }
   return getProjectWithMembers(project.id);
 };
@@ -96,12 +98,12 @@ const getProjectOr404 = async (id) => {
 // Covers both a plain rename and the full "Edit project" modal (type,
 // timezone, working hours, members) - same endpoint, since they're all just
 // fields on the same row and never need to change independently of each other.
-const renameProject = async (id, name, details, employeeIds) => {
+const renameProject = async (id, name, details, members) => {
   await getProjectOr404(id);
   await assertNameAvailable(name, id);
   await prisma.project.update({ where: { id }, data: { name, ...details } });
-  if (employeeIds !== undefined) {
-    await setProjectMembers(id, employeeIds);
+  if (members !== undefined) {
+    await setProjectMembers(id, members);
   }
   return getProjectWithMembers(id);
 };

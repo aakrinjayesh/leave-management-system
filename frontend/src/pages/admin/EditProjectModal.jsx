@@ -28,28 +28,33 @@ const toForm = (project) => ({
   submissionFrequency: project.submissionFrequency,
 });
 
+const toMembers = (project) =>
+  (project.assignedEmployees || []).map((e) => ({
+    userId: e.id,
+    startDate: toDateInputValue(e.assignedAt),
+    endDate: e.endDate ? toDateInputValue(e.endDate) : "",
+  }));
+
 export default function EditProjectModal({ project, onClose, onSuccess }) {
   const [form, setForm] = useState(toForm(project));
-  const [memberIds, setMemberIds] = useState((project.assignedEmployees || []).map((e) => e.id));
+  const [members, setMembers] = useState(toMembers(project));
   const [recentMembers, setRecentMembers] = useState([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Employees who logged time on this project before admin-set membership
-  // existed - shown as a hint next to the (already-correct) checklist below,
-  // so admin can spot anyone still worth formally adding.
   useEffect(() => {
     adminApi
       .getProjectRecentMembers(project.id)
       .then((data) => {
-        const alreadyMembers = new Set(memberIds);
-        setRecentMembers(data.members.filter((m) => !alreadyMembers.has(m.id)));
+        const alreadyMemberIds = new Set(members.map((m) => m.userId));
+        setRecentMembers(data.members.filter((m) => !alreadyMemberIds.has(m.id)));
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
-  const handleChange = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const handleChange = (field) => (e) =>
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -71,6 +76,12 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
       setError("End date can't be before the start date.");
       return;
     }
+    for (const member of members) {
+      if (member.endDate && member.endDate < member.startDate) {
+        setError("A member's end date can't be before their own start date.");
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     try {
@@ -78,25 +89,37 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
         ...form,
         name: form.name.trim(),
         endDate: form.endDate || null,
-        employeeIds: memberIds,
+        members: members.map((m) => ({ ...m, endDate: m.endDate || null })),
       });
       onSuccess();
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't save this project. Please try again."));
+      setError(
+        getErrorMessage(err, "Couldn't save this project. Please try again."),
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Modal title="Edit project" onClose={onClose}>
+    <Modal title="Edit project" onClose={onClose} wide>
       <Alert type="error">{error}</Alert>
 
       <form onSubmit={handleSubmit} noValidate>
-        <TextInput label="Project name" value={form.name} onChange={handleChange("name")} />
+        <p className="modal-section-title">Project details</p>
+
+        <TextInput
+          label="Project name"
+          value={form.name}
+          onChange={handleChange("name")}
+        />
 
         <div className="form-two-col">
-          <FormSelect label="Project type" value={form.projectType} onChange={handleChange("projectType")}>
+          <FormSelect
+            label="Project type"
+            value={form.projectType}
+            onChange={handleChange("projectType")}
+          >
             {PROJECT_TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -117,21 +140,38 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
           ))}
         </datalist>
 
+        <hr className="modal-section-divider" />
+        <p className="modal-section-title">Schedule &amp; working hours</p>
+
         <div className="form-two-col">
-          <TextInput label="Start date" type="date" value={form.startDate} onChange={handleChange("startDate")} />
-          <TextInput label="End date" type="date" value={form.endDate} onChange={handleChange("endDate")} />
+          <TextInput
+            label="Project Start date"
+            type="date"
+            value={form.startDate}
+            onChange={handleChange("startDate")}
+          />
+          <TextInput
+            label="Project End date"
+            type="date"
+            value={form.endDate}
+            onChange={handleChange("endDate")}
+          />
         </div>
 
         <div className="form-three-col">
           <TimeOfDayField
             label="Working hours start"
             value={form.workStartTime}
-            onChange={(value) => setForm((prev) => ({ ...prev, workStartTime: value }))}
+            onChange={(value) =>
+              setForm((prev) => ({ ...prev, workStartTime: value }))
+            }
           />
           <TimeOfDayField
             label="Working hours end"
             value={form.workEndTime}
-            onChange={(value) => setForm((prev) => ({ ...prev, workEndTime: value }))}
+            onChange={(value) =>
+              setForm((prev) => ({ ...prev, workEndTime: value }))
+            }
           />
           <FormSelect
             label="Timesheet submission"
@@ -147,11 +187,17 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
         </div>
 
         <p className="helper-text">
-          Employees will see this project type, timezone, working hours and submission frequency automatically once
-          admin assigns them here.
+          Employees will see this project type, timezone, working hours and
+          submission frequency automatically once admin assigns them here.
         </p>
 
-        <ProjectMembersField selectedIds={memberIds} onChange={setMemberIds} recentHint={recentMembers} />
+        <hr className="modal-section-divider" />
+
+        <ProjectMembersField
+          members={members}
+          onChange={setMembers}
+          recentHint={recentMembers}
+        />
 
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>

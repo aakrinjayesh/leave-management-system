@@ -82,7 +82,7 @@ const createProject = asyncHandler(async (req, res) => {
     req.body.name,
     req.user.id,
     toProjectDetails(req.body),
-    req.body.employeeIds
+    req.body.members
   );
 
   new ApiResponse(201, "Project added.", { project }).send(res);
@@ -92,7 +92,7 @@ const createProject = asyncHandler(async (req, res) => {
 
 const renameProject = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const project = await projectService.renameProject(id, req.body.name, toProjectDetails(req.body), req.body.employeeIds);
+  const project = await projectService.renameProject(id, req.body.name, toProjectDetails(req.body), req.body.members);
 
   new ApiResponse(200, "Project updated.", { project }).send(res);
 
