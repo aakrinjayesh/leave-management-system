@@ -59,6 +59,9 @@ export const createProject = (payload) => unwrap(axiosClient.post("/admin/projec
 
 export const updateProject = (id, payload) => unwrap(axiosClient.patch(`/admin/projects/${id}`, payload));
 
+export const updateProjectMembers = (id, members) =>
+  unwrap(axiosClient.patch(`/admin/projects/${id}/members`, { members }));
+
 export const deactivateProject = (id) => unwrap(axiosClient.patch(`/admin/projects/${id}/deactivate`));
 
 export const reactivateProject = (id) => unwrap(axiosClient.patch(`/admin/projects/${id}/reactivate`));

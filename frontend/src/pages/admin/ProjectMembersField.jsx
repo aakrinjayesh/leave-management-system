@@ -8,8 +8,10 @@ const todayValue = () => toDateInputValue(new Date());
 // Checkbox list of who's available to assign to a project - shared between
 // "Create project" and "Edit project" since both manage the exact same field
 // (Project.assignedEmployees). An employee can be on several projects at
-// once, so this always shows every active, non-admin employee - no
-// exclusivity filtering.
+// once, so this always shows every non-admin employee - no exclusivity
+// filtering. PENDING employees (admin-created accounts that haven't been
+// activated yet) are included so admin can line up their project up front;
+// they're tagged with a "Pending" badge so it's clear they can't log in yet.
 //
 // `members` is the canonical selection: [{ userId, startDate, endDate }].
 // Checking someone defaults their startDate to today (admin can backdate it
@@ -32,7 +34,11 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
 
   useEffect(() => {
     adminApi.listUsers().then((data) => {
-      setEmployees(data.users.filter((u) => u.status === "ACTIVE" && u.userType !== "ADMIN"));
+      setEmployees(
+        data.users.filter(
+          (u) => (u.status === "ACTIVE" || u.status === "PENDING") && u.userType !== "ADMIN",
+        ),
+      );
     });
 
     // What each employee is currently working on (across ALL projects) -
@@ -93,7 +99,7 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
       {!employees ? (
         <p className="helper-text">Loading employees…</p>
       ) : employees.length === 0 ? (
-        <p className="helper-text">No active employees to assign yet.</p>
+        <p className="helper-text">No employees to assign yet.</p>
       ) : (
         <div className="member-list">
           {sortedEmployees.map((employee, index) => {

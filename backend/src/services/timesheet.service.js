@@ -185,15 +185,18 @@ const buildProjectStints = (submissions) => {
   return stints.reverse();
 };
 
-// Census for the admin Report tab: every active Employee/Manager, one row
-// per project they're actually assigned to (an employee on 2 projects shows
-// up twice, once per project) - "Since" is the real ProjectMembership.assignedAt
+// Census for the admin Report tab: every Employee/Manager, one row per
+// project they're actually assigned to (an employee on 2 projects shows up
+// twice, once per project) - "Since" is the real ProjectMembership.assignedAt
 // date. Anyone with no formal membership yet falls back to timesheet
 // submission history as a hint (same purpose as before this was
-// admin-assignable), and falls into notAssigned if neither exists.
+// admin-assignable); with neither, they go in `noProject` - a separate
+// bucket from `notAssigned` (Internal Project), not lumped in with it.
+// PENDING accounts (admin-created, not activated yet) are included so a
+// project assigned to them before they activate still shows up here.
 const getProjectAssignmentReport = async () => {
   const users = await prisma.user.findMany({
-    where: { status: "ACTIVE", userType: { in: ["EMPLOYEE", "MANAGER"] } },
+    where: { status: { in: ["ACTIVE", "PENDING"] }, userType: { in: ["EMPLOYEE", "MANAGER"] } },
     orderBy: { firstName: "asc" },
     include: {
       projectMemberships: {
@@ -228,6 +231,10 @@ const getProjectAssignmentReport = async () => {
 
   const assigned = [];
   const notAssigned = [];
+  // Employees with no project at all - no formal membership and no timesheet
+  // history to fall back on. Kept out of `notAssigned` (Internal Project) so
+  // "no project yet" reads as its own state, not as being on an internal one.
+  const noProject = [];
 
   for (const user of users) {
     const baseEntry = {
@@ -264,15 +271,22 @@ const getProjectAssignmentReport = async () => {
       // it - no membership and no submissions yet means there's no "since".
       projectSince: current?.startDate ?? null,
     };
-    (latestSubmission?.projectAssigned === "ASSIGNED" ? assigned : notAssigned).push(entry);
+
+    if (!current) {
+      noProject.push(entry);
+    } else {
+      (latestSubmission?.projectAssigned === "ASSIGNED" ? assigned : notAssigned).push(entry);
+    }
   }
 
   return {
     totalEmployees: users.length,
     assignedCount: assigned.length,
     notAssignedCount: notAssigned.length,
+    noProjectCount: noProject.length,
     assigned,
     notAssigned,
+    noProject,
   };
 };
 

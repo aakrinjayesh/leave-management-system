@@ -2,8 +2,8 @@ import { X } from "lucide-react";
 import "./Modal.css";
 
 // `wide` opts into a roomier max-width for modals with denser content (e.g.
-// EditProjectModal's schedule fields + members list) - the default stays
-// unchanged for every simpler modal (confirmations, single-field forms).
+// EditProjectModal's schedule fields, the manage-members list) - the default
+// stays unchanged for every simpler modal (confirmations, single-field forms).
 export default function Modal({ title, onClose, children, wide = false }) {
   return (
     <div className="modal-overlay">

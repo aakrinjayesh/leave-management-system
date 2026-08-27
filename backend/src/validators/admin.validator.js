@@ -287,6 +287,13 @@ const renameProjectSchema = withDateRangeCheck(
   })
 );
 
+// Members-only edit (the standalone "Manage members" modal). Here `members`
+// is required, not optional - the request is always the full desired member
+// list, and an explicit [] means "remove everyone".
+const setProjectMembersSchema = z.object({
+  members: membersSchema.unwrap(),
+});
+
 module.exports = {
   createUserSchema,
   updateManagerSchema,
@@ -305,6 +312,7 @@ module.exports = {
   generateIncomeTaxComputationSchema,
   createProjectSchema,
   renameProjectSchema,
+  setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
 };

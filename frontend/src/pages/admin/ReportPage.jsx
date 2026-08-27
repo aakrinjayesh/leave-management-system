@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Ban,
   CheckCircle2,
-  ChevronDown,
   ChevronUp,
   Clock,
   Download,
@@ -26,6 +25,7 @@ import Spinner from "../../components/common/Spinner";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import EditProjectModal from "./EditProjectModal";
+import ManageProjectMembersModal from "./ManageProjectMembersModal";
 import ProjectHistoryModal from "./ProjectHistoryModal";
 import ProjectMembersField from "./ProjectMembersField";
 import * as adminApi from "../../api/admin.api";
@@ -37,7 +37,6 @@ import {
 } from "../../utils/openBlob";
 import {
   PROJECT_TYPE_OPTIONS,
-  TIMEZONE_OPTIONS,
   SUBMISSION_FREQUENCY_OPTIONS,
   formatProjectType,
   formatWorkingHours,
@@ -54,6 +53,7 @@ const formatNum = (value) => {
 
 function EmployeeListCard({
   title,
+  subtitle,
   employees,
   weekSubmissionsByKey,
   workloadByUserId,
@@ -112,7 +112,8 @@ function EmployeeListCard({
         </div>
 
         <p className="card-section-subtitle">
-          Every employee currently working on this project type, and the date they started on it.
+          {subtitle ||
+            "Every employee currently working on this project type, and the date they started on it."}
         </p>
 
         {visibleEmployees.length === 0 ? (
@@ -267,6 +268,7 @@ function ManageProjectsCard() {
   const [newProjectMembers, setNewProjectMembers] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
+  const [managingMembersProject, setManagingMembersProject] = useState(null);
   const [actioningId, setActioningId] = useState(null);
 
   const loadProjects = () =>
@@ -329,7 +331,10 @@ function ManageProjectsCard() {
         ...newProject,
         name: newProject.name.trim(),
         endDate: newProject.endDate || null,
-        members: newProjectMembers.map((m) => ({ ...m, endDate: m.endDate || null })),
+        members: newProjectMembers.map((m) => ({
+          ...m,
+          endDate: m.endDate || null,
+        })),
       });
       setNewProject(DEFAULT_NEW_PROJECT);
       setNewProjectMembers([]);
@@ -343,6 +348,11 @@ function ManageProjectsCard() {
 
   const handleEditSuccess = () => {
     setEditingProject(null);
+    loadProjects();
+  };
+
+  const handleMembersSuccess = () => {
+    setManagingMembersProject(null);
     loadProjects();
   };
 
@@ -366,230 +376,277 @@ function ManageProjectsCard() {
   return (
     <div className="card" style={{ marginBottom: 20 }}>
       <div className="card-section">
-        <button
-          type="button"
-          className="section-flex-row"
-          style={{
-            width: "100%",
-            background: "none",
-            border: "none",
-            padding: 0,
-            cursor: "pointer",
-            justifyContent: "flex-start",
-            gap: 10,
-          }}
-          onClick={() => setIsExpanded((prev) => !prev)}
-        >
-          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        <div className="section-flex-row" style={{ marginBottom: 0 }}>
           <span className="card-section-title" style={{ marginBottom: 0 }}>
-            Create project {projects ? `(${projects.length})` : ""}
+            Projects {projects ? `(${projects.length})` : ""}
           </span>
-        </button>
+          <Button
+            variant={isExpanded ? "secondary" : "primary"}
+            className="page-header-btn"
+            onClick={() => setIsExpanded((prev) => !prev)}
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp size={15} style={{ marginRight: 6 }} />
+                Close
+              </>
+            ) : (
+              <>
+                <Plus size={15} style={{ marginRight: 6 }} />
+                New project
+              </>
+            )}
+          </Button>
+        </div>
+
+        <Alert type="error">{error}</Alert>
 
         {isExpanded && (
-          <>
-            <Alert type="error">{error}</Alert>
-
-            <form
-              onSubmit={handleAdd}
-              style={{ marginTop: 16, marginBottom: 16 }}
-            >
-              <div className="form-three-col">
-                <TextInput
-                  label="Project name"
-                  placeholder="New project name"
-                  value={newProject.name}
-                  onChange={handleNewProjectChange("name")}
-                />
-                <FormSelect
-                  label="Project type"
-                  value={newProject.projectType}
-                  onChange={handleNewProjectChange("projectType")}
-                >
-                  <option value="" hidden></option>
-                  {PROJECT_TYPE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </FormSelect>
-                <div className="form-two-col" style={{ margin: 0 }}>
-                  <TextInput
-                    label="Project Start date"
-                    type="date"
-                    value={newProject.startDate}
-                    onChange={handleNewProjectChange("startDate")}
-                  />
-                  <TextInput
-                    label="Project End date"
-                    type="date"
-                    value={newProject.endDate}
-                    onChange={handleNewProjectChange("endDate")}
-                  />
-                </div>
-              </div>
-              <div className="form-three-col">
-                <TextInput
-                  label="Timezone"
-                  list="timezone-suggestions"
-                  placeholder="e.g. India (IST, UTC+5:30)"
-                  value={newProject.timezone}
-                  onChange={handleNewProjectChange("timezone")}
-                />
-                <div className="form-two-col" style={{ margin: 0 }}>
-                  <TimeOfDayField
-                    label="Hours start"
-                    value={newProject.workStartTime}
-                    onChange={(value) =>
-                      setNewProject((prev) => ({
-                        ...prev,
-                        workStartTime: value,
-                      }))
-                    }
-                  />
-                  <TimeOfDayField
-                    label="Hours end"
-                    value={newProject.workEndTime}
-                    onChange={(value) =>
-                      setNewProject((prev) => ({ ...prev, workEndTime: value }))
-                    }
-                  />
-                </div>
-                <FormSelect
-                  label="Timesheet submission"
-                  value={newProject.submissionFrequency}
-                  onChange={handleNewProjectChange("submissionFrequency")}
-                >
-                  <option value="" hidden></option>
-                  {SUBMISSION_FREQUENCY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </FormSelect>
-              </div>
-              <datalist id="timezone-suggestions">
-                {TIMEZONE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.label} />
-                ))}
-              </datalist>
-
-              <ProjectMembersField
-                members={newProjectMembers}
-                onChange={setNewProjectMembers}
-                refreshKey={projects}
+          <form
+            onSubmit={handleAdd}
+            style={{
+              marginTop: 14,
+              marginBottom: 22,
+              padding: 20,
+              border: "1px solid var(--border-color)",
+              borderRadius: 6,
+              background: "var(--color-gray-50)",
+            }}
+          >
+            <p className="card-section-title" style={{ marginBottom: 16 }}>
+              New project details
+            </p>
+            <div className="form-three-col">
+              <TextInput
+                label="Project name"
+                placeholder="New project name"
+                value={newProject.name}
+                onChange={handleNewProjectChange("name")}
               />
-
-              <div style={{ marginTop: 16 }}>
-                <Button type="submit" isLoading={isAdding}>
-                  <Plus
-                    size={14}
-                    style={{ marginRight: 6, verticalAlign: "-2px" }}
-                  />
-                  Add project
-                </Button>
+              <FormSelect
+                label="Project type"
+                value={newProject.projectType}
+                onChange={handleNewProjectChange("projectType")}
+              >
+                <option value="" hidden></option>
+                {PROJECT_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </FormSelect>
+              <div className="form-two-col" style={{ margin: 0 }}>
+                <TextInput
+                  label="Project Start date"
+                  type="date"
+                  value={newProject.startDate}
+                  onChange={handleNewProjectChange("startDate")}
+                />
+                <TextInput
+                  label="Project End date"
+                  type="date"
+                  value={newProject.endDate}
+                  onChange={handleNewProjectChange("endDate")}
+                />
               </div>
-            </form>
-          </>
+            </div>
+            <div className="form-three-col">
+              <TextInput
+                label="Timezone"
+                placeholder="e.g. India (IST, UTC+5:30)"
+                value={newProject.timezone}
+                onChange={handleNewProjectChange("timezone")}
+              />
+              <div className="form-two-col" style={{ margin: 0 }}>
+                <TimeOfDayField
+                  label="Hours start"
+                  value={newProject.workStartTime}
+                  onChange={(value) =>
+                    setNewProject((prev) => ({
+                      ...prev,
+                      workStartTime: value,
+                    }))
+                  }
+                />
+                <TimeOfDayField
+                  label="Hours end"
+                  value={newProject.workEndTime}
+                  onChange={(value) =>
+                    setNewProject((prev) => ({ ...prev, workEndTime: value }))
+                  }
+                />
+              </div>
+              <FormSelect
+                label="Timesheet submission"
+                value={newProject.submissionFrequency}
+                onChange={handleNewProjectChange("submissionFrequency")}
+              >
+                <option value="" hidden></option>
+                {SUBMISSION_FREQUENCY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </FormSelect>
+            </div>
+
+            <ProjectMembersField
+              members={newProjectMembers}
+              onChange={setNewProjectMembers}
+              refreshKey={projects}
+            />
+
+            <div style={{ marginTop: 16 }}>
+              <Button type="submit" isLoading={isAdding}>
+                <Plus
+                  size={14}
+                  style={{ marginRight: 6, verticalAlign: "-2px" }}
+                />
+                Add project
+              </Button>
+            </div>
+          </form>
         )}
 
-        {isExpanded &&
-          (!projects ? (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                padding: "24px 0",
-              }}
-            >
-              <Spinner size={24} />
-            </div>
-          ) : projects.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-state-icon">
-                <ListChecks size={22} />
-              </span>
-              <p>No projects added yet.</p>
-            </div>
-          ) : (
-            (() => {
-              const activeProjects = projects.filter((p) => p.isActive);
-              const inactiveProjects = projects.filter((p) => !p.isActive);
+        {!projects ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: "24px 0",
+            }}
+          >
+            <Spinner size={24} />
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="empty-state">
+            <span className="empty-state-icon">
+              <ListChecks size={22} />
+            </span>
+            <p>No projects added yet.</p>
+          </div>
+        ) : (
+          (() => {
+            const activeProjects = projects.filter((p) => p.isActive);
+            const inactiveProjects = projects.filter((p) => !p.isActive);
 
-              const renderRow = (project) => (
-                <tr key={project.id}>
-                  <td className="table-cell-primary">{project.name}</td>
-                  <td className="table-cell-secondary">{formatProjectType(project.projectType)}</td>
-                  <td className="table-cell-secondary">{formatWorkingHours(project)}</td>
-                  <td className="table-cell-secondary">{formatDate(project.startDate)}</td>
-                  <td className="table-cell-secondary">{project.endDate ? formatDate(project.endDate) : "Ongoing"}</td>
-                  <td className="table-cell-secondary">{formatSubmissionFrequency(project.submissionFrequency)}</td>
-                  <td className="table-cell-secondary">{project.assignedEmployees?.length ?? 0}</td>
-                  <td>
-                    <StatusBadge status={project.isActive ? "ACTIVE" : "INACTIVE"} />
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      <button type="button" className="row-action-btn" onClick={() => setEditingProject(project)}>
-                        <Pencil size={14} />
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={`row-action-btn ${project.isActive ? "reject" : "approve"}`}
-                        disabled={actioningId === project.id}
-                        onClick={() => handleToggleActive(project)}
-                      >
-                        {project.isActive ? <Ban size={14} /> : <RotateCcw size={14} />}
-                        {project.isActive ? "Deactivate" : "Reactivate"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-
-              const tableHead = (
-                <thead>
-                  <tr>
-                    <th>Project name</th>
-                    <th>Type</th>
-                    <th>Working hours</th>
-                    <th>Start date</th>
-                    <th>End date</th>
-                    <th>Submission</th>
-                    <th>Members</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-              );
-
-              return (
-                <>
-                  <div className="data-table-wrap">
-                    <table className="data-table">
-                      {tableHead}
-                      <tbody>{activeProjects.map(renderRow)}</tbody>
-                    </table>
+            const renderRow = (project) => (
+              <tr
+                key={project.id}
+                className="is-clickable"
+                onClick={() => setManagingMembersProject(project)}
+                title="Manage members on this project"
+              >
+                <td className="table-cell-primary">{project.name}</td>
+                <td className="table-cell-secondary">
+                  {formatProjectType(project.projectType)}
+                </td>
+                <td className="table-cell-secondary">
+                  {formatWorkingHours(project)}
+                </td>
+                <td className="table-cell-secondary">
+                  {formatDate(project.startDate)}
+                </td>
+                <td className="table-cell-secondary">
+                  {project.endDate ? formatDate(project.endDate) : "Ongoing"}
+                </td>
+                <td className="table-cell-secondary">
+                  {formatSubmissionFrequency(project.submissionFrequency)}
+                </td>
+                <td className="table-cell-secondary">
+                  <span className="link-btn">
+                    <Users
+                      size={13}
+                      style={{ verticalAlign: "-2px", marginRight: 4 }}
+                    />
+                    {project.assignedEmployees?.length ?? 0}
+                  </span>
+                </td>
+                <td>
+                  <StatusBadge
+                    status={project.isActive ? "ACTIVE" : "INACTIVE"}
+                  />
+                </td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="row-action-btn"
+                      onClick={() => setEditingProject(project)}
+                    >
+                      <Pencil size={14} />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className={`row-action-btn ${project.isActive ? "reject" : "approve"}`}
+                      disabled={actioningId === project.id}
+                      onClick={() => handleToggleActive(project)}
+                    >
+                      {project.isActive ? (
+                        <Ban size={14} />
+                      ) : (
+                        <RotateCcw size={14} />
+                      )}
+                      {project.isActive ? "Deactivate" : "Reactivate"}
+                    </button>
                   </div>
+                </td>
+              </tr>
+            );
 
-                  {inactiveProjects.length > 0 && (
-                    <>
-                      <p className="card-section-subtitle" style={{ marginTop: 24, marginBottom: 8 }}>
-                        Inactive projects ({inactiveProjects.length})
-                      </p>
-                      <div className="data-table-wrap">
-                        <table className="data-table">
-                          {tableHead}
-                          <tbody>{inactiveProjects.map(renderRow)}</tbody>
-                        </table>
-                      </div>
-                    </>
-                  )}
-                </>
-              );
-            })()
-          ))}
+            const tableHead = (
+              <thead>
+                <tr>
+                  <th>Project name</th>
+                  <th>Type</th>
+                  <th>Working hours</th>
+                  <th>Start date</th>
+                  <th>End date</th>
+                  <th>Submission</th>
+                  <th>Members</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+            );
+
+            return (
+              <>
+                <p
+                  className="card-section-subtitle"
+                  style={{ marginTop: 4, marginBottom: 10 }}
+                >
+                  Click a project to manage its members. Use Edit to change
+                  project details.
+                </p>
+                <div className="data-table-wrap">
+                  <table className="data-table">
+                    {tableHead}
+                    <tbody>{activeProjects.map(renderRow)}</tbody>
+                  </table>
+                </div>
+
+                {inactiveProjects.length > 0 && (
+                  <>
+                    <p
+                      className="card-section-subtitle"
+                      style={{ marginTop: 24, marginBottom: 8 }}
+                    >
+                      Inactive projects ({inactiveProjects.length})
+                    </p>
+                    <div className="data-table-wrap">
+                      <table className="data-table">
+                        {tableHead}
+                        <tbody>{inactiveProjects.map(renderRow)}</tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </>
+            );
+          })()
+        )}
       </div>
 
       {editingProject && (
@@ -597,6 +654,14 @@ function ManageProjectsCard() {
           project={editingProject}
           onClose={() => setEditingProject(null)}
           onSuccess={handleEditSuccess}
+        />
+      )}
+
+      {managingMembersProject && (
+        <ManageProjectMembersModal
+          project={managingMembersProject}
+          onClose={() => setManagingMembersProject(null)}
+          onSuccess={handleMembersSuccess}
         />
       )}
     </div>
@@ -695,10 +760,10 @@ export default function ReportPage() {
   };
 
   return (
-    <DashboardLayout title="Report">
+    <DashboardLayout title="Project">
       <div className="page-header">
         <div>
-          <h1>Report</h1>
+          <h1>Projects</h1>
           <p>Which employees are on a client project vs an internal project.</p>
         </div>
       </div>
@@ -734,6 +799,11 @@ export default function ReportPage() {
               icon={<XCircle size={20} />}
               label="Employees on Internal Projects"
               value={report.notAssignedCount}
+            />
+            <StatCard
+              icon={<Ban size={20} />}
+              label="Employees with no project"
+              value={report.noProjectCount}
             />
           </div>
 
@@ -812,6 +882,17 @@ export default function ReportPage() {
           <EmployeeListCard
             title="Internal Project"
             employees={applyFilters(report.notAssigned)}
+            weekSubmissionsByKey={weekSubmissionsByKey}
+            workloadByUserId={workloadByUserId}
+            hoursByUserProject={hoursByUserProject}
+            downloadingId={downloadingId}
+            onDownloadTimesheet={handleDownloadTimesheet}
+            onViewHistory={setHistoryEmployee}
+          />
+          <EmployeeListCard
+            title="No project"
+            subtitle="Employees not on any project yet - assign them one by clicking a project above."
+            employees={applyFilters(report.noProject)}
             weekSubmissionsByKey={weekSubmissionsByKey}
             workloadByUserId={workloadByUserId}
             hoursByUserProject={hoursByUserProject}

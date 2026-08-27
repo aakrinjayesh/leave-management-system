@@ -99,6 +99,15 @@ const renameProject = asyncHandler(async (req, res) => {
   await notifyAllOfProjectChange(`Project "${project.name}" has been updated.`);
 });
 
+const setProjectMembers = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const project = await projectService.updateProjectMembers(id, req.body.members);
+
+  new ApiResponse(200, "Project members updated.", { project }).send(res);
+
+  await notifyAllOfProjectChange(`Project "${project.name}" team has been updated.`);
+});
+
 // Every employee who has logged time against this project before admin-set
 // membership existed - shown as a hint in the Edit Project modal so admin
 // can decide whether to formally add them (see timesheetService.getRecentProjectMembers).
@@ -135,6 +144,7 @@ module.exports = {
   listProjects,
   createProject,
   renameProject,
+  setProjectMembers,
   deactivateProject,
   reactivateProject,
 };

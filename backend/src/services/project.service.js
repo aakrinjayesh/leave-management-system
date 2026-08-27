@@ -113,6 +113,15 @@ const setProjectActive = async (id, isActive) => {
   return prisma.project.update({ where: { id }, data: { isActive } });
 };
 
+// Members-only edit - same effect as passing `members` to renameProject, but
+// without having to resend every project detail field. Used by the standalone
+// "Manage members" modal. An explicit [] clears the whole member list.
+const updateProjectMembers = async (id, members) => {
+  await getProjectOr404(id);
+  await setProjectMembers(id, members);
+  return getProjectWithMembers(id);
+};
+
 // Every project a given employee is currently a member of - used to build
 // their own timesheet's project switcher.
 const listProjectsForEmployee = (userId) =>
@@ -127,5 +136,6 @@ module.exports = {
   renameProject,
   setProjectActive,
   setProjectMembers,
+  updateProjectMembers,
   listProjectsForEmployee,
 };

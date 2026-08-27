@@ -19,6 +19,7 @@ const {
   generateIncomeTaxComputationSchema,
   createProjectSchema,
   renameProjectSchema,
+  setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
 } = require("../validators/admin.validator");
@@ -67,6 +68,7 @@ router.get("/reports/timesheet-submissions", reportController.getWeekTimesheetSu
 router.get("/projects", reportController.listProjects);
 router.post("/projects", validate(createProjectSchema), reportController.createProject);
 router.patch("/projects/:id", validate(renameProjectSchema), reportController.renameProject);
+router.patch("/projects/:id/members", validate(setProjectMembersSchema), reportController.setProjectMembers);
 router.get("/projects/:id/recent-members", reportController.getProjectRecentMembers);
 router.patch("/projects/:id/deactivate", reportController.deactivateProject);
 router.patch("/projects/:id/reactivate", reportController.reactivateProject);
