@@ -10,6 +10,11 @@ const { notFound, errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
 
+// Behind Render's proxy (and the frontend's /api rewrite): trust one hop so the
+// app sees HTTPS and the real client IP instead of the proxy's - matters for
+// secure-cookie detection and IP-based rate limiting.
+app.set("trust proxy", 1);
+
 const isDevLocalhost = (origin) => env.NODE_ENV !== "production" && /^http:\/\/localhost:\d+$/.test(origin);
 
 app.use(helmet());

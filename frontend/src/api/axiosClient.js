@@ -1,6 +1,9 @@
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// Relative by default so the browser only ever talks to one origin and the
+// refresh-token cookie stays first-party. In prod the frontend host rewrites
+// /api/* to the API service; in dev the Vite proxy does the same (vite.config.js).
+const BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
 const axiosClient = axios.create({
   baseURL: BASE_URL,
