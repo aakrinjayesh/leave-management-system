@@ -7,9 +7,7 @@ import {
   Clock,
   Download,
   ListChecks,
-  Pencil,
   Plus,
-  RotateCcw,
   Search,
   Users,
   X,
@@ -274,7 +272,15 @@ function ManageProjectsCard() {
   const loadProjects = () =>
     adminApi
       .listProjects()
-      .then((res) => setProjects(res.projects))
+      .then((res) => {
+        setProjects(res.projects);
+        // Keep an open "Manage members" modal pointed at the fresh row so its
+        // header (type, status, member count) reflects edits made from within it.
+        setManagingMembersProject((cur) =>
+          cur ? res.projects.find((p) => p.id === cur.id) ?? null : cur,
+        );
+        return res.projects;
+      })
       .catch((err) => setError(getErrorMessage(err)));
 
   useEffect(() => {
@@ -567,31 +573,6 @@ function ManageProjectsCard() {
                     status={project.isActive ? "ACTIVE" : "INACTIVE"}
                   />
                 </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <div className="row-actions">
-                    <button
-                      type="button"
-                      className="row-action-btn"
-                      onClick={() => setEditingProject(project)}
-                    >
-                      <Pencil size={14} />
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className={`row-action-btn ${project.isActive ? "reject" : "approve"}`}
-                      disabled={actioningId === project.id}
-                      onClick={() => handleToggleActive(project)}
-                    >
-                      {project.isActive ? (
-                        <Ban size={14} />
-                      ) : (
-                        <RotateCcw size={14} />
-                      )}
-                      {project.isActive ? "Deactivate" : "Reactivate"}
-                    </button>
-                  </div>
-                </td>
               </tr>
             );
 
@@ -606,7 +587,6 @@ function ManageProjectsCard() {
                   <th>Submission</th>
                   <th>Members</th>
                   <th>Status</th>
-                  <th></th>
                 </tr>
               </thead>
             );
@@ -649,19 +629,23 @@ function ManageProjectsCard() {
         )}
       </div>
 
-      {editingProject && (
-        <EditProjectModal
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          onSuccess={handleEditSuccess}
-        />
-      )}
-
       {managingMembersProject && (
         <ManageProjectMembersModal
           project={managingMembersProject}
           onClose={() => setManagingMembersProject(null)}
           onSuccess={handleMembersSuccess}
+          onEdit={() => setEditingProject(managingMembersProject)}
+          onToggleActive={() => handleToggleActive(managingMembersProject)}
+          isToggling={actioningId === managingMembersProject.id}
+        />
+      )}
+
+      {/* After the members modal so an Edit opened from inside it stacks on top. */}
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSuccess={handleEditSuccess}
         />
       )}
     </div>

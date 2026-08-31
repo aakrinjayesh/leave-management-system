@@ -43,6 +43,16 @@ const listEmployees = asyncHandler(async (req, res) => {
   const fiscalYear = await companySettingsService.getCurrentFiscalYear();
   const managerId = req.user.id;
 
+  // Full yearly entitlement across every countable leave type - used as the
+  // "remaining" fallback for an employee who has no balance rows yet (pending
+  // account, or just never applied for leave), so the column reads the real
+  // allocation instead of a misleading 0.
+  const activePolicies = await prisma.leavePolicy.findMany({
+    where: { isActive: true, isUnlimited: false },
+    select: { allocatedLeaves: true },
+  });
+  const fullEntitlement = activePolicies.reduce((sum, p) => sum + p.allocatedLeaves, 0);
+
   const employees = await prisma.user.findMany({
     where: { managerId },
     orderBy: { firstName: "asc" },
@@ -60,8 +70,11 @@ const listEmployees = asyncHandler(async (req, res) => {
   });
 
   const result = employees.map((employee) => {
+    const hasBalances = employee.leaveBalances.length > 0;
     const totalUsed = employee.leaveBalances.reduce((sum, b) => sum + b.usedLeaves, 0);
-    const totalRemaining = employee.leaveBalances.reduce((sum, b) => sum + b.remainingLeaves, 0);
+    const totalRemaining = hasBalances
+      ? employee.leaveBalances.reduce((sum, b) => sum + b.remainingLeaves, 0)
+      : fullEntitlement;
     return {
       id: employee.id,
       employeeCode: employee.employeeCode,

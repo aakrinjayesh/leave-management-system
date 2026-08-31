@@ -1,10 +1,19 @@
 import { useEffect, useState } from "react";
+import { Ban, Pencil, RotateCcw } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import ProjectMembersField from "./ProjectMembersField";
+import ProjectEmployeeTimesheets from "./ProjectEmployeeTimesheets";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { formatDate } from "../../utils/formatDate";
+import {
+  formatProjectType,
+  formatProjectTimezone,
+  formatSubmissionFrequency,
+  formatWorkingHours,
+} from "../../utils/projectOptions";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
 
@@ -16,10 +25,19 @@ const toMembers = (project) =>
   }));
 
 // Standalone "who's on this project" editor - opened by clicking a project
-// row on the Report page. Adds/removes members and tweaks their per-project
-// start/end dates, nothing else about the project. Project details
-// (type/timezone/hours/dates) stay in EditProjectModal.
-export default function ManageProjectMembersModal({ project, onClose, onSuccess }) {
+// row on the Report page. Handles the member list (check to add / uncheck to
+// remove, plus per-member start/end dates); Edit and Deactivate/Reactivate in
+// the header defer to the parent so they behave like the project table's own
+// buttons.
+export default function ManageProjectMembersModal({
+  project,
+  onClose,
+  onSuccess,
+  onEdit,
+  onToggleActive,
+  isToggling = false,
+}) {
+  const [tab, setTab] = useState("members");
   const [members, setMembers] = useState(toMembers(project));
   const [recentMembers, setRecentMembers] = useState([]);
   const [error, setError] = useState("");
@@ -61,31 +79,136 @@ export default function ManageProjectMembersModal({ project, onClose, onSuccess 
     }
   };
 
+  const isClient = project.projectType === "ASSIGNED";
+  const memberCount = project.assignedEmployees?.length ?? 0;
+
+  const headerActions = (
+    <>
+      <button type="button" className="row-action-btn" onClick={onEdit}>
+        <Pencil size={14} />
+        Edit
+      </button>
+      <button
+        type="button"
+        className={`row-action-btn ${project.isActive ? "reject" : "approve"}`}
+        disabled={isToggling}
+        onClick={onToggleActive}
+      >
+        {project.isActive ? <Ban size={14} /> : <RotateCcw size={14} />}
+        {project.isActive ? "Deactivate" : "Reactivate"}
+      </button>
+    </>
+  );
+
   return (
-    <Modal title={`Members · ${project.name}`} onClose={onClose} wide>
-      <Alert type="error">{error}</Alert>
+    <Modal title="Manage project members" onClose={onClose} full headerActions={headerActions}>
+      <div className="pm-modal-body">
+        <Alert type="error">{error}</Alert>
 
-      <form onSubmit={handleSubmit} noValidate>
-        <p className="helper-text" style={{ marginTop: 0 }}>
-          Check an employee to add them to this project, uncheck to remove them. Members see
-          this project's type, timezone, working hours and submission frequency automatically.
-        </p>
+        <div className="pm-detail">
+          <div className="pm-detail-head">
+            <h3 className="pm-detail-name">{project.name}</h3>
+            <div className="pm-detail-badges">
+              <span className={`pm-badge ${isClient ? "is-client" : "is-internal"}`}>
+                {formatProjectType(project.projectType)}
+              </span>
+              <span className={`pm-badge ${project.isActive ? "is-active" : "is-inactive"}`}>
+                {project.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+          </div>
 
-        <ProjectMembersField
-          members={members}
-          onChange={setMembers}
-          recentHint={recentMembers}
-        />
-
-        <div className="modal-actions">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" isLoading={isSubmitting}>
-            Save members
-          </Button>
+          <dl className="pm-detail-grid">
+            <div>
+              <dt>Working hours</dt>
+              <dd>{formatWorkingHours(project)}</dd>
+            </div>
+            <div>
+              <dt>Timezone</dt>
+              <dd>{formatProjectTimezone(project.timezone)}</dd>
+            </div>
+            <div>
+              <dt>Timesheets</dt>
+              <dd>{formatSubmissionFrequency(project.submissionFrequency)}</dd>
+            </div>
+            <div>
+              <dt>Start date</dt>
+              <dd>{formatDate(project.startDate)}</dd>
+            </div>
+            <div>
+              <dt>End date</dt>
+              <dd>{project.endDate ? formatDate(project.endDate) : "Ongoing"}</dd>
+            </div>
+            <div>
+              <dt>Members</dt>
+              <dd>{memberCount}</dd>
+            </div>
+          </dl>
         </div>
-      </form>
+
+        <div className="filter-tabs" style={{ marginBottom: 10 }}>
+          <button
+            type="button"
+            className={`filter-tab ${tab === "members" ? "active" : ""}`}
+            onClick={() => setTab("members")}
+          >
+            Members
+          </button>
+          <button
+            type="button"
+            className={`filter-tab ${tab === "timesheets" ? "active" : ""}`}
+            onClick={() => setTab("timesheets")}
+          >
+            Employee timesheets
+          </button>
+        </div>
+
+        {tab === "members" ? (
+          <>
+            <p className="helper-text" style={{ marginTop: 0 }}>
+              Check an employee to add them, uncheck to remove them. Members pick up this
+              project's type, timezone, working hours and submission frequency automatically.
+              Use <strong>Edit</strong> above to change any of those project details.
+            </p>
+
+            <form onSubmit={handleSubmit} noValidate className="pm-modal-form">
+              <div className="pm-modal-list">
+                <ProjectMembersField
+                  members={members}
+                  onChange={setMembers}
+                  recentHint={recentMembers}
+                />
+              </div>
+
+              <div className="modal-actions pm-modal-footer">
+                <Button type="button" variant="secondary" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" isLoading={isSubmitting}>
+                  Save members
+                </Button>
+              </div>
+            </form>
+          </>
+        ) : (
+          <div className="pm-modal-form">
+            <p className="helper-text" style={{ marginTop: 0 }}>
+              Click an employee to open their full timesheet. People on this project are listed
+              first, everyone else below.
+            </p>
+
+            <div className="pm-modal-list">
+              <ProjectEmployeeTimesheets project={project} />
+            </div>
+
+            <div className="modal-actions pm-modal-footer">
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

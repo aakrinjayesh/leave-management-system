@@ -30,6 +30,9 @@ const nullableInt = (min = 0) => z.coerce.number().int().min(min).nullable().opt
 const createLeavePolicySchema = z.object({
   leaveName: z.string().trim().min(1, "Leave name is required.").max(100),
   allocatedLeaves: z.coerce.number().int().min(0),
+  // null / omitted = whole yearly allocation granted up front. A number = how
+  // many days are credited each month instead (e.g. 1 = one day/month).
+  monthlyAccrualDays: z.coerce.number().min(0).max(31).nullable().optional(),
   isUnlimited: z.boolean().optional(),
   isUnpaid: z.boolean().optional(),
   allowHalfDay: z.boolean().optional(),

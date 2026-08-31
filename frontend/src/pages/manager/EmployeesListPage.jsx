@@ -23,7 +23,11 @@ export default function EmployeesListPage() {
       <div className="page-header">
         <div>
           <h1>Employees</h1>
-          <p>Everyone who reports to you, with their usage and balance.</p>
+          <p>
+            Everyone who reports to you. Leave figures below are the totals
+            across all leave types (Casual, Sick, Earned, etc.) - click a row
+            for the per-type breakdown.
+          </p>
         </div>
       </div>
 
@@ -32,7 +36,7 @@ export default function EmployeesListPage() {
           <StatCard icon={<Users size={20} />} label="Total employees" value={overview.totalEmployees} />
           <StatCard
             icon={<ClockAlert size={20} />}
-            label="Pending requests"
+            label="Pending leave requests"
             value={overview.pendingRequestsCount}
             onClick={() => navigate("/manager/leave-requests")}
           />
@@ -66,9 +70,9 @@ export default function EmployeesListPage() {
                   <tr>
                     <th>Employee</th>
                     <th>Project</th>
-                    <th>Days used</th>
-                    <th>Days remaining</th>
-                    <th>Pending requests</th>
+                    <th>Leave days used</th>
+                    <th>Leave days remaining</th>
+                    <th>Pending leave requests</th>
                     <th></th>
                   </tr>
                 </thead>

@@ -22,7 +22,6 @@ const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat("en-IN", { weekday: "short",
 const formatDayLabel = (date) => DAY_LABEL_FORMATTER.format(new Date(date));
 
 const HOUR_OPTIONS = Array.from({ length: 25 }, (_, i) => i); // 0..24
-const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => i * 5); // 0,5,10,...,55
 
 // Every calendar date from periodStart to periodEnd inclusive - 7 dates for
 // a WEEKLY project's Monday-Sunday grid, ~28-31 for a MONTHLY project's
@@ -157,11 +156,6 @@ export default function MyTimesheetPage() {
       const row = rowState[dateKey];
       if (row.locked) continue;
 
-      const minutes = Number(row.minutes) || 0;
-      if (minutes < 0 || minutes > 59) {
-        setError(`Minutes for ${formatDayLabel(dateKey)} must be between 0 and 59.`);
-        return;
-      }
       const hoursWorked = combineHoursMinutes(row.hours, row.minutes);
       if (hoursWorked <= 0) continue;
       if (hoursWorked > 24) {
@@ -172,7 +166,7 @@ export default function MyTimesheetPage() {
     }
 
     if (toSave.length === 0) {
-      setError("Please enter hours or minutes for at least one day before saving.");
+      setError("Please enter hours for at least one day before saving.");
       return;
     }
 
@@ -418,7 +412,6 @@ export default function MyTimesheetPage() {
                         <tr>
                           <th>Date</th>
                           <th>Hours</th>
-                          <th>Minutes</th>
                           <th>What did you work on? (optional)</th>
                           <th></th>
                         </tr>
@@ -439,19 +432,6 @@ export default function MyTimesheetPage() {
                                     {HOUR_OPTIONS.map((h) => (
                                       <option key={h} value={h}>
                                         {h}
-                                      </option>
-                                    ))}
-                                  </FormSelect>
-                                )}
-                              </td>
-                              <td style={{ width: 100 }}>
-                                {row.locked ? (
-                                  row.minutes || "0"
-                                ) : (
-                                  <FormSelect value={row.minutes} onChange={(e) => updateRow(dateKey, "minutes", e.target.value)}>
-                                    {MINUTE_OPTIONS.map((m) => (
-                                      <option key={m} value={m}>
-                                        {m}
                                       </option>
                                     ))}
                                   </FormSelect>

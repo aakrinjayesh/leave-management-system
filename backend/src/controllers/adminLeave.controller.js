@@ -3,6 +3,7 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const notificationService = require("../services/notification.service");
+const leaveBalanceService = require("../services/leaveBalance.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 
 // Notifies every active account - a leave policy change affects the whole
@@ -37,10 +38,10 @@ const buildDateRange = (start, end) => {
 };
 
 // ---------- Leave Policies ----------
-// Editing/creating a policy only ever changes the LeavePolicy row itself.
-// Existing LeaveBalance rows (already created for employees this year) are
-// never touched here, so allocation changes only take effect for balances
-// not yet created (new joiners, or next time a balance is lazily created).
+// Creating a policy only changes the LeavePolicy row. Editing one also
+// propagates an allocation change to employees' current-fiscal-year balances
+// (see updateLeavePolicy -> syncBalancesToPolicyAllocation) so "Sick: 8 -> 12"
+// is reflected everywhere immediately, not just for balances created later.
 
 const listLeavePolicies = asyncHandler(async (req, res) => {
   const policies = await prisma.leavePolicy.findMany({ orderBy: { leaveName: "asc" } });
@@ -75,6 +76,16 @@ const updateLeavePolicy = asyncHandler(async (req, res) => {
   }
 
   const policy = await prisma.leavePolicy.update({ where: { id }, data: req.body });
+
+  // Re-sync this year's balance rows whenever the allocation or the accrual
+  // setting (on/off/rate) changes - see reconcileBalancesToPolicy.
+  const allocationChanged =
+    req.body.allocatedLeaves !== undefined && req.body.allocatedLeaves !== existing.allocatedLeaves;
+  const accrualChanged = existing.monthlyAccrualDays !== policy.monthlyAccrualDays;
+  if (allocationChanged || accrualChanged) {
+    await leaveBalanceService.reconcileBalancesToPolicy(policy.id);
+  }
+
   new ApiResponse(200, "Leave type updated.", { policy }).send(res);
 
   await notifyAllOfPolicyChange(`The ${policy.leaveName} leave policy has been updated.`);

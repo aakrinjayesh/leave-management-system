@@ -252,6 +252,7 @@ export default function ManageLeavesPage() {
                     <tr>
                       <th>Name</th>
                       <th>Days/year</th>
+                      <th>Accrual</th>
                       <th>Max/request</th>
                       <th>Half-day</th>
                       <th>Type</th>
@@ -265,6 +266,11 @@ export default function ManageLeavesPage() {
                         <td className="table-cell-primary">{policy.leaveName}</td>
                         <td className="table-cell-secondary">
                           {policy.isUnlimited ? "Unlimited" : policy.allocatedLeaves}
+                        </td>
+                        <td className="table-cell-secondary">
+                          {policy.monthlyAccrualDays
+                            ? `${policy.monthlyAccrualDays}/month`
+                            : "Up front"}
                         </td>
                         <td className="table-cell-secondary">{policy.maxLeavesPerRequest}</td>
                         <td className="table-cell-secondary">{policy.allowHalfDay ? "Yes" : "No"}</td>

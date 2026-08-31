@@ -126,43 +126,40 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
                       <span className="member-row-name">
                         {employee.firstName} {employee.lastName}
                       </span>
-                      {currentProjects.length > 0 ? (
-                        <>
-                          <span className="member-row-label">Currently working on:</span>
-                          <span className="member-project-chips">
-                            {currentProjects.map((p, i) => (
-                              <span key={i} className="member-project-chip">
-                                {p.projectName}
-                                <span className="member-project-chip-date">· since {formatDate(p.projectSince)}</span>
-                              </span>
-                            ))}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="member-row-empty">Not currently on a project</span>
+                      {isChecked && (
+                        <span className="member-row-dates">
+                          <label className="member-row-date-field">
+                            <span>Start</span>
+                            <input
+                              type="date"
+                              value={member.startDate}
+                              onChange={(e) => updateMemberDate(employee.id, "startDate", e.target.value)}
+                            />
+                          </label>
+                          <label className="member-row-date-field">
+                            <span>End (optional)</span>
+                            <input
+                              type="date"
+                              value={member.endDate || ""}
+                              onChange={(e) => updateMemberDate(employee.id, "endDate", e.target.value)}
+                            />
+                          </label>
+                        </span>
                       )}
                     </span>
 
-                    {isChecked && (
-                      <span className="member-row-dates">
-                        <label className="member-row-date-field">
-                          <span>Start date</span>
-                          <input
-                            type="date"
-                            value={member.startDate}
-                            onChange={(e) => updateMemberDate(employee.id, "startDate", e.target.value)}
-                          />
-                        </label>
-                        <label className="member-row-date-field">
-                          <span>End date (optional)</span>
-                          <input
-                            type="date"
-                            value={member.endDate || ""}
-                            onChange={(e) => updateMemberDate(employee.id, "endDate", e.target.value)}
-                          />
-                        </label>
-                      </span>
-                    )}
+                    <span className="member-row-sub">
+                      {currentProjects.length > 0 ? (
+                        <>
+                          <span className="member-row-label">Currently working on:</span>{" "}
+                          {currentProjects
+                            .map((p) => `${p.projectName} (since ${formatDate(p.projectSince)})`)
+                            .join(", ")}
+                        </>
+                      ) : (
+                        "Not currently on another project"
+                      )}
+                    </span>
                   </span>
                 </div>
               </div>
