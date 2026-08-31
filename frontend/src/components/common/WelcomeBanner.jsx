@@ -15,6 +15,21 @@ const SUPPORT_CONTACT = {
 
 const ROLE_LABELS = { MANAGER: "Manager", ADMIN: "Admin", EMPLOYEE: "Employee" };
 
+const greetingForNow = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+};
+
+const longToday = () =>
+  new Date().toLocaleDateString("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
 const initialsOf = (name) =>
   name
     .split(" ")
@@ -58,6 +73,15 @@ export default function WelcomeBanner() {
     <div className="card welcome-banner-card" style={{ marginBottom: 20 }}>
       <div className="welcome-banner-cover">
         <div className="welcome-banner-cover-glow" aria-hidden="true" />
+
+        <div className="welcome-banner-greeting">
+          <span className="welcome-banner-greeting-eyebrow">{greetingForNow()}</span>
+          <span className="welcome-banner-greeting-main">
+            Welcome back, {user?.firstName} <span aria-hidden="true">👋</span>
+          </span>
+          <span className="welcome-banner-greeting-date">{longToday()}</span>
+        </div>
+
         <div className="welcome-banner-photo" aria-hidden="true">
           {photoUrl ? (
             <img src={photoUrl} alt="" className="welcome-banner-photo-img" onError={() => setPhotoUrl(null)} />

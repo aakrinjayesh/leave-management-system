@@ -22,6 +22,7 @@ const {
   setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
+  rejectProfileChangeSchema,
 } = require("../validators/admin.validator");
 const { rejectWfhRequestSchema } = require("../validators/wfh.validator");
 const controller = require("../controllers/admin.controller");
@@ -34,6 +35,7 @@ const reportController = require("../controllers/adminReport.controller");
 const offerLetterController = require("../controllers/adminOfferLetter.controller");
 const resignationController = require("../controllers/adminResignation.controller");
 const wfhController = require("../controllers/adminWfh.controller");
+const profileChangeController = require("../controllers/adminProfileChange.controller");
 const { uploadSingleEmployeeDocument } = require("../config/employeeDocumentUpload");
 const { USER_TYPE } = require("../utils/constants");
 
@@ -77,6 +79,9 @@ router.get("/users/:id/calendar", controller.getUserCalendar);
 router.get("/leave-requests/:id/attachment", controller.getUserLeaveAttachment);
 router.get("/users/:id/details", controller.getUserDetails);
 router.patch("/users/:id/details", validate(updateUserDetailsSchema), controller.updateUserDetails);
+router.get("/users/:id/profile-change-requests", profileChangeController.listForUser);
+router.patch("/profile-change-requests/:id/accept", profileChangeController.accept);
+router.patch("/profile-change-requests/:id/reject", validate(rejectProfileChangeSchema), profileChangeController.reject);
 
 router.get("/leave-policies", leaveController.listLeavePolicies);
 router.get("/leave-policies/history/years", leaveController.getLeavePolicyHistoryYears);

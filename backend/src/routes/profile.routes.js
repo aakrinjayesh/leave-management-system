@@ -18,6 +18,8 @@ router.patch("/me/personal-info", validate(updateMyPersonalInfoSchema), controll
 router.patch("/me/statutory-info", validate(updateMyStatutoryInfoSchema), controller.updateMyStatutoryInfo);
 router.patch("/me/bank-info", validate(updateMyBankInfoSchema), controller.updateMyBankInfo);
 
+router.get("/me/change-requests", controller.getMyProfileChangeRequests);
+
 router.get("/me/intro", controller.getMyIntro);
 router.put("/me/intro", validate(updateMyIntroSchema), controller.updateMyIntro);
 

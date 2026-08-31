@@ -12,6 +12,8 @@ export const updateMyStatutoryInfo = (data) => unwrap(axiosClient.patch("/profil
 
 export const updateMyBankInfo = (data) => unwrap(axiosClient.patch("/profile/me/bank-info", data));
 
+export const getMyProfileChangeRequests = () => unwrap(axiosClient.get("/profile/me/change-requests"));
+
 export const getMyIntro = () => unwrap(axiosClient.get("/profile/me/intro"));
 
 export const updateMyIntro = (data) => unwrap(axiosClient.put("/profile/me/intro", data));

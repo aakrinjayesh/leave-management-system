@@ -45,8 +45,8 @@ export default function EditBankInfoModal({ user, editsRemaining, onClose, onSav
       <form onSubmit={handleSubmit} noValidate>
         <p className="helper-text" style={{ marginTop: 0 }}>
           Salary / CTC can only be changed by your admin. Your account number is shown masked - leave it blank to
-          keep the current value. You have <strong>{editsRemaining}</strong> edit{editsRemaining === 1 ? "" : "s"}{" "}
-          left for this section.
+          keep the current value. Changes are sent to admin for approval before they take effect. You have{" "}
+          <strong>{editsRemaining}</strong> request{editsRemaining === 1 ? "" : "s"} left for this section.
         </p>
 
         <TextInput

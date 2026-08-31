@@ -49,8 +49,8 @@ export default function EditStatutoryInfoModal({ user, editsRemaining, onClose, 
       <form onSubmit={handleSubmit} noValidate>
         <p className="helper-text" style={{ marginTop: 0 }}>
           PF number can only be changed by your admin. Sensitive numbers below are shown masked - leave a field
-          blank to keep its current value. You have <strong>{editsRemaining}</strong> edit
-          {editsRemaining === 1 ? "" : "s"} left for this section.
+          blank to keep its current value. Changes are sent to admin for approval before they take effect. You have{" "}
+          <strong>{editsRemaining}</strong> request{editsRemaining === 1 ? "" : "s"} left for this section.
         </p>
 
         <div className="form-two-col">

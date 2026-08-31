@@ -8,6 +8,7 @@ import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
 import DocumentUploadField from "./DocumentUploadField";
+import ProfileChangeRequestsCard from "./ProfileChangeRequestsCard";
 import UpdateSalaryStructureModal from "./UpdateSalaryStructureModal";
 import TaxComputationSection from "./TaxComputationSection";
 import * as adminApi from "../../api/admin.api";
@@ -30,14 +31,27 @@ const PF_NUMBER_REGEX = /^[A-Za-z0-9/]+$/;
 
 // Mirrors the backend's updateUserDetailsSchema so the admin sees these
 // errors immediately, without waiting on a round trip.
+// A native <input type="date"> lets you type a 5-6 digit year; a real date is
+// always exactly yyyy-mm-dd with a 4-digit year.
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const isSaneYear = (dateStr) => {
+  const year = Number(dateStr.slice(0, 4));
+  return year >= 1900 && year <= 2100;
+};
+
 const validateForm = (form) => {
   const errors = {};
 
   if (form.employeeCode && !EMPLOYEE_CODE_REGEX.test(form.employeeCode.trim())) {
     errors.employeeCode = "Only letters, numbers, hyphens, and underscores are allowed.";
   }
-  if (form.birthDate && form.birthDate > todayDateInputValue()) {
+  if (form.birthDate && (!ISO_DATE_REGEX.test(form.birthDate) || !isSaneYear(form.birthDate))) {
+    errors.birthDate = "Please enter a valid date with a 4-digit year.";
+  } else if (form.birthDate && form.birthDate > todayDateInputValue()) {
     errors.birthDate = "Date of birth can't be in the future.";
+  }
+  if (form.joiningDate && (!ISO_DATE_REGEX.test(form.joiningDate) || !isSaneYear(form.joiningDate))) {
+    errors.joiningDate = "Please enter a valid date with a 4-digit year.";
   }
   if (form.pan && !PAN_REGEX.test(form.pan.trim().toUpperCase())) {
     errors.pan = "PAN must be in the format ABCDE1234F.";
@@ -91,6 +105,62 @@ const toForm = (user) => ({
   pfNumber: user.pfNumber ?? "",
 });
 
+// Which form fields belong to which card. Each card saves independently -
+// only its own fields go in the PATCH, so an admin editing one thing doesn't
+// have to scroll to a single button at the bottom (and can't accidentally
+// re-save unrelated sections). uan has no input of its own, so it rides
+// along with the PAN card to keep its stored value intact.
+const SECTIONS = {
+  personal: {
+    label: "Personal information",
+    fields: [
+      "employeeCode",
+      "gender",
+      "birthDate",
+      "joiningDate",
+      "phone",
+      "maritalStatus",
+      "fatherName",
+      "fatherMotherPhone",
+      "spouseName",
+      "nationality",
+      "qualification",
+    ],
+  },
+  employment: {
+    label: "Employment details",
+    fields: ["designation", "location", "taxRegime", "residentialAddress", "wardNo", "micrCode", "residentialStatus"],
+  },
+  pan: { label: "PAN details", fields: ["pan", "panHolderName", "uan"] },
+  aadhaar: { label: "Aadhaar details", fields: ["aadharNumber", "aadharHolderName"] },
+  bank: { label: "Bank details", fields: ["bankAccountNumber", "bankName", "ifscCode", "pfNumber"] },
+};
+
+const ALL_DETAIL_FIELDS = Object.values(SECTIONS).flatMap((section) => section.fields);
+
+// Fields whose form value is used as-is (dropdowns, date inputs); everything
+// else is a text field that gets trimmed. pan/ifscCode are also upper-cased.
+const RAW_FIELDS = new Set(["birthDate", "joiningDate", "gender", "maritalStatus", "taxRegime", "residentialStatus"]);
+const UPPERCASE_FIELDS = new Set(["pan", "ifscCode"]);
+
+const toPayloadValue = (field, value) => {
+  if (RAW_FIELDS.has(field)) return value || null;
+  const trimmed = (value || "").trim();
+  return (UPPERCASE_FIELDS.has(field) ? trimmed.toUpperCase() : trimmed) || null;
+};
+
+// The PATCH endpoint's validator fills in `null` for every string field it
+// doesn't receive, so a partial body would wipe the other sections. We send
+// the FULL record every time: the section being saved comes from the live
+// form, every other field from the last-loaded values (`baseForm`).
+const buildSectionPayload = (baseForm, liveForm, fields) => {
+  const merged = { ...baseForm };
+  fields.forEach((field) => {
+    merged[field] = liveForm[field];
+  });
+  return Object.fromEntries(ALL_DETAIL_FIELDS.map((field) => [field, toPayloadValue(field, merged[field])]));
+};
+
 export default function EmployeeDetailsPage() {
   const { id } = useParams();
   return <EmployeeDetailsContent key={id} id={id} />;
@@ -103,7 +173,7 @@ function EmployeeDetailsContent({ id }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
-  const [isSaving, setIsSaving] = useState(false);
+  const [savingSection, setSavingSection] = useState(null);
   const [busyDocType, setBusyDocType] = useState(null);
   const [structureHistory, setStructureHistory] = useState(null);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
@@ -140,57 +210,43 @@ function EmployeeDetailsContent({ id }) {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const saveSection = async (sectionKey) => {
+    const { label, fields } = SECTIONS[sectionKey];
     setError("");
     setSuccess("");
 
-    const errors = validateForm(form);
-    setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) {
-      setError("Please fix the highlighted fields.");
+    const allErrors = validateForm(form);
+    const sectionErrors = Object.fromEntries(
+      Object.entries(allErrors).filter(([field]) => fields.includes(field)),
+    );
+    setFieldErrors((prev) => {
+      const cleared = { ...prev };
+      fields.forEach((field) => delete cleared[field]);
+      return { ...cleared, ...sectionErrors };
+    });
+    if (Object.keys(sectionErrors).length > 0) {
+      setError(`Please fix the highlighted fields in ${label}.`);
       return;
     }
 
-    setIsSaving(true);
+    setSavingSection(sectionKey);
     try {
-      const payload = {
-        employeeCode: form.employeeCode.trim() || null,
-        phone: form.phone.trim() || null,
-        birthDate: form.birthDate || null,
-        joiningDate: form.joiningDate || null,
-        gender: form.gender || null,
-        fatherName: form.fatherName.trim() || null,
-        fatherMotherPhone: form.fatherMotherPhone.trim() || null,
-        spouseName: form.spouseName.trim() || null,
-        maritalStatus: form.maritalStatus || null,
-        nationality: form.nationality.trim() || null,
-        qualification: form.qualification.trim() || null,
-        designation: form.designation.trim() || null,
-        location: form.location.trim() || null,
-        taxRegime: form.taxRegime || null,
-        residentialAddress: form.residentialAddress.trim() || null,
-        wardNo: form.wardNo.trim() || null,
-        micrCode: form.micrCode.trim() || null,
-        residentialStatus: form.residentialStatus || null,
-        pan: form.pan.trim().toUpperCase() || null,
-        panHolderName: form.panHolderName.trim() || null,
-        uan: form.uan.trim() || null,
-        aadharNumber: form.aadharNumber.trim() || null,
-        aadharHolderName: form.aadharHolderName.trim() || null,
-        bankAccountNumber: form.bankAccountNumber.trim() || null,
-        bankName: form.bankName.trim() || null,
-        ifscCode: form.ifscCode.trim().toUpperCase() || null,
-        pfNumber: form.pfNumber.trim() || null,
-      };
+      // baseForm = last-saved values (from `user`); only this section's fields
+      // come from the live form, so other cards' in-progress edits aren't saved.
+      const payload = buildSectionPayload(toForm(user), form, fields);
       const data = await adminApi.updateUserDetails(id, payload);
       setUser((prev) => ({ ...prev, ...data.user }));
-      setForm(toForm({ ...user, ...data.user }));
-      setSuccess("Details updated.");
+      // Re-sync only this section's fields, so unsaved edits in other cards stay put.
+      const refreshed = toForm(data.user);
+      setForm((prev) => ({
+        ...prev,
+        ...Object.fromEntries(fields.map((field) => [field, refreshed[field]])),
+      }));
+      setSuccess(`${label} updated.`);
     } catch (err) {
-      setError(getErrorMessage(err, "Couldn't save these details. Please try again."));
+      setError(getErrorMessage(err, `Couldn't save ${label}. Please try again.`));
     } finally {
-      setIsSaving(false);
+      setSavingSection(null);
     }
   };
 
@@ -306,8 +362,18 @@ function EmployeeDetailsContent({ id }) {
       <Alert type="error">{error}</Alert>
       <Alert type="success">{success}</Alert>
 
-      <form onSubmit={handleSubmit} noValidate>
-        <div className="card" style={{ marginBottom: 20 }}>
+      <ProfileChangeRequestsCard userId={id} onDecided={loadUser} />
+
+      <div>
+        <form
+          className="card"
+          style={{ marginBottom: 20 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveSection("personal");
+          }}
+          noValidate
+        >
           <div className="card-section">
             <span className="card-section-title">Personal information</span>
             <p className="card-section-subtitle">
@@ -333,12 +399,21 @@ function EmployeeDetailsContent({ id }) {
               <TextInput
                 label="Date of birth"
                 type="date"
+                min="1900-01-01"
                 max={todayDateInputValue()}
                 value={form.birthDate}
                 onChange={handleChange("birthDate")}
                 error={fieldErrors.birthDate}
               />
-              <TextInput label="Date of joining" type="date" value={form.joiningDate} onChange={handleChange("joiningDate")} />
+              <TextInput
+                label="Date of joining"
+                type="date"
+                min="1900-01-01"
+                max="2100-12-31"
+                value={form.joiningDate}
+                onChange={handleChange("joiningDate")}
+                error={fieldErrors.joiningDate}
+              />
             </div>
 
             <div className="form-two-col">
@@ -368,10 +443,24 @@ function EmployeeDetailsContent({ id }) {
             <div className="form-two-col">
               <TextInput label="Qualification" value={form.qualification} onChange={handleChange("qualification")} />
             </div>
-          </div>
-        </div>
 
-        <div className="card" style={{ marginBottom: 20 }}>
+            <div className="modal-actions" style={{ justifyContent: "flex-start", marginTop: 8 }}>
+              <Button type="submit" isLoading={savingSection === "personal"}>
+                Update personal information
+              </Button>
+            </div>
+          </div>
+        </form>
+
+        <form
+          className="card"
+          style={{ marginBottom: 20 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveSection("employment");
+          }}
+          noValidate
+        >
           <div className="card-section">
             <span className="card-section-title">Employment details</span>
             <p className="card-section-subtitle">Shown on this employee's payslips.</p>
@@ -408,10 +497,24 @@ function EmployeeDetailsContent({ id }) {
               <option value="NON_RESIDENT">Non-Resident</option>
               <option value="RESIDENT_NOT_ORDINARILY_RESIDENT">Resident but Not Ordinarily Resident (RNOR)</option>
             </FormSelect>
-          </div>
-        </div>
 
-        <div className="card" style={{ marginBottom: 20 }}>
+            <div className="modal-actions" style={{ justifyContent: "flex-start", marginTop: 8 }}>
+              <Button type="submit" isLoading={savingSection === "employment"}>
+                Update employment details
+              </Button>
+            </div>
+          </div>
+        </form>
+
+        <form
+          className="card"
+          style={{ marginBottom: 20 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveSection("pan");
+          }}
+          noValidate
+        >
           <div className="card-section">
             <span className="card-section-title">PAN details</span>
 
@@ -426,6 +529,12 @@ function EmployeeDetailsContent({ id }) {
               <TextInput label="Name as per PAN card" value={form.panHolderName} onChange={handleChange("panHolderName")} />
             </div>
 
+            <div className="modal-actions" style={{ justifyContent: "flex-start", marginTop: 8, marginBottom: 4 }}>
+              <Button type="submit" isLoading={savingSection === "pan"}>
+                Update PAN details
+              </Button>
+            </div>
+
             <DocumentUploadField
               label="PAN card (PDF/JPEG/PNG)"
               hasDocument={Boolean(user.panDocumentUrl)}
@@ -435,9 +544,17 @@ function EmployeeDetailsContent({ id }) {
               onRemove={() => handleDocumentRemove("pan")}
             />
           </div>
-        </div>
+        </form>
 
-        <div className="card" style={{ marginBottom: 20 }}>
+        <form
+          className="card"
+          style={{ marginBottom: 20 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveSection("aadhaar");
+          }}
+          noValidate
+        >
           <div className="card-section">
             <span className="card-section-title">Aadhaar details</span>
 
@@ -456,8 +573,15 @@ function EmployeeDetailsContent({ id }) {
               />
             </div>
 
+            <div className="modal-actions" style={{ justifyContent: "flex-start", marginTop: 8, marginBottom: 4 }}>
+              <Button type="submit" isLoading={savingSection === "aadhaar"}>
+                Update Aadhaar details
+              </Button>
+            </div>
+
             <DocumentUploadField
-              label="Aadhaar card (PDF/JPEG/PNG)"
+              label="Aadhaar card (PDF only)"
+              accept=".pdf"
               hasDocument={Boolean(user.aadharDocumentUrl)}
               isBusy={busyDocType === "aadhar"}
               onUpload={(file) => handleDocumentUpload("aadhar", file)}
@@ -465,9 +589,17 @@ function EmployeeDetailsContent({ id }) {
               onRemove={() => handleDocumentRemove("aadhar")}
             />
           </div>
-        </div>
+        </form>
 
-        <div className="card" style={{ marginBottom: 20 }}>
+        <form
+          className="card"
+          style={{ marginBottom: 20 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveSection("bank");
+          }}
+          noValidate
+        >
           <div className="card-section">
             <span className="card-section-title">Bank details</span>
 
@@ -497,6 +629,12 @@ function EmployeeDetailsContent({ id }) {
               />
             </div>
 
+            <div className="modal-actions" style={{ justifyContent: "flex-start", marginTop: 8, marginBottom: 4 }}>
+              <Button type="submit" isLoading={savingSection === "bank"}>
+                Update bank details
+              </Button>
+            </div>
+
             <DocumentUploadField
               label="Bank passbook / statement (PDF/JPEG/PNG)"
               hasDocument={Boolean(user.bankDocumentUrl)}
@@ -506,7 +644,7 @@ function EmployeeDetailsContent({ id }) {
               onRemove={() => handleDocumentRemove("bank")}
             />
           </div>
-        </div>
+        </form>
 
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-section">
@@ -522,13 +660,7 @@ function EmployeeDetailsContent({ id }) {
             />
           </div>
         </div>
-
-        <div className="modal-actions" style={{ justifyContent: "flex-start", marginBottom: 20 }}>
-          <Button type="submit" isLoading={isSaving}>
-            Update details
-          </Button>
-        </div>
-      </form>
+      </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">

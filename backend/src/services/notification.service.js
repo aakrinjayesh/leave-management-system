@@ -25,15 +25,20 @@ const NOTIFICATION_TYPES = {
   TIMESHEET_MONTH_END_REMINDER: "TIMESHEET_MONTH_END_REMINDER",
   WFH_SUBMITTED: "WFH_SUBMITTED",
   WFH_DECIDED: "WFH_DECIDED",
+  PROFILE_CHANGE_REQUESTED: "PROFILE_CHANGE_REQUESTED",
+  PROFILE_CHANGE_DECIDED: "PROFILE_CHANGE_DECIDED",
 };
 
-const notify = ({ userId, type, title, message }) => prisma.notification.create({ data: { userId, type, title, message } });
+const notify = ({ userId, type, title, message, link = null }) =>
+  prisma.notification.create({ data: { userId, type, title, message, link } });
 
 // Fans the same notification out to many recipients at once (e.g. a
 // company-wide broadcast) - skips the query entirely for an empty list.
-const notifyMany = (userIds, { type, title, message }) => {
+const notifyMany = (userIds, { type, title, message, link = null }) => {
   if (!userIds.length) return Promise.resolve();
-  return prisma.notification.createMany({ data: userIds.map((userId) => ({ userId, type, title, message })) });
+  return prisma.notification.createMany({
+    data: userIds.map((userId) => ({ userId, type, title, message, link })),
+  });
 };
 
 const listForUser = (userId, limit = 30) =>

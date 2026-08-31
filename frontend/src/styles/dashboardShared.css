@@ -211,6 +211,49 @@
   margin-bottom: 0;
 }
 
+/* Small coloured status dot shown inline before a name (e.g. the accounts
+   table) instead of a dedicated Status column. */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: 1px;
+  flex-shrink: 0;
+  background-color: var(--color-gray-400);
+}
+
+.status-dot.is-active {
+  background-color: #22c55e;
+}
+
+.status-dot.is-pending {
+  background-color: #f97316;
+}
+
+.status-dot.is-inactive {
+  background-color: #ef4444;
+}
+
+/* Freezes the first column so it stays visible while the rest of a wide
+   table scrolls horizontally. The cell needs its own opaque background
+   (otherwise scrolled content shows through) plus a divider so the seam
+   reads clearly. */
+.data-table.sticky-first-col th:first-child,
+.data-table.sticky-first-col td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--color-white);
+  border-right: 1px solid var(--border-color);
+}
+
+.data-table.sticky-first-col thead th:first-child {
+  z-index: 2;
+  background-color: var(--color-gray-50);
+}
+
 .data-table tbody tr.is-clickable {
   cursor: pointer;
   transition: background-color var(--transition-fast);
@@ -986,4 +1029,31 @@
   display: flex;
   gap: 8px;
   margin-top: 6px;
+}
+
+/* --- Admin: pending profile-change request review card ----------------- */
+
+.pcr-request + .pcr-request {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color);
+}
+
+.pcr-request-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pcr-request-section {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pcr-reject-box {
+  margin-top: 10px;
 }

@@ -42,10 +42,46 @@ const RESIDENTIAL_STATUS = {
   RESIDENT_NOT_ORDINARILY_RESIDENT: "RESIDENT_NOT_ORDINARILY_RESIDENT",
 };
 
-// How many times an employee may use their own self-service profile edit
-// form per section (Personal/Statutory/Bank Information) before only admin
-// can change that section - see profile.controller.js's applySelfEdit.
+// How many self-service profile change requests an employee may submit per
+// section (Personal/Statutory/Bank) before only admin can change it - the
+// counter bumps on submission, accepted or not. See profile.controller.js.
 const SELF_PROFILE_EDIT_LIMIT = 3;
+
+// The three approval-gated profile sections. `fields` are the User columns an
+// employee may propose changing in that section (must line up with the
+// matching updateMy*InfoSchema); `countField` is the User column that caps
+// submissions at SELF_PROFILE_EDIT_LIMIT.
+const PROFILE_CHANGE_SECTIONS = {
+  PERSONAL: {
+    label: "Personal Information",
+    countField: "personalInfoEditCount",
+    fields: [
+      "phone",
+      "birthDate",
+      "gender",
+      "maritalStatus",
+      "fatherName",
+      "fatherMotherPhone",
+      "spouseName",
+      "nationality",
+      "qualification",
+    ],
+  },
+  STATUTORY: {
+    label: "Statutory Information",
+    countField: "statutoryInfoEditCount",
+    fields: ["pan", "panHolderName", "uan", "aadharNumber", "aadharHolderName"],
+  },
+  BANK: {
+    label: "Bank Information",
+    countField: "bankInfoEditCount",
+    fields: ["bankAccountNumber", "bankName", "ifscCode"],
+  },
+};
+
+// User columns in the above that are dates, so a stored JSON string gets
+// coerced back to a Date when an admin accepts the request.
+const PROFILE_CHANGE_DATE_FIELDS = new Set(["birthDate"]);
 
 const RESIGNATION_STATUS = {
   PENDING: "PENDING",
@@ -72,6 +108,8 @@ module.exports = {
   RESIDENTIAL_STATUS,
   RESIGNATION_STATUS,
   SELF_PROFILE_EDIT_LIMIT,
+  PROFILE_CHANGE_SECTIONS,
+  PROFILE_CHANGE_DATE_FIELDS,
   INTRO_PROMPT_KEYS,
   INTRO_ANSWER_MAX_LENGTH,
 };

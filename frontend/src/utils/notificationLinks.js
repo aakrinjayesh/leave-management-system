@@ -40,6 +40,12 @@ export const getNotificationDestination = (type, user) => {
       return "/profile";
     case "PROFILE_UPDATED":
       return isAdmin ? "/admin/dashboard" : null;
+    // A specific employee's details page is in notification.link; this is just
+    // the fallback if that's ever missing.
+    case "PROFILE_CHANGE_REQUESTED":
+      return isAdmin ? "/admin/dashboard" : null;
+    case "PROFILE_CHANGE_DECIDED":
+      return "/profile";
     case "WFH_SUBMITTED":
       if (isAdmin) return "/admin/wfh-requests";
       return isManager ? "/manager/wfh-requests" : null;

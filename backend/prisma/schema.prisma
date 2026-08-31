@@ -241,6 +241,9 @@ model User {
 
     wfhRequests        WfhRequest[]
     decidedWfhRequests WfhRequest[] @relation("WfhRequestsDecidedBy")
+
+    profileChangeRequests        ProfileChangeRequest[]
+    decidedProfileChangeRequests ProfileChangeRequest[] @relation("ProfileChangeRequestsDecidedBy")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
@@ -332,6 +335,48 @@ model WfhRequest {
 
     user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
     decidedBy User? @relation("WfhRequestsDecidedBy", fields: [decidedById], references: [id])
+
+    @@index([userId])
+    @@index([status])
+}
+
+enum ProfileChangeSection {
+    PERSONAL
+    STATUTORY
+    BANK
+}
+
+enum ProfileChangeStatus {
+    PENDING
+    ACCEPTED
+    REJECTED
+}
+
+// An employee's self-service edit to one of the three approval-gated profile
+// sections (Personal / Statutory / Bank). Instead of writing to User straight
+// away, the submitted field values are parked here as `changes` (a JSON map
+// of column -> new value) until an admin accepts (values copied onto User) or
+// rejects. One PENDING request per section at a time; the section's
+// {section}InfoEditCount on User still caps total submissions at 3.
+model ProfileChangeRequest {
+    id Int @id @default(autoincrement())
+
+    userId  Int
+    section ProfileChangeSection
+
+    changes Json
+
+    status       ProfileChangeStatus @default(PENDING)
+    adminRemarks String?
+
+    decidedById Int?
+    decidedAt   DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+    decidedBy User? @relation("ProfileChangeRequestsDecidedBy", fields: [decidedById], references: [id])
 
     @@index([userId])
     @@index([status])
@@ -832,6 +877,11 @@ model Notification {
     message String
 
     type String
+
+    // Optional in-app route to open when the notification is clicked (e.g.
+    // "/admin/users/3/details"). Falls back to a type+role lookup on the
+    // frontend when not set - see notificationLinks.js.
+    link String?
 
     isRead Boolean @default(false)
 

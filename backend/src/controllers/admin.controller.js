@@ -70,12 +70,25 @@ const createUser = asyncHandler(async (req, res) => {
 // Reactivating clears exitDate (the "current" convenience field) since
 // they're active again - the ExitRecord history from adminExit.controller.js
 // is untouched, so past relieving letters stay downloadable even after rehire.
+//
+// Status goes back to ACTIVE only if a password was ever set; an account that
+// was exited while still PENDING (never onboarded) returns to PENDING so it
+// still has to be activated rather than landing in an "active but can't log
+// in" state.
 const reactivateUser = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    throw ApiError.notFound("Account not found.");
+  }
+
   const user = await prisma.user.update({
     where: { id },
-    data: { status: USER_STATUS.ACTIVE, exitDate: null },
+    data: {
+      status: existing.isPasswordSet ? USER_STATUS.ACTIVE : USER_STATUS.PENDING,
+      exitDate: null,
+    },
   });
 
   new ApiResponse(200, "Account reactivated.", { user: toSafeUser(user) }).send(res);
@@ -121,11 +134,14 @@ const setAdminAccess = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Account not found.");
   }
 
+  // Only block if removing this person would leave zero admins who can
+  // actually log in - i.e. no OTHER active admin remains. Demoting a
+  // pending/inactive admin is always fine as long as one active admin is left.
   if (!grant && target.userType === USER_TYPE.ADMIN) {
-    const adminCount = await prisma.user.count({
-      where: { userType: USER_TYPE.ADMIN, status: USER_STATUS.ACTIVE },
+    const otherActiveAdmins = await prisma.user.count({
+      where: { userType: USER_TYPE.ADMIN, status: USER_STATUS.ACTIVE, id: { not: id } },
     });
-    if (adminCount <= 1) {
+    if (otherActiveAdmins === 0) {
       throw ApiError.badRequest("Can't remove the last admin account.");
     }
   }

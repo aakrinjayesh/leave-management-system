@@ -84,13 +84,48 @@ export default function ProfilePage() {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [editingSection, setEditingSection] = useState(null); // "personal" | "statutory" | "bank" | null
   const [profileMessage, setProfileMessage] = useState("");
+  const [pendingSections, setPendingSections] = useState(new Set());
 
   const isAdmin = user?.userType === "ADMIN";
 
+  // Maps this page's section keys to the backend's ProfileChangeSection enum.
+  const SECTION_ENUM = { personal: "PERSONAL", statutory: "STATUTORY", bank: "BANK" };
+  const isSectionPending = (key) => pendingSections.has(SECTION_ENUM[key]);
+
+  const loadChangeRequests = () => {
+    if (isAdmin) return Promise.resolve();
+    return profileApi
+      .getMyProfileChangeRequests()
+      .then((data) => {
+        setPendingSections(
+          new Set(data.requests.filter((r) => r.status === "PENDING").map((r) => r.section)),
+        );
+      })
+      .catch(() => {});
+  };
+
   const handleSectionSaved = async (label) => {
     setEditingSection(null);
-    await refreshUser();
-    setProfileMessage(`${label} updated.`);
+    await Promise.all([refreshUser(), loadChangeRequests()]);
+    setProfileMessage(`${label} change sent to admin for approval.`);
+  };
+
+  // Right-side control on each editable section header: a pending-approval
+  // note, an Edit link, or a "no self-edits left" note.
+  const renderSectionEditControl = (key, editsRemaining) => {
+    if (isAdmin) return null;
+    if (isSectionPending(key)) {
+      return <span className="card-section-header-note">Change awaiting admin approval</span>;
+    }
+    if (editsRemaining > 0) {
+      return (
+        <button type="button" className="link-btn" onClick={() => setEditingSection(key)}>
+          <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+          Edit
+        </button>
+      );
+    }
+    return <span className="card-section-header-note">No self-edits left - contact admin</span>;
   };
 
   const loadMyResignation = () =>
@@ -102,6 +137,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (isAdmin) return;
     loadMyResignation();
+    loadChangeRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -317,15 +353,7 @@ export default function ProfilePage() {
               <User size={15} className="profile-title-icon" />
               Personal information
             </span>
-            {!isAdmin &&
-              (user?.personalInfoEditsRemaining > 0 ? (
-                <button type="button" className="link-btn" onClick={() => setEditingSection("personal")}>
-                  <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                  Edit
-                </button>
-              ) : (
-                <span className="card-section-header-note">No self-edits left - contact admin</span>
-              ))}
+            {renderSectionEditControl("personal", user?.personalInfoEditsRemaining)}
           </div>
           <p className="card-section-subtitle">
             {isAdmin
@@ -401,15 +429,7 @@ export default function ProfilePage() {
               <CreditCard size={15} className="profile-title-icon" />
               Statutory Information
             </span>
-            {!isAdmin &&
-              (user?.statutoryInfoEditsRemaining > 0 ? (
-                <button type="button" className="link-btn" onClick={() => setEditingSection("statutory")}>
-                  <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                  Edit
-                </button>
-              ) : (
-                <span className="card-section-header-note">No self-edits left - contact admin</span>
-              ))}
+            {renderSectionEditControl("statutory", user?.statutoryInfoEditsRemaining)}
           </div>
           <p className="card-section-subtitle">
             Sensitive numbers are shown masked. Uploaded documents are visible to admin only.
@@ -452,15 +472,7 @@ export default function ProfilePage() {
               <Landmark size={15} className="profile-title-icon" />
               Bank &amp; salary
             </span>
-            {!isAdmin &&
-              (user?.bankInfoEditsRemaining > 0 ? (
-                <button type="button" className="link-btn" onClick={() => setEditingSection("bank")}>
-                  <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                  Edit
-                </button>
-              ) : (
-                <span className="card-section-header-note">No self-edits left - contact admin</span>
-              ))}
+            {renderSectionEditControl("bank", user?.bankInfoEditsRemaining)}
           </div>
           {!isAdmin && (
             <p className="card-section-subtitle">

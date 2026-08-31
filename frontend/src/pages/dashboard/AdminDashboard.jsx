@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
-import StatusBadge from "../../components/common/StatusBadge";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
@@ -35,6 +34,23 @@ import { formatDate } from "../../utils/formatDate";
 import "../../styles/dashboardShared.css";
 
 const currentMonthValue = () => new Date().toISOString().slice(0, 7);
+
+// Account status is shown as a small coloured dot before the name (green =
+// active, orange = pending activation, red = inactive/exited) instead of a
+// whole column - the accounts table is already very wide.
+const STATUS_DOT_CLASS = {
+  ACTIVE: "is-active",
+  PENDING: "is-pending",
+  INACTIVE: "is-inactive",
+  REJECTED: "is-inactive",
+};
+
+const STATUS_LABEL = {
+  ACTIVE: "Active",
+  PENDING: "Pending activation",
+  INACTIVE: "Inactive",
+  REJECTED: "Rejected",
+};
 
 export default function AdminDashboard() {
   const { user: currentUser } = useAuth();
@@ -225,29 +241,28 @@ export default function AdminDashboard() {
             </div>
           ) : (
             <div className="data-table-wrap">
-              <table className="data-table">
+              <table className="data-table sticky-first-col">
                 <thead>
                   <tr>
                     <th>Name</th>
                     <th>Email</th>
                     <th>Manager</th>
-                    <th>Status</th>
-                    <th>Exit date</th>
                     <th></th>
+                    <th>Exit date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((user) => (
                     <tr key={user.id}>
                       <td className="table-cell-primary">
+                        <span
+                          className={`status-dot ${STATUS_DOT_CLASS[user.status] || ""}`}
+                          title={STATUS_LABEL[user.status] || user.status}
+                        />
                         {user.firstName} {user.lastName}
                       </td>
                       <td className="table-cell-secondary">{user.email}</td>
                       <td className="table-cell-secondary">{managerNameById(user.managerId)}</td>
-                      <td>
-                        <StatusBadge status={user.status} />
-                      </td>
-                      <td className="table-cell-secondary">{user.exitDate ? formatDate(user.exitDate) : "—"}</td>
                       <td>
                         <div className="row-actions">
                           <button
@@ -353,6 +368,9 @@ export default function AdminDashboard() {
                               </button>
                             ))}
                         </div>
+                      </td>
+                      <td className="table-cell-secondary">
+                        {user.exitDate ? formatDate(user.exitDate) : "—"}
                       </td>
                     </tr>
                   ))}

@@ -220,6 +220,10 @@ const previewOfferLetterSchema = z.object({
   letterText: z.string().trim().min(1, "Please provide the offer letter text.").max(50000),
 });
 
+const rejectProfileChangeSchema = z.object({
+  remarks: z.string().trim().max(500).optional(),
+});
+
 // Multipart form fields always arrive as strings, so value/label are plain
 // strings here even though the request may also carry an uploaded file.
 const customFieldSchema = z.object({
@@ -318,4 +322,5 @@ module.exports = {
   setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
+  rejectProfileChangeSchema,
 };

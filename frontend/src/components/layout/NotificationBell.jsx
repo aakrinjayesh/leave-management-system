@@ -72,7 +72,9 @@ export default function NotificationBell() {
       notificationApi.markNotificationRead(notification.id).catch(() => {});
     }
 
-    const destination = getNotificationDestination(notification.type, user);
+    // A per-notification link (set for record-specific alerts like a profile
+    // change request) wins; otherwise fall back to the type + role lookup.
+    const destination = notification.link || getNotificationDestination(notification.type, user);
     if (destination) {
       setIsOpen(false);
       navigate(destination);

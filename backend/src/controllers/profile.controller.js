@@ -3,7 +3,11 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
-const { SELF_PROFILE_EDIT_LIMIT, INTRO_PROMPT_KEYS } = require("../utils/constants");
+const {
+  SELF_PROFILE_EDIT_LIMIT,
+  PROFILE_CHANGE_SECTIONS,
+  INTRO_PROMPT_KEYS,
+} = require("../utils/constants");
 const incomeTaxService = require("../services/incomeTax.service");
 const resignationService = require("../services/resignation.service");
 const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.service");
@@ -37,63 +41,105 @@ const getMyPhoto = asyncHandler(async (req, res) => {
 });
 
 // Lets every active admin know an employee changed their own profile - the
-// employee's edit applies immediately (no approval step), this is just a
-// heads-up so admin can review it if something looks off.
-const notifyAdminsOfProfileSelfEdit = async (employee, sectionLabel) => {
+const notifyAdminsOfProfileChangeRequest = async (employee, sectionLabel) => {
   try {
     const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" }, select: { id: true } });
     await notificationService.notifyMany(
       admins.map((admin) => admin.id),
       {
-        type: notificationService.NOTIFICATION_TYPES.PROFILE_UPDATED,
-        title: "Employee updated their profile",
-        message: `${employee.firstName} ${employee.lastName} updated their ${sectionLabel}.`,
+        type: notificationService.NOTIFICATION_TYPES.PROFILE_CHANGE_REQUESTED,
+        title: "Profile change request",
+        message: `${employee.firstName} ${employee.lastName} requested a change to their ${sectionLabel}. Review it on their details page.`,
+        link: `/admin/users/${employee.id}/details`,
       }
     );
   } catch (err) {
-    console.error("Failed to create profile self-edit notification:", err);
+    console.error("Failed to create profile change request notification:", err);
   }
 };
 
-// Shared by all three updateMy*Info handlers below - checks the section's
-// edit count against SELF_PROFILE_EDIT_LIMIT, applies the (already-validated)
-// changes, and bumps the counter. Undefined fields in `data` are left
-// untouched by Prisma, so a field the employee didn't fill in on this save
-// just keeps its existing value.
-const applySelfEdit = async (userId, countField, data, sectionLabel) => {
+// Normalises a stored/db value to a string so the "did this actually change?"
+// comparison isn't fooled by Date objects vs ISO strings, null vs "", etc.
+const normaliseForCompare = (value) => {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+};
+
+// Shared by all three updateMy*Info handlers - instead of writing to User, it
+// parks the (already-validated) changes in a PENDING ProfileChangeRequest for
+// an admin to accept or reject. Bumps the section's submission counter, and
+// only one PENDING request per section is allowed at a time.
+const submitProfileChangeRequest = async (userId, section, data) => {
+  const config = PROFILE_CHANGE_SECTIONS[section];
   const existing = await prisma.user.findUnique({ where: { id: userId } });
-  if (existing[countField] >= SELF_PROFILE_EDIT_LIMIT) {
+
+  if (existing[config.countField] >= SELF_PROFILE_EDIT_LIMIT) {
     throw ApiError.forbidden(
-      `You've used all ${SELF_PROFILE_EDIT_LIMIT} edits allowed for ${sectionLabel}. Contact your admin to make further changes.`
+      `You've used all ${SELF_PROFILE_EDIT_LIMIT} change requests for ${config.label}. Contact your admin to make further changes.`
     );
   }
 
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: { ...data, [countField]: { increment: 1 } },
+  const alreadyPending = await prisma.profileChangeRequest.findFirst({
+    where: { userId, section, status: "PENDING" },
   });
+  if (alreadyPending) {
+    throw ApiError.badRequest(`Your last ${config.label} change is still awaiting admin approval.`);
+  }
 
-  await notifyAdminsOfProfileSelfEdit(user, sectionLabel);
+  // Keep only the fields the employee actually provided AND that differ from
+  // what's already on record - a no-op save shouldn't create a request.
+  const changes = {};
+  for (const field of config.fields) {
+    const value = data[field];
+    if (value === undefined) continue;
+    if (normaliseForCompare(existing[field]) !== normaliseForCompare(value)) {
+      changes[field] = value instanceof Date ? value.toISOString() : value;
+    }
+  }
+  if (Object.keys(changes).length === 0) {
+    throw ApiError.badRequest("Nothing has changed in this section.");
+  }
 
-  return SELF_PROFILE_EDIT_LIMIT - user[countField];
+  const [updatedUser] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { [config.countField]: { increment: 1 } },
+    }),
+    prisma.profileChangeRequest.create({ data: { userId, section, changes } }),
+  ]);
+
+  await notifyAdminsOfProfileChangeRequest(updatedUser, config.label);
+
+  return SELF_PROFILE_EDIT_LIMIT - updatedUser[config.countField];
 };
 
 const updateMyPersonalInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await applySelfEdit(req.user.id, "personalInfoEditCount", req.body, "Personal Information");
+  const editsRemaining = await submitProfileChangeRequest(req.user.id, "PERSONAL", req.body);
 
-  new ApiResponse(200, "Personal information updated.", { editsRemaining }).send(res);
+  new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
 });
 
 const updateMyStatutoryInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await applySelfEdit(req.user.id, "statutoryInfoEditCount", req.body, "Statutory Information");
+  const editsRemaining = await submitProfileChangeRequest(req.user.id, "STATUTORY", req.body);
 
-  new ApiResponse(200, "Statutory information updated.", { editsRemaining }).send(res);
+  new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
 });
 
 const updateMyBankInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await applySelfEdit(req.user.id, "bankInfoEditCount", req.body, "Bank Information");
+  const editsRemaining = await submitProfileChangeRequest(req.user.id, "BANK", req.body);
 
-  new ApiResponse(200, "Bank information updated.", { editsRemaining }).send(res);
+  new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
+});
+
+const getMyProfileChangeRequests = asyncHandler(async (req, res) => {
+  const requests = await prisma.profileChangeRequest.findMany({
+    where: { userId: req.user.id },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  new ApiResponse(200, "OK", { requests }).send(res);
 });
 
 // Every active admin, plus this employee's own active manager if they have
@@ -338,6 +384,7 @@ const updateMyIntro = asyncHandler(async (req, res) => {
 module.exports = {
   markAnniversaryCelebrationSeen,
   markBirthdayCelebrationSeen,
+  getMyProfileChangeRequests,
   getMyIntro,
   updateMyIntro,
   updateMyPersonalInfo,

@@ -50,8 +50,9 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
       <Alert type="error">{error}</Alert>
       <form onSubmit={handleSubmit} noValidate>
         <p className="helper-text" style={{ marginTop: 0 }}>
-          Name, employee code, and email can only be changed by your admin. You have{" "}
-          <strong>{editsRemaining}</strong> edit{editsRemaining === 1 ? "" : "s"} left for this section.
+          Name, employee code, and email can only be changed by your admin. Your changes are sent to
+          admin for approval before they take effect. You have{" "}
+          <strong>{editsRemaining}</strong> request{editsRemaining === 1 ? "" : "s"} left for this section.
         </p>
 
         <div className="form-two-col">
