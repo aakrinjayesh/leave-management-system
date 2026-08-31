@@ -1,5 +1,10 @@
 const { z } = require("zod");
-const { GENDER, MARITAL_STATUS } = require("../utils/constants");
+const {
+  GENDER,
+  MARITAL_STATUS,
+  INTRO_PROMPT_KEYS,
+  INTRO_ANSWER_MAX_LENGTH,
+} = require("../utils/constants");
 
 // Empty-string form fields are left alone (undefined) rather than clearing
 // the field - unlike admin's editor, an employee leaving a field blank on
@@ -86,9 +91,24 @@ const submitResignationSchema = z
     }
   );
 
+// Private "Introduce yourself" answers. Every prompt key is accepted and
+// optional; a blank/whitespace answer clears that one. Unknown keys are
+// rejected so the stored object can't accumulate junk.
+const updateMyIntroSchema = z
+  .object(
+    Object.fromEntries(
+      INTRO_PROMPT_KEYS.map((key) => [
+        key,
+        z.string().trim().max(INTRO_ANSWER_MAX_LENGTH).optional(),
+      ])
+    )
+  )
+  .strict();
+
 module.exports = {
   submitResignationSchema,
   updateMyPersonalInfoSchema,
   updateMyStatutoryInfoSchema,
   updateMyBankInfoSchema,
+  updateMyIntroSchema,
 };

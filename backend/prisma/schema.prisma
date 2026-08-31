@@ -189,6 +189,11 @@ model User {
 
     isRegistrationAllowed Boolean @default(true)
 
+    // Free-text answers to the fixed "Introduce yourself" prompts on the
+    // employee dashboard - a private self-description keyed by prompt id
+    // (see INTRO_PROMPT_KEYS). Only the employee themselves ever sees this.
+    intro Json?
+
     manager   User?  @relation("ManagerEmployees", fields: [managerId], references: [id])
     employees User[] @relation("ManagerEmployees")
 

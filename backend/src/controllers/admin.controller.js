@@ -18,6 +18,7 @@ const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUploa
 
 const toSafeUser = (user) => ({
   id: user.id,
+  employeeCode: user.employeeCode,
   firstName: user.firstName,
   lastName: user.lastName,
   email: user.email,

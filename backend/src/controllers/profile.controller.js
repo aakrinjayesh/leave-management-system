@@ -3,7 +3,7 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
-const { SELF_PROFILE_EDIT_LIMIT } = require("../utils/constants");
+const { SELF_PROFILE_EDIT_LIMIT, INTRO_PROMPT_KEYS } = require("../utils/constants");
 const incomeTaxService = require("../services/incomeTax.service");
 const resignationService = require("../services/resignation.service");
 const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.service");
@@ -295,9 +295,51 @@ const withdrawMyResignation = asyncHandler(async (req, res) => {
   }
 });
 
+// ---- "Introduce yourself" (private, employee-managed free text) ----------
+
+// Normalise whatever's stored (or missing) into a plain key->string map with
+// an entry for every known prompt, so the frontend always gets a full shape.
+const toIntroView = (stored) => {
+  const source = stored && typeof stored === "object" ? stored : {};
+  return Object.fromEntries(INTRO_PROMPT_KEYS.map((key) => [key, source[key] || ""]));
+};
+
+const getMyIntro = asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { intro: true },
+  });
+
+  new ApiResponse(200, "OK", { intro: toIntroView(user?.intro) }).send(res);
+});
+
+// Merges the submitted answers onto whatever's stored - an omitted prompt is
+// left as-is, an empty string clears just that one.
+const updateMyIntro = asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { intro: true },
+  });
+
+  const current = user?.intro && typeof user.intro === "object" ? user.intro : {};
+  const next = { ...current };
+
+  for (const key of INTRO_PROMPT_KEYS) {
+    if (req.body[key] === undefined) continue;
+    if (req.body[key] === "") delete next[key];
+    else next[key] = req.body[key];
+  }
+
+  await prisma.user.update({ where: { id: req.user.id }, data: { intro: next } });
+
+  new ApiResponse(200, "Saved.", { intro: toIntroView(next) }).send(res);
+});
+
 module.exports = {
   markAnniversaryCelebrationSeen,
   markBirthdayCelebrationSeen,
+  getMyIntro,
+  updateMyIntro,
   updateMyPersonalInfo,
   updateMyStatutoryInfo,
   updateMyBankInfo,

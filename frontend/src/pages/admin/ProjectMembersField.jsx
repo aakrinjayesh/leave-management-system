@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Search } from "lucide-react";
+import TextInput from "../../components/common/TextInput";
 import * as adminApi from "../../api/admin.api";
 import { formatDate } from "../../utils/formatDate";
 
@@ -26,6 +28,7 @@ const todayValue = () => toDateInputValue(new Date());
 export default function ProjectMembersField({ members, onChange, recentHint, refreshKey }) {
   const [employees, setEmployees] = useState(null);
   const [projectsByEmployeeId, setProjectsByEmployeeId] = useState({});
+  const [search, setSearch] = useState("");
   // Captured once, on mount only - who's already assigned when this field
   // first shows up (e.g. Edit project's existing members). Sorting/grouping
   // against this frozen snapshot instead of the live `members` means
@@ -85,9 +88,35 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
       })
     : null;
 
+  const query = search.trim().toLowerCase();
+  const visibleEmployees = sortedEmployees
+    ? query
+      ? sortedEmployees.filter(
+          (e) =>
+            `${e.firstName} ${e.lastName}`.toLowerCase().includes(query) ||
+            (e.email || "").toLowerCase().includes(query) ||
+            (e.employeeCode || "").toLowerCase().includes(query),
+        )
+      : sortedEmployees
+    : null;
+
   return (
     <div className="field">
-      <label className="field-label">Members {members.length > 0 ? `(${members.length} selected)` : ""}</label>
+      <div className="member-field-header">
+        <label className="field-label" style={{ marginBottom: 0 }}>
+          Members {members.length > 0 ? `(${members.length} selected)` : ""}
+        </label>
+        {employees && employees.length > 0 && (
+          <div className="member-search">
+            <TextInput
+              icon={<Search size={15} />}
+              placeholder="Search name, employee ID or email"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        )}
+      </div>
 
       {recentHint && recentHint.length > 0 && (
         <p className="helper-text" style={{ marginTop: 0, marginBottom: 8 }}>
@@ -100,9 +129,13 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
         <p className="helper-text">Loading employees…</p>
       ) : employees.length === 0 ? (
         <p className="helper-text">No employees to assign yet.</p>
+      ) : visibleEmployees.length === 0 ? (
+        <div className="member-list">
+          <p className="member-list-note">No employees match “{search.trim()}”.</p>
+        </div>
       ) : (
         <div className="member-list">
-          {sortedEmployees.map((employee, index) => {
+          {visibleEmployees.map((employee, index) => {
             const currentProjects = projectsByEmployeeId[employee.id] || [];
             const member = memberById(employee.id);
             const isChecked = Boolean(member);
@@ -111,7 +144,7 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
             const isFirstMember = index === 0 && initialMemberIds.has(employee.id);
             const isFirstNonMember =
               !initialMemberIds.has(employee.id) &&
-              (index === 0 || initialMemberIds.has(sortedEmployees[index - 1].id));
+              (index === 0 || initialMemberIds.has(visibleEmployees[index - 1].id));
 
             return (
               <div key={employee.id}>

@@ -54,6 +54,13 @@ const RESIGNATION_STATUS = {
   WITHDRAWN: "WITHDRAWN",
 };
 
+// Fixed prompts for the private "Introduce yourself" card on the employee
+// dashboard. The frontend has a matching list with the display labels; the
+// keys here are the source of truth for what User.intro may contain.
+const INTRO_PROMPT_KEYS = ["about", "jobLove", "outsideWork"];
+
+const INTRO_ANSWER_MAX_LENGTH = 2000;
+
 module.exports = {
   REFRESH_TOKEN_COOKIE,
   OTP_PURPOSE,
@@ -65,4 +72,6 @@ module.exports = {
   RESIDENTIAL_STATUS,
   RESIGNATION_STATUS,
   SELF_PROFILE_EDIT_LIMIT,
+  INTRO_PROMPT_KEYS,
+  INTRO_ANSWER_MAX_LENGTH,
 };

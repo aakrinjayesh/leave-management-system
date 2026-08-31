@@ -1,6 +1,7 @@
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
 import WelcomeBanner from "../../components/common/WelcomeBanner";
+import IntroduceYourselfCard from "../../components/common/IntroduceYourselfCard";
 import { useAuth } from "../../context/AuthContext";
 import "../../styles/dashboardShared.css";
 import "./Dashboard.css";
@@ -23,6 +24,7 @@ export default function EmployeeDashboard() {
         </div>
       </div>
       <WelcomeBanner />
+      <IntroduceYourselfCard />
     </DashboardLayout>
   );
 }

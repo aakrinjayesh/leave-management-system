@@ -6,6 +6,7 @@ const {
   updateMyPersonalInfoSchema,
   updateMyStatutoryInfoSchema,
   updateMyBankInfoSchema,
+  updateMyIntroSchema,
 } = require("../validators/profile.validator");
 const controller = require("../controllers/profile.controller");
 
@@ -16,6 +17,9 @@ router.use(authenticate);
 router.patch("/me/personal-info", validate(updateMyPersonalInfoSchema), controller.updateMyPersonalInfo);
 router.patch("/me/statutory-info", validate(updateMyStatutoryInfoSchema), controller.updateMyStatutoryInfo);
 router.patch("/me/bank-info", validate(updateMyBankInfoSchema), controller.updateMyBankInfo);
+
+router.get("/me/intro", controller.getMyIntro);
+router.put("/me/intro", validate(updateMyIntroSchema), controller.updateMyIntro);
 
 router.put("/anniversary-celebration-seen", controller.markAnniversaryCelebrationSeen);
 router.put("/birthday-celebration-seen", controller.markBirthdayCelebrationSeen);
