@@ -4,6 +4,8 @@ const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const notificationService = require("../services/notification.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
+const leaveDecisionService = require("../services/leaveDecision.service");
+const companySettingsService = require("../services/companySettings.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 
 // Notifies every active account - a leave policy change affects the whole
@@ -342,7 +344,100 @@ const reactivateHoliday = asyncHandler(async (req, res) => {
   );
 });
 
+// ---------- All leave requests (admin-wide) ----------
+// One row per employee (every non-admin account, whether or not they've ever
+// applied for leave), with their request counts by status and this year's
+// leave balance totals. The admin acts on individual requests from the
+// per-employee leave detail page.
+
+const listEmployeeLeaveSummary = asyncHandler(async (req, res) => {
+  const fiscalYear = await companySettingsService.getCurrentFiscalYear();
+
+  // Full yearly entitlement, used as the "remaining" figure for an employee
+  // who has no balance rows yet - so the column shows their real allocation
+  // instead of a misleading 0. Mirrors managerLeave.listEmployees.
+  const activePolicies = await prisma.leavePolicy.findMany({
+    where: { isActive: true, isUnlimited: false },
+    select: { allocatedLeaves: true },
+  });
+  const fullEntitlement = activePolicies.reduce((sum, p) => sum + p.allocatedLeaves, 0);
+
+  const employees = await prisma.user.findMany({
+    where: { userType: { not: "ADMIN" } },
+    orderBy: { firstName: "asc" },
+    include: {
+      leaveBalances: { where: { year: fiscalYear } },
+      leaveRequests: { select: { status: true } },
+    },
+  });
+
+  const result = employees.map((employee) => {
+    const hasBalances = employee.leaveBalances.length > 0;
+    const totalUsed = employee.leaveBalances.reduce((sum, b) => sum + b.usedLeaves, 0);
+    const totalRemaining = hasBalances
+      ? employee.leaveBalances.reduce((sum, b) => sum + b.remainingLeaves, 0)
+      : fullEntitlement;
+
+    const counts = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
+    for (const request of employee.leaveRequests) {
+      counts[request.status] = (counts[request.status] || 0) + 1;
+    }
+
+    return {
+      id: employee.id,
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      email: employee.email,
+      employeeCode: employee.employeeCode,
+      status: employee.status,
+      pendingCount: counts.PENDING,
+      approvedCount: counts.APPROVED,
+      rejectedCount: counts.REJECTED,
+      totalRequests: employee.leaveRequests.length,
+      totalUsed,
+      totalRemaining,
+    };
+  });
+
+  new ApiResponse(200, "OK", { employees: result }).send(res);
+});
+
+const decideLeaveRequest = (decision) =>
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { remarks } = req.body;
+
+    const leaveRequest = await prisma.leaveRequest.findUnique({
+      where: { id },
+      include: { leavePolicy: true, user: true },
+    });
+    if (!leaveRequest) {
+      throw ApiError.notFound("Leave request not found.");
+    }
+
+    const updated = await leaveDecisionService.applyDecision({
+      leaveRequest,
+      actor: req.user,
+      decision,
+      remarks,
+    });
+
+    new ApiResponse(
+      200,
+      decision === "APPROVED" ? "Leave request approved." : "Leave request rejected.",
+      { leaveRequest: updated }
+    ).send(res);
+
+    await leaveDecisionService.sendDecisionSideEffects({ leaveRequest, actor: req.user, decision, remarks });
+  });
+
+const approveLeaveRequest = decideLeaveRequest("APPROVED");
+const rejectLeaveRequest = decideLeaveRequest("REJECTED");
+
 module.exports = {
+  listEmployeeLeaveSummary,
+  approveLeaveRequest,
+  rejectLeaveRequest,
   listLeavePolicies,
   createLeavePolicy,
   updateLeavePolicy,

@@ -5,9 +5,7 @@ const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
 const projectService = require("../services/project.service");
-const { sendTimesheetDecisionEmail } = require("../utils/email.util");
-const notificationService = require("../services/notification.service");
-const { formatDateShort } = require("../utils/formatDate.util");
+const timesheetDecisionService = require("../services/timesheetDecision.service");
 const { isS3Url } = require("../utils/s3.util");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
@@ -127,116 +125,31 @@ const getRoutedSubmissionOr404 = async (id, routedToId) => {
   return submission;
 };
 
-const approveSubmission = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { remarks } = req.body;
+const decideSubmission = (decision) =>
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { remarks } = req.body;
 
-  const submission = await getRoutedSubmissionOr404(id, req.user.id);
-  if (submission.status !== "PENDING") {
-    throw ApiError.badRequest("This timesheet has already been actioned.");
-  }
+    const submission = await getRoutedSubmissionOr404(id, req.user.id);
 
-  const updated = await prisma.timesheetSubmission.update({
-    where: { id },
-    data: {
-      status: "APPROVED",
-      approvedById: req.user.id,
-      approvedAt: new Date(),
-      managerRemarks: remarks || null,
-    },
-  });
-
-  new ApiResponse(200, "Timesheet approved.", { submission: updated }).send(res);
-
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendTimesheetDecisionEmail({
-      to: submission.user.email,
-      employeeFirstName: submission.user.firstName,
-      weekStartDate: submission.weekStartDate,
-      weekEndDate: submission.weekEndDate,
-      totalHours: submission.totalHours,
-      status: "APPROVED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
-      remarks: remarks || null,
-    });
-  } catch (err) {
-    console.error("Failed to send timesheet approved email:", err);
-  }
-
-  try {
-    await notificationService.notify({
-      userId: submission.user.id,
-      type: notificationService.NOTIFICATION_TYPES.TIMESHEET_DECIDED,
-      title: "Timesheet approved",
-      message: `Your timesheet for the week of ${formatDateShort(submission.weekStartDate)} - ${formatDateShort(
-        submission.weekEndDate
-      )} was approved by ${req.user.firstName} ${req.user.lastName}.`,
-    });
-  } catch (err) {
-    console.error("Failed to create timesheet approved notification:", err);
-  }
-});
-
-const rejectSubmission = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { remarks } = req.body;
-
-  const submission = await getRoutedSubmissionOr404(id, req.user.id);
-  if (submission.status !== "PENDING") {
-    throw ApiError.badRequest("This timesheet has already been actioned.");
-  }
-
-  // Rejecting doesn't touch the entries' hours/description at all - it just
-  // lifts the lock so the employee can fix them and submit the week again.
-  // The rejected submission record itself stays exactly as-is for history.
-  const [updated] = await prisma.$transaction([
-    prisma.timesheetSubmission.update({
-      where: { id },
-      data: {
-        status: "REJECTED",
-        approvedById: req.user.id,
-        rejectedAt: new Date(),
-        managerRemarks: remarks,
-      },
-    }),
-    prisma.timesheetEntry.updateMany({
-      where: { timesheetSubmissionId: id },
-      data: { timesheetSubmissionId: null },
-    }),
-  ]);
-
-  new ApiResponse(200, "Timesheet rejected.", { submission: updated }).send(res);
-
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendTimesheetDecisionEmail({
-      to: submission.user.email,
-      employeeFirstName: submission.user.firstName,
-      weekStartDate: submission.weekStartDate,
-      weekEndDate: submission.weekEndDate,
-      totalHours: submission.totalHours,
-      status: "REJECTED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
+    const updated = await timesheetDecisionService.applyDecision({
+      submission,
+      actor: req.user,
+      decision,
       remarks,
     });
-  } catch (err) {
-    console.error("Failed to send timesheet rejected email:", err);
-  }
 
-  try {
-    await notificationService.notify({
-      userId: submission.user.id,
-      type: notificationService.NOTIFICATION_TYPES.TIMESHEET_DECIDED,
-      title: "Timesheet rejected",
-      message: `Your timesheet for the week of ${formatDateShort(submission.weekStartDate)} - ${formatDateShort(
-        submission.weekEndDate
-      )} was rejected by ${req.user.firstName} ${req.user.lastName}.`,
-    });
-  } catch (err) {
-    console.error("Failed to create timesheet rejected notification:", err);
-  }
-});
+    new ApiResponse(
+      200,
+      decision === "APPROVED" ? "Timesheet approved." : "Timesheet rejected.",
+      { submission: updated }
+    ).send(res);
+
+    await timesheetDecisionService.sendDecisionSideEffects({ submission, actor: req.user, decision, remarks });
+  });
+
+const approveSubmission = decideSubmission("APPROVED");
+const rejectSubmission = decideSubmission("REJECTED");
 
 module.exports = {
   listTeamSubmissions,

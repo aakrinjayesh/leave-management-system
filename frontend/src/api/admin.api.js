@@ -46,6 +46,17 @@ export const exportPayrollTimesheet = (date) =>
 export const downloadTimesheetSubmissionAttachment = (submissionId) =>
   axiosClient.get(`/admin/timesheet-submissions/${submissionId}/attachment`, { responseType: "blob" });
 
+export const getEmployeeTimesheetSummary = () => unwrap(axiosClient.get("/admin/timesheet-summary"));
+
+export const approveTimesheetSubmission = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/timesheets/${id}/approve`, remarks ? { remarks } : {}));
+
+export const rejectTimesheetSubmission = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/timesheets/${id}/reject`, { remarks }));
+
+export const getCompanyCalendar = (year, month) =>
+  unwrap(axiosClient.get("/admin/calendar", { params: { year, month } }));
+
 export const getProjectAssignmentReport = () => unwrap(axiosClient.get("/admin/reports/project-assignment"));
 
 export const getProjectHistory = (id) => unwrap(axiosClient.get(`/admin/users/${id}/project-history`));
@@ -100,6 +111,14 @@ export const getUserCalendar = (id, year, month) =>
 
 export const downloadLeaveAttachment = (requestId) =>
   axiosClient.get(`/admin/leave-requests/${requestId}/attachment`, { responseType: "blob" }).then((res) => res.data);
+
+export const getEmployeeLeaveSummary = () => unwrap(axiosClient.get("/admin/leave-summary"));
+
+export const approveLeaveRequest = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/leave-requests/${id}/approve`, remarks ? { remarks } : {}));
+
+export const rejectLeaveRequest = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/leave-requests/${id}/reject`, { remarks }));
 
 export const getUserDetails = (id) => unwrap(axiosClient.get(`/admin/users/${id}/details`));
 

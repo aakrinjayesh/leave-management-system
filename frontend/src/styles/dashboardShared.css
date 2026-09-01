@@ -236,6 +236,32 @@
   background-color: #ef4444;
 }
 
+/* Small count badge for a table cell (e.g. pending-request count) - only
+   drawn when the count is non-zero, so it draws the eye. */
+.count-pill {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  background-color: var(--color-gray-100);
+  color: var(--text-primary);
+}
+
+.count-pill.is-pending {
+  background-color: #ffedd5;
+  color: #9a3412;
+}
+
+/* One-line count/summary sitting just above a data table. */
+.table-caption {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
 /* Freezes the first column so it stays visible while the rest of a wide
    table scrolls horizontally. The cell needs its own opaque background
    (otherwise scrolled content shows through) plus a divider so the seam

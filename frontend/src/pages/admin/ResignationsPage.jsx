@@ -61,11 +61,11 @@ export default function ResignationsPage() {
   const visible = resignations?.filter((r) => !filter || r.status === filter) || null;
 
   return (
-    <DashboardLayout title="Resignations">
+    <DashboardLayout title="All Resignations">
       <div className="page-header">
         <div>
-          <h1>Resignations</h1>
-          <p>Review resignation requests submitted by employees and accept or reject them.</p>
+          <h1>All resignations</h1>
+          <p>Review resignation requests submitted by any employee and accept or reject them.</p>
         </div>
       </div>
 

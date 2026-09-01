@@ -10,6 +10,7 @@ const projectService = require("../services/project.service");
 const companySettingsService = require("../services/companySettings.service");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
+const timesheetDecisionService = require("../services/timesheetDecision.service");
 const notificationService = require("../services/notification.service");
 const { sendAdminAccessRemovedEmail } = require("../utils/email.util");
 const { isS3Url } = require("../utils/s3.util");
@@ -329,6 +330,41 @@ const getUserCalendar = asyncHandler(async (req, res) => {
   new ApiResponse(200, "OK", { ...calendar, leaves }).send(res);
 });
 
+// Company-wide month calendar - every non-admin employee's leave (pending +
+// approved) and approved WFH on one calendar. The admin equivalent of the
+// manager's team calendar, with no reporting-line filter.
+const getCompanyCalendar = asyncHandler(async (req, res) => {
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const month = Number(req.query.month) || new Date().getMonth() + 1;
+
+  const rangeEnd = new Date(Date.UTC(year, month, 0));
+  const rangeStart = new Date(Date.UTC(year, month - 1, 1));
+
+  const [calendar, teamLeaves, teamWfh] = await Promise.all([
+    leaveCalendarService.getMonthCalendarData(year, month),
+    prisma.leaveRequest.findMany({
+      where: {
+        user: { userType: { not: "ADMIN" } },
+        status: { in: ["PENDING", "APPROVED"] },
+        startDate: { lte: rangeEnd },
+        endDate: { gte: rangeStart },
+      },
+      include: { leavePolicy: true, user: { select: { firstName: true, lastName: true } } },
+    }),
+    prisma.wfhRequest.findMany({
+      where: {
+        user: { userType: { not: "ADMIN" } },
+        status: "APPROVED",
+        startDate: { lte: rangeEnd },
+        endDate: { gte: rangeStart },
+      },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    }),
+  ]);
+
+  new ApiResponse(200, "OK", { ...calendar, teamLeaves, teamWfh }).send(res);
+});
+
 const getUserLeaveAttachment = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
@@ -473,6 +509,85 @@ const exportPayrollTimesheet = asyncHandler(async (req, res) => {
   sendCsv(res, filename, csv);
 });
 
+// ---------- All timesheets (admin-wide) ----------
+// One row per non-admin employee with their weekly-submission counts by status
+// and total submitted hours this month. The admin acts on individual weekly
+// submissions from the per-employee timesheet page.
+
+const listEmployeeTimesheetSummary = asyncHandler(async (req, res) => {
+  const { start, end } = timesheetService.getViewRange("month", new Date());
+
+  const employees = await prisma.user.findMany({
+    where: { userType: { not: "ADMIN" } },
+    orderBy: { firstName: "asc" },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      employeeCode: true,
+      status: true,
+      timesheetSubmissions: { select: { status: true } },
+    },
+  });
+
+  const result = await Promise.all(
+    employees.map(async (employee) => {
+      const counts = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
+      for (const submission of employee.timesheetSubmissions) {
+        counts[submission.status] = (counts[submission.status] || 0) + 1;
+      }
+      const entries = await timesheetService.getSubmittedEntriesInRange(employee.id, start, end);
+
+      return {
+        id: employee.id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        employeeCode: employee.employeeCode,
+        status: employee.status,
+        pendingCount: counts.PENDING,
+        approvedCount: counts.APPROVED,
+        rejectedCount: counts.REJECTED,
+        totalSubmissions: employee.timesheetSubmissions.length,
+        hoursThisMonth: timesheetService.sumHours(entries),
+      };
+    })
+  );
+
+  new ApiResponse(200, "OK", { employees: result }).send(res);
+});
+
+const decideTimesheetSubmission = (decision) =>
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { remarks } = req.body;
+
+    const submission = await prisma.timesheetSubmission.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+    if (!submission) {
+      throw ApiError.notFound("Timesheet submission not found.");
+    }
+
+    const updated = await timesheetDecisionService.applyDecision({
+      submission,
+      actor: req.user,
+      decision,
+      remarks,
+    });
+
+    new ApiResponse(
+      200,
+      decision === "APPROVED" ? "Timesheet approved." : "Timesheet rejected.",
+      { submission: updated }
+    ).send(res);
+
+    await timesheetDecisionService.sendDecisionSideEffects({ submission, actor: req.user, decision, remarks });
+  });
+
+const approveTimesheetSubmission = decideTimesheetSubmission("APPROVED");
+const rejectTimesheetSubmission = decideTimesheetSubmission("REJECTED");
+
 const getCompanySettings = asyncHandler(async (req, res) => {
   const settings = await companySettingsService.getSettings();
   new ApiResponse(200, "OK", { settings }).send(res);
@@ -493,8 +608,12 @@ module.exports = {
   getTimesheetSubmissionAttachment,
   exportUserTimesheet,
   exportPayrollTimesheet,
+  listEmployeeTimesheetSummary,
+  approveTimesheetSubmission,
+  rejectTimesheetSubmission,
   getUserLeaveDetail,
   getUserCalendar,
+  getCompanyCalendar,
   getUserLeaveAttachment,
   getUserDetails,
   updateUserDetails,

@@ -104,11 +104,11 @@ export default function WfhRequestsPage() {
   };
 
   return (
-    <DashboardLayout title="WFH Requests">
+    <DashboardLayout title="All WFH Requests">
       <div className="page-header">
         <div>
-          <h1>WFH Requests</h1>
-          <p>Review work-from-home requests submitted by employees and approve or reject them.</p>
+          <h1>All WFH requests</h1>
+          <p>Review work-from-home requests submitted by any employee and approve or reject them.</p>
         </div>
       </div>
 

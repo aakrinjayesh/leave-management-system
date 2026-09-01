@@ -23,6 +23,10 @@ export default function AdminEmployeeTimesheetPage() {
         fetchTimesheet={(view, date, projectId) => adminApi.getUserTimesheet(id, view, date, projectId)}
         exportTimesheet={(view, date, projectId) => adminApi.exportUserTimesheet(id, view, date, projectId)}
         downloadAttachment={(submissionId) => adminApi.downloadTimesheetSubmissionAttachment(submissionId)}
+        decisionApi={{
+          approve: (submissionId) => adminApi.approveTimesheetSubmission(submissionId),
+          reject: (submissionId, remarks) => adminApi.rejectTimesheetSubmission(submissionId, remarks),
+        }}
         onDataLoad={setEmployee}
       />
     </DashboardLayout>

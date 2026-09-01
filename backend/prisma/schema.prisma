@@ -273,7 +273,7 @@ model ExitRecord {
 // managerId, not stored on the row) - only admin can Accept/Reject.
 // proposedLastWorkingDate is whatever date the employee chose at submission
 // - not yet official. lastWorkingDate is the CONFIRMED date, only set once
-// admin accepts: proposedLastWorkingDate + noticePeriodDays (30 by default),
+// admin accepts: proposedLastWorkingDate + noticePeriodDays (90 by default),
 // per the actual notice-period policy - the employee's chosen date is a
 // resignation/notice date, not their literal final day, so a full notice
 // period is added on top of it once accepted.
@@ -285,7 +285,7 @@ model Resignation {
     reason String @db.Text
 
     status                  ResignationStatus @default(PENDING)
-    noticePeriodDays        Int               @default(30)
+    noticePeriodDays        Int               @default(90)
     proposedLastWorkingDate DateTime
     lastWorkingDate         DateTime?
 

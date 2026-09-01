@@ -41,6 +41,34 @@ const buildNavItems = (user) => {
     icon: LayoutDashboard,
   });
 
+  if (isAdmin) {
+    items.push({
+      to: "/admin/leave-requests",
+      label: "All Leave Requests",
+      icon: ListChecks,
+    });
+    items.push({
+      to: "/admin/timesheets",
+      label: "All Timesheets",
+      icon: Clock,
+    });
+    items.push({
+      to: "/admin/calendar",
+      label: "All Calendar",
+      icon: CalendarDays,
+    });
+    items.push({
+      to: "/admin/wfh-requests",
+      label: "All WFH Requests",
+      icon: Home,
+    });
+    items.push({
+      to: "/admin/resignations",
+      label: "All Resignations",
+      icon: FileWarning,
+    });
+  }
+
   if (!isAdmin) {
     items.push({
       to: "/employee/leave-requests",
@@ -56,7 +84,12 @@ const buildNavItems = (user) => {
     items.push({ to: "/wfh", label: "WFH", icon: Home });
   }
 
-  if (user?.isManager) {
+  if (user?.isManager && !isAdmin) {
+    // Admin doesn't get the manager tabs at all: the team roster + team-scoped
+    // Leave Requests / Calendar / Timesheets are replaced by the company-wide
+    // "All ..." tabs added right after Dashboard above, and Team WFH / Team
+    // Resignations were view-only mirrors of the admin's own WFH / Resignations
+    // pages (also promoted up top).
     items.push({ to: "/manager/employees", label: "Employees", icon: Users });
     items.push({
       to: "/manager/leave-requests",
@@ -102,16 +135,6 @@ const buildNavItems = (user) => {
       icon: CalendarRange,
     });
     items.push({ to: "/admin/payslips", label: "Payslips", icon: FileText });
-    items.push({
-      to: "/admin/resignations",
-      label: "Resignations",
-      icon: FileWarning,
-    });
-    items.push({
-      to: "/admin/wfh-requests",
-      label: "WFH Requests",
-      icon: Home,
-    });
   }
   items.push({ to: "/profile", label: "Profile", icon: UserCog });
 

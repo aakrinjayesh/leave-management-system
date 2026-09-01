@@ -11,6 +11,7 @@ import {
   FileText,
   LogOut,
   Pencil,
+  ChevronRight,
 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Button from "../../components/common/Button";
@@ -80,6 +81,9 @@ export default function ProfilePage() {
   const [celebrationYears, setCelebrationYears] = useState(null);
   const [myResignation, setMyResignation] = useState(undefined);
   const [showResignationModal, setShowResignationModal] = useState(false);
+  // Resignation is a deliberately low-key action - the section stays collapsed
+  // behind a small "Need to resign?" link until the employee opens it.
+  const [showResignForm, setShowResignForm] = useState(false);
   const [resignationError, setResignationError] = useState("");
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [editingSection, setEditingSection] = useState(null); // "personal" | "statutory" | "bank" | null
@@ -576,16 +580,42 @@ export default function ProfilePage() {
               </div>
             ) : !myResignation || ["REJECTED", "WITHDRAWN"].includes(myResignation.status) ? (
               <>
-                <p className="card-section-subtitle">
-                  {myResignation?.status === "REJECTED" &&
-                    "Your previous resignation was rejected by admin. "}
-                  {myResignation?.status === "WITHDRAWN" && "You previously withdrew your resignation. "}
-                  If you wish to resign, submit a request below - it will be sent to your manager (view only) and
-                  admin for review.
-                </p>
-                <Button type="button" onClick={() => setShowResignationModal(true)}>
-                  Submit resignation
-                </Button>
+                <button
+                  type="button"
+                  className="link-btn"
+                  aria-expanded={showResignForm}
+                  onClick={() => setShowResignForm((v) => !v)}
+                >
+                  <ChevronRight
+                    size={14}
+                    style={{
+                      marginRight: 4,
+                      transition: "transform 0.15s",
+                      transform: showResignForm ? "rotate(90deg)" : "none",
+                    }}
+                  />
+                  Need to resign?
+                </button>
+
+                {showResignForm && (
+                  <div style={{ marginTop: 12 }}>
+                    <p className="card-section-subtitle">
+                      {myResignation?.status === "REJECTED" &&
+                        "Your previous resignation was rejected by admin. "}
+                      {myResignation?.status === "WITHDRAWN" && "You previously withdrew your resignation. "}
+                      If you wish to resign, submit a request - it will be sent to your manager (view only) and
+                      admin for review.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="page-header-btn"
+                      onClick={() => setShowResignationModal(true)}
+                    >
+                      Submit resignation
+                    </Button>
+                  </div>
+                )}
               </>
             ) : (
               <>

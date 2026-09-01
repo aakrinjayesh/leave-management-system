@@ -7,8 +7,7 @@ const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
 const companySettingsService = require("../services/companySettings.service");
 const { sendLeaveDecisionEmail } = require("../utils/email.util");
-const notificationService = require("../services/notification.service");
-const { formatDateShort } = require("../utils/formatDate.util");
+const leaveDecisionService = require("../services/leaveDecision.service");
 const { isS3Url } = require("../utils/s3.util");
 const { UPLOAD_DIR } = require("../config/upload");
 
@@ -352,124 +351,31 @@ const getTeamLeaveRequestAttachment = asyncHandler(async (req, res) => {
   });
 });
 
-const approveLeaveRequest = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { remarks } = req.body;
+const decideLeaveRequest = (decision) =>
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { remarks } = req.body;
 
-  const leaveRequest = await getRoutedLeaveRequestOr404(id, req.user.id);
-  if (leaveRequest.status !== "PENDING") {
-    throw ApiError.badRequest("This request has already been actioned.");
-  }
+    const leaveRequest = await getRoutedLeaveRequestOr404(id, req.user.id);
 
-  const requestFiscalYear = await companySettingsService.getFiscalYearForDate(leaveRequest.startDate);
-  const balance = await leaveBalanceService.getOrCreateBalance(
-    leaveRequest.userId,
-    leaveRequest.leavePolicy,
-    requestFiscalYear
-  );
-
-  if (!leaveRequest.leavePolicy.isUnlimited && leaveRequest.totalDays > balance.remainingLeaves) {
-    throw ApiError.badRequest(
-      `${leaveRequest.user.firstName} only has ${balance.remainingLeaves} day(s) of ${leaveRequest.leavePolicy.leaveName} remaining.`
-    );
-  }
-
-  await leaveBalanceService.applyUsage(balance.id, leaveRequest.totalDays);
-
-  const updated = await prisma.leaveRequest.update({
-    where: { id },
-    data: {
-      status: "APPROVED",
-      approvedById: req.user.id,
-      approvedAt: new Date(),
-      managerRemarks: remarks || null,
-    },
-  });
-
-  new ApiResponse(200, "Leave request approved.", { leaveRequest: updated }).send(res);
-
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendLeaveDecisionEmail({
-      to: leaveRequest.user.email,
-      employeeFirstName: leaveRequest.user.firstName,
-      leaveName: leaveRequest.leavePolicy.leaveName,
-      startDate: leaveRequest.startDate,
-      endDate: leaveRequest.endDate,
-      totalDays: leaveRequest.totalDays,
-      status: "APPROVED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
-      remarks: remarks || null,
-    });
-  } catch (err) {
-    console.error("Failed to send leave approved email:", err);
-  }
-
-  try {
-    await notificationService.notify({
-      userId: leaveRequest.user.id,
-      type: notificationService.NOTIFICATION_TYPES.LEAVE_DECIDED,
-      title: "Leave request approved",
-      message: `Your ${leaveRequest.leavePolicy.leaveName} request (${formatDateShort(
-        leaveRequest.startDate
-      )} - ${formatDateShort(leaveRequest.endDate)}) was approved by ${req.user.firstName} ${req.user.lastName}.`,
-    });
-  } catch (err) {
-    console.error("Failed to create leave approved notification:", err);
-  }
-});
-
-const rejectLeaveRequest = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { remarks } = req.body;
-
-  const leaveRequest = await getRoutedLeaveRequestOr404(id, req.user.id);
-  if (leaveRequest.status !== "PENDING") {
-    throw ApiError.badRequest("This request has already been actioned.");
-  }
-
-  const updated = await prisma.leaveRequest.update({
-    where: { id },
-    data: {
-      status: "REJECTED",
-      approvedById: req.user.id,
-      rejectedAt: new Date(),
-      managerRemarks: remarks,
-    },
-  });
-
-  new ApiResponse(200, "Leave request rejected.", { leaveRequest: updated }).send(res);
-
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendLeaveDecisionEmail({
-      to: leaveRequest.user.email,
-      employeeFirstName: leaveRequest.user.firstName,
-      leaveName: leaveRequest.leavePolicy.leaveName,
-      startDate: leaveRequest.startDate,
-      endDate: leaveRequest.endDate,
-      totalDays: leaveRequest.totalDays,
-      status: "REJECTED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
+    const updated = await leaveDecisionService.applyDecision({
+      leaveRequest,
+      actor: req.user,
+      decision,
       remarks,
     });
-  } catch (err) {
-    console.error("Failed to send leave rejected email:", err);
-  }
 
-  try {
-    await notificationService.notify({
-      userId: leaveRequest.user.id,
-      type: notificationService.NOTIFICATION_TYPES.LEAVE_DECIDED,
-      title: "Leave request rejected",
-      message: `Your ${leaveRequest.leavePolicy.leaveName} request (${formatDateShort(
-        leaveRequest.startDate
-      )} - ${formatDateShort(leaveRequest.endDate)}) was rejected by ${req.user.firstName} ${req.user.lastName}.`,
-    });
-  } catch (err) {
-    console.error("Failed to create leave rejected notification:", err);
-  }
-});
+    new ApiResponse(
+      200,
+      decision === "APPROVED" ? "Leave request approved." : "Leave request rejected.",
+      { leaveRequest: updated }
+    ).send(res);
+
+    await leaveDecisionService.sendDecisionSideEffects({ leaveRequest, actor: req.user, decision, remarks });
+  });
+
+const approveLeaveRequest = decideLeaveRequest("APPROVED");
+const rejectLeaveRequest = decideLeaveRequest("REJECTED");
 
 const getTeamCalendar = asyncHandler(async (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();

@@ -25,6 +25,8 @@ const {
   rejectProfileChangeSchema,
 } = require("../validators/admin.validator");
 const { rejectWfhRequestSchema } = require("../validators/wfh.validator");
+const { approveLeaveSchema, rejectLeaveSchema } = require("../validators/leave.validator");
+const { approveTimesheetSchema, rejectTimesheetSchema } = require("../validators/timesheet.validator");
 const controller = require("../controllers/admin.controller");
 const leaveController = require("../controllers/adminLeave.controller");
 const payrollController = require("../controllers/adminPayroll.controller");
@@ -62,7 +64,10 @@ router.get("/offer-letters/:id/pdf", offerLetterController.downloadOfferLetterPd
 router.delete("/offer-letters/:id", offerLetterController.deleteOfferLetter);
 router.get("/users/:id/timesheet", controller.getUserTimesheet);
 router.get("/users/:id/timesheet/export", controller.exportUserTimesheet);
+router.get("/timesheet-summary", controller.listEmployeeTimesheetSummary);
 router.get("/timesheets/export", controller.exportPayrollTimesheet);
+router.patch("/timesheets/:id/approve", validate(approveTimesheetSchema), controller.approveTimesheetSubmission);
+router.patch("/timesheets/:id/reject", validate(rejectTimesheetSchema), controller.rejectTimesheetSubmission);
 router.get("/timesheet-submissions/:id/attachment", controller.getTimesheetSubmissionAttachment);
 router.get("/reports/project-assignment", reportController.getProjectAssignmentReport);
 router.get("/users/:id/project-history", reportController.getProjectHistory);
@@ -76,6 +81,10 @@ router.patch("/projects/:id/deactivate", reportController.deactivateProject);
 router.patch("/projects/:id/reactivate", reportController.reactivateProject);
 router.get("/users/:id/leaves", controller.getUserLeaveDetail);
 router.get("/users/:id/calendar", controller.getUserCalendar);
+router.get("/calendar", controller.getCompanyCalendar);
+router.get("/leave-summary", leaveController.listEmployeeLeaveSummary);
+router.patch("/leave-requests/:id/approve", validate(approveLeaveSchema), leaveController.approveLeaveRequest);
+router.patch("/leave-requests/:id/reject", validate(rejectLeaveSchema), leaveController.rejectLeaveRequest);
 router.get("/leave-requests/:id/attachment", controller.getUserLeaveAttachment);
 router.get("/users/:id/details", controller.getUserDetails);
 router.patch("/users/:id/details", validate(updateUserDetailsSchema), controller.updateUserDetails);

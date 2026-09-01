@@ -32,6 +32,9 @@ import EmployeeLeaveDetailPage from "../pages/admin/EmployeeLeaveDetailPage";
 import EmployeeDetailsPage from "../pages/admin/EmployeeDetailsPage";
 import OfferLetterPage from "../pages/admin/OfferLetterPage";
 import ManageLeavesPage from "../pages/admin/ManageLeavesPage";
+import AllLeaveRequestsPage from "../pages/admin/AllLeaveRequestsPage";
+import AllTimesheetsPage from "../pages/admin/AllTimesheetsPage";
+import AllCalendarPage from "../pages/admin/AllCalendarPage";
 import PayslipsPage from "../pages/admin/PayslipsPage";
 import EmployeePayslipsPage from "../pages/admin/EmployeePayslipsPage";
 import ReportPage from "../pages/admin/ReportPage";
@@ -107,6 +110,9 @@ export default function AppRoutes() {
       <Route element={<ProtectedRoute check={isAdmin} />}>
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/reports" element={<ReportPage />} />
+        <Route path="/admin/leave-requests" element={<AllLeaveRequestsPage />} />
+        <Route path="/admin/timesheets" element={<AllTimesheetsPage />} />
+        <Route path="/admin/calendar" element={<AllCalendarPage />} />
         <Route path="/admin/manage-leaves" element={<ManageLeavesPage />} />
         <Route path="/admin/users/:id/timesheet" element={<AdminEmployeeTimesheetPage />} />
         <Route path="/admin/users/:id/leaves" element={<EmployeeLeaveDetailPage />} />
