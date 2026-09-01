@@ -9,14 +9,33 @@ const {
   updateMyIntroSchema,
 } = require("../validators/profile.validator");
 const controller = require("../controllers/profile.controller");
+const { uploadProfileSectionDocuments } = require("../config/profileDocumentUpload");
 
 const router = express.Router();
 
 router.use(authenticate);
 
-router.patch("/me/personal-info", validate(updateMyPersonalInfoSchema), controller.updateMyPersonalInfo);
-router.patch("/me/statutory-info", validate(updateMyStatutoryInfoSchema), controller.updateMyStatutoryInfo);
-router.patch("/me/bank-info", validate(updateMyBankInfoSchema), controller.updateMyBankInfo);
+// multipart: text fields + optional document files. multer must run before
+// validate so req.body is populated for validation.
+router.patch(
+  "/me/personal-info",
+  uploadProfileSectionDocuments,
+  validate(updateMyPersonalInfoSchema),
+  controller.updateMyPersonalInfo
+);
+router.patch(
+  "/me/statutory-info",
+  uploadProfileSectionDocuments,
+  validate(updateMyStatutoryInfoSchema),
+  controller.updateMyStatutoryInfo
+);
+router.patch(
+  "/me/bank-info",
+  uploadProfileSectionDocuments,
+  validate(updateMyBankInfoSchema),
+  controller.updateMyBankInfo
+);
+router.get("/me/documents/:type", controller.getMyDocument);
 
 router.get("/me/change-requests", controller.getMyProfileChangeRequests);
 

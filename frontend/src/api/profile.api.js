@@ -6,11 +6,30 @@ export const markAnniversaryCelebrationSeen = () => unwrap(axiosClient.put("/pro
 
 export const markBirthdayCelebrationSeen = () => unwrap(axiosClient.put("/profile/birthday-celebration-seen"));
 
-export const updateMyPersonalInfo = (data) => unwrap(axiosClient.patch("/profile/me/personal-info", data));
+// `files` is an optional { fieldName: File } map (photo / panDocument /
+// aadharDocument / bankDocument). When present the request goes as
+// multipart/form-data; otherwise plain JSON.
+const patchSection = (url, data, files) => {
+  const fileEntries = Object.entries(files || {}).filter(([, f]) => f);
+  if (fileEntries.length === 0) {
+    return unwrap(axiosClient.patch(url, data));
+  }
+  const form = new FormData();
+  Object.entries(data || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") form.append(k, v);
+  });
+  fileEntries.forEach(([name, file]) => form.append(name, file));
+  return unwrap(axiosClient.patch(url, form));
+};
 
-export const updateMyStatutoryInfo = (data) => unwrap(axiosClient.patch("/profile/me/statutory-info", data));
+export const updateMyPersonalInfo = (data, files) => patchSection("/profile/me/personal-info", data, files);
 
-export const updateMyBankInfo = (data) => unwrap(axiosClient.patch("/profile/me/bank-info", data));
+export const updateMyStatutoryInfo = (data, files) => patchSection("/profile/me/statutory-info", data, files);
+
+export const updateMyBankInfo = (data, files) => patchSection("/profile/me/bank-info", data, files);
+
+export const downloadMyDocument = (type) =>
+  axiosClient.get(`/profile/me/documents/${type}`, { responseType: "blob" });
 
 export const getMyProfileChangeRequests = () => unwrap(axiosClient.get("/profile/me/change-requests"));
 

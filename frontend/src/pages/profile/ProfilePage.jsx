@@ -30,6 +30,7 @@ import EditBankInfoModal from "./EditBankInfoModal";
 import { useAuth } from "../../context/AuthContext";
 import * as profileApi from "../../api/profile.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { openBlobInNewTab } from "../../utils/openBlob";
 import { formatDate } from "../../utils/formatDate";
 import "../../styles/dashboardShared.css";
 
@@ -88,6 +89,7 @@ export default function ProfilePage() {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [editingSection, setEditingSection] = useState(null); // "personal" | "statutory" | "bank" | null
   const [profileMessage, setProfileMessage] = useState("");
+  const [docError, setDocError] = useState("");
   const [pendingSections, setPendingSections] = useState(new Set());
 
   const isAdmin = user?.userType === "ADMIN";
@@ -116,6 +118,35 @@ export default function ProfilePage() {
 
   // Right-side control on each editable section header: a pending-approval
   // note, an Edit link, or a "no self-edits left" note.
+  const viewMyDocument = async (docType) => {
+    setDocError("");
+    try {
+      const res = await profileApi.downloadMyDocument(docType);
+      openBlobInNewTab(res.data);
+    } catch (err) {
+      setDocError(getErrorMessage(err, "Couldn't open this document."));
+    }
+  };
+
+  const renderDocDetail = (label, has, docType) => (
+    <div>
+      <div className="profile-detail-label">{label}</div>
+      <div className="profile-detail-value">
+        {has ? "Uploaded" : "Not uploaded"}
+        {has && (
+          <button
+            type="button"
+            className="link-btn"
+            style={{ marginLeft: 10 }}
+            onClick={() => viewMyDocument(docType)}
+          >
+            View
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   const renderSectionEditControl = (key, editsRemaining) => {
     if (isAdmin) return null;
     if (isSectionPending(key)) {
@@ -202,6 +233,7 @@ export default function ProfilePage() {
       </div>
 
       <Alert type="success">{profileMessage}</Alert>
+      <Alert type="error">{docError}</Alert>
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">
@@ -376,6 +408,10 @@ export default function ProfilePage() {
               <div className="profile-detail-label">Email</div>
               <div className="profile-detail-value">{user?.email}</div>
             </div>
+            <div>
+              <div className="profile-detail-label">Personal email</div>
+              <div className="profile-detail-value">{user?.personalEmail || "Not set"}</div>
+            </div>
             {user?.isManager && (
               <div>
                 <div className="profile-detail-label">Manager status</div>
@@ -422,6 +458,7 @@ export default function ProfilePage() {
               <div className="profile-detail-label">Qualification</div>
               <div className="profile-detail-value">{user?.qualification || "Not set"}</div>
             </div>
+            {renderDocDetail("Profile picture", user?.hasPhoto, "photo")}
           </div>
         </div>
       </div>
@@ -436,7 +473,7 @@ export default function ProfilePage() {
             {renderSectionEditControl("statutory", user?.statutoryInfoEditsRemaining)}
           </div>
           <p className="card-section-subtitle">
-            Sensitive numbers are shown masked. Uploaded documents are visible to admin only.
+            Sensitive numbers are shown masked.
             {!isAdmin && " PF number can only be changed by your admin - everything else you can edit yourself, up to 3 times."}
           </p>
 
@@ -465,6 +502,8 @@ export default function ProfilePage() {
               <div className="profile-detail-label">PF number</div>
               <div className="profile-detail-value">{user?.pfNumber || "Not set"}</div>
             </div>
+            {renderDocDetail("PAN card document", user?.hasPanDocument, "pan")}
+            {renderDocDetail("Aadhaar card document", user?.hasAadharDocument, "aadhar")}
           </div>
         </div>
       </div>
@@ -501,6 +540,7 @@ export default function ProfilePage() {
               <div className="profile-detail-label">Salary / CTC (annual)</div>
               <div className="profile-detail-value">{formatCtc(user?.salaryCtc)}</div>
             </div>
+            {renderDocDetail("Bank proof document", user?.hasBankDocument, "bank")}
           </div>
         </div>
       </div>

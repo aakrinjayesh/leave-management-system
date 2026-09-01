@@ -39,6 +39,15 @@ const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 // name, employee code, and email are excluded on purpose (see
 // updateMyPersonalInfo in profile.controller.js).
 const updateMyPersonalInfoSchema = z.object({
+  personalEmail: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .transform((value) => (value ? value : undefined))
+    .refine((value) => value === undefined || z.string().email().safeParse(value).success, {
+      message: "Please enter a valid personal email address.",
+    }),
   phone: nullableString(20),
   birthDate: z.coerce.date().max(new Date(), "Date of birth can't be in the future.").optional(),
   gender: z.enum([GENDER.MALE, GENDER.FEMALE, GENDER.OTHER]).optional(),

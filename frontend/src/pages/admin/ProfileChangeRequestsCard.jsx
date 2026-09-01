@@ -9,6 +9,7 @@ import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate } from "../../utils/formatDate";
 
 const FIELD_LABELS = {
+  personalEmail: "Personal email",
   phone: "Mobile number",
   birthDate: "Date of birth",
   gender: "Gender",
@@ -18,20 +19,31 @@ const FIELD_LABELS = {
   spouseName: "Spouse name",
   nationality: "Nationality",
   qualification: "Qualification",
+  photoUrl: "Profile picture",
   pan: "PAN number",
   panHolderName: "Name as per PAN",
   uan: "UAN",
   aadharNumber: "Aadhaar number",
   aadharHolderName: "Name as per Aadhaar",
+  panDocumentUrl: "PAN card document",
+  aadharDocumentUrl: "Aadhaar card document",
   bankAccountNumber: "Bank account number",
   bankName: "Bank name",
   ifscCode: "IFSC code",
+  bankDocumentUrl: "Bank proof document",
 };
 
 const DATE_FIELDS = new Set(["birthDate"]);
 
-const showValue = (field, value) => {
+const showValue = (field, value, isDocument) => {
   if (value === null || value === undefined || value === "") return "—";
+  if (isDocument) {
+    return (
+      <a href={String(value)} target="_blank" rel="noreferrer" className="link-btn">
+        View file
+      </a>
+    );
+  }
   if (DATE_FIELDS.has(field)) return formatDate(value);
   return String(value);
 };
@@ -123,11 +135,11 @@ export default function ProfileChangeRequestsCard({ userId, onDecided }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {request.fields.map(({ field, current, requested }) => (
+                    {request.fields.map(({ field, current, requested, isDocument }) => (
                       <tr key={field}>
                         <td className="table-cell-primary">{FIELD_LABELS[field] || field}</td>
-                        <td className="table-cell-secondary">{showValue(field, current)}</td>
-                        <td className="table-cell-primary">{showValue(field, requested)}</td>
+                        <td className="table-cell-secondary">{showValue(field, current, isDocument)}</td>
+                        <td className="table-cell-primary">{showValue(field, requested, isDocument)}</td>
                       </tr>
                     ))}
                   </tbody>

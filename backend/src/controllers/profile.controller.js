@@ -6,6 +6,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const {
   SELF_PROFILE_EDIT_LIMIT,
   PROFILE_CHANGE_SECTIONS,
+  PROFILE_CHANGE_DOCUMENTS,
   INTRO_PROMPT_KEYS,
 } = require("../utils/constants");
 const incomeTaxService = require("../services/incomeTax.service");
@@ -14,8 +15,72 @@ const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.serv
 const { sendResignationSubmittedEmail, sendResignationWithdrawnEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
-const { isS3Url } = require("../utils/s3.util");
+const { isS3Url, uploadToS3, deleteFromS3 } = require("../utils/s3.util");
 const { EMPLOYEE_DOCUMENT_DIR } = require("../config/employeeDocumentUpload");
+
+// Document type route param (photo|pan|aadhar|bank) -> User column.
+const DOC_COLUMN_BY_TYPE = {
+  photo: "photoUrl",
+  pan: "panDocumentUrl",
+  aadhar: "aadharDocumentUrl",
+  bank: "bankDocumentUrl",
+};
+
+// Uploads any files the employee attached to a profile section form to S3 and
+// merges the resulting URLs into req.body (as the User column names) so they
+// ride along in the same change request as the section's field edits. Only
+// the document fields that belong to `section` are considered - the schema
+// already stripped any URL the client tried to put in the body directly.
+const attachSectionDocuments = async (req, section) => {
+  const config = PROFILE_CHANGE_SECTIONS[section];
+  const uploaded = [];
+  for (const [column, doc] of Object.entries(PROFILE_CHANGE_DOCUMENTS)) {
+    if (!config.fields.includes(column)) continue;
+    const file = req.files?.[doc.uploadField]?.[0];
+    if (!file) continue;
+    const { url } = await uploadToS3(file, doc.folder);
+    req.body[column] = url;
+    uploaded.push(url);
+  }
+  return uploaded;
+};
+
+// Submits the section change request, cleaning up any just-uploaded files if
+// the submission itself is rejected (nothing changed / one already pending).
+const submitSectionWithDocs = async (req, section) => {
+  const uploaded = await attachSectionDocuments(req, section);
+  try {
+    return await submitProfileChangeRequest(req.user.id, section, req.body);
+  } catch (err) {
+    for (const url of uploaded) {
+      deleteFromS3(url).catch((e) => console.error("Failed to clean up abandoned profile document:", e));
+    }
+    throw err;
+  }
+};
+
+const getMyDocument = asyncHandler(async (req, res) => {
+  const column = DOC_COLUMN_BY_TYPE[req.params.type];
+  if (!column) {
+    throw ApiError.badRequest("Unknown document type.");
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user || !user[column]) {
+    throw ApiError.notFound("No document uploaded yet.");
+  }
+
+  if (isS3Url(user[column])) {
+    return res.redirect(user[column]);
+  }
+
+  const filePath = path.join(EMPLOYEE_DOCUMENT_DIR, path.basename(user[column]));
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ success: false, message: "Document file not found." });
+    }
+  });
+});
 
 // Self-service version of admin's downloadUserDocument (type "photo" only) -
 // admin is still the only one who can upload/replace it (see
@@ -115,20 +180,17 @@ const submitProfileChangeRequest = async (userId, section, data) => {
 };
 
 const updateMyPersonalInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await submitProfileChangeRequest(req.user.id, "PERSONAL", req.body);
-
+  const editsRemaining = await submitSectionWithDocs(req, "PERSONAL");
   new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
 });
 
 const updateMyStatutoryInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await submitProfileChangeRequest(req.user.id, "STATUTORY", req.body);
-
+  const editsRemaining = await submitSectionWithDocs(req, "STATUTORY");
   new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
 });
 
 const updateMyBankInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await submitProfileChangeRequest(req.user.id, "BANK", req.body);
-
+  const editsRemaining = await submitSectionWithDocs(req, "BANK");
   new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
 });
 
@@ -391,6 +453,7 @@ module.exports = {
   updateMyStatutoryInfo,
   updateMyBankInfo,
   getMyPhoto,
+  getMyDocument,
   getMyIncomeTaxComputation,
   listMyIncomeTaxComputationGenerations,
   downloadMyIncomeTaxComputationPdf,

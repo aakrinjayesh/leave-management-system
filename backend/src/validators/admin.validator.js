@@ -107,6 +107,8 @@ const nullablePattern = (regex, message, max, { uppercase = false } = {}) =>
     .refine((value) => value === null || regex.test(value), { message });
 
 const EMPLOYEE_CODE_REGEX = /^[A-Za-z0-9_-]+$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PIN_CODE_REGEX = /^\d{6}$/;
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const UAN_REGEX = /^\d{12}$/;
 const AADHAR_REGEX = /^\d{12}$/;
@@ -120,6 +122,7 @@ const updateUserDetailsSchema = z.object({
     "Employee code can only contain letters, numbers, hyphens, and underscores.",
     50
   ),
+  personalEmail: nullablePattern(EMAIL_REGEX, "Please enter a valid personal email address.", 255),
   birthDate: z.coerce.date().max(new Date(), "Date of birth can't be in the future.").nullable().optional(),
   joiningDate: z.coerce.date().nullable().optional(),
   gender: z.enum([GENDER.MALE, GENDER.FEMALE, GENDER.OTHER]).nullable().optional(),
@@ -143,8 +146,7 @@ const updateUserDetailsSchema = z.object({
   location: nullableString(100),
   taxRegime: z.enum([TAX_REGIME.OLD, TAX_REGIME.NEW]).nullable().optional(),
   residentialAddress: nullableString(500),
-  wardNo: nullableString(50),
-  micrCode: nullableString(20),
+  pinCode: nullablePattern(PIN_CODE_REGEX, "PIN code must be exactly 6 digits.", 6),
   residentialStatus: z
     .enum([
       RESIDENTIAL_STATUS.RESIDENT,

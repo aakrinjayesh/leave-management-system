@@ -45,6 +45,12 @@ const validateForm = (form) => {
   if (form.employeeCode && !EMPLOYEE_CODE_REGEX.test(form.employeeCode.trim())) {
     errors.employeeCode = "Only letters, numbers, hyphens, and underscores are allowed.";
   }
+  if (form.personalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.personalEmail.trim())) {
+    errors.personalEmail = "Please enter a valid personal email address.";
+  }
+  if (form.pinCode && !/^\d{6}$/.test(form.pinCode.trim())) {
+    errors.pinCode = "PIN code must be exactly 6 digits.";
+  }
   if (form.birthDate && (!ISO_DATE_REGEX.test(form.birthDate) || !isSaneYear(form.birthDate))) {
     errors.birthDate = "Please enter a valid date with a 4-digit year.";
   } else if (form.birthDate && form.birthDate > todayDateInputValue()) {
@@ -77,6 +83,7 @@ const validateForm = (form) => {
 
 const toForm = (user) => ({
   employeeCode: user.employeeCode ?? "",
+  personalEmail: user.personalEmail ?? "",
   phone: user.phone ?? "",
   birthDate: toDateInputValue(user.birthDate),
   joiningDate: toDateInputValue(user.joiningDate),
@@ -91,8 +98,7 @@ const toForm = (user) => ({
   location: user.location ?? "",
   taxRegime: user.taxRegime ?? "",
   residentialAddress: user.residentialAddress ?? "",
-  wardNo: user.wardNo ?? "",
-  micrCode: user.micrCode ?? "",
+  pinCode: user.pinCode ?? "",
   residentialStatus: user.residentialStatus ?? "",
   pan: user.pan ?? "",
   panHolderName: user.panHolderName ?? "",
@@ -115,6 +121,7 @@ const SECTIONS = {
     label: "Personal information",
     fields: [
       "employeeCode",
+      "personalEmail",
       "gender",
       "birthDate",
       "joiningDate",
@@ -129,7 +136,7 @@ const SECTIONS = {
   },
   employment: {
     label: "Employment details",
-    fields: ["designation", "location", "taxRegime", "residentialAddress", "wardNo", "micrCode", "residentialStatus"],
+    fields: ["designation", "location", "taxRegime", "residentialAddress", "pinCode", "residentialStatus"],
   },
   pan: { label: "PAN details", fields: ["pan", "panHolderName", "uan"] },
   aadhaar: { label: "Aadhaar details", fields: ["aadharNumber", "aadharHolderName"] },
@@ -182,11 +189,13 @@ function EmployeeDetailsContent({ id }) {
   const [newField, setNewField] = useState({ label: "", value: "", file: null });
   const [isAddingField, setIsAddingField] = useState(false);
   const [deletingFieldId, setDeletingFieldId] = useState(null);
+  const [nextCodeNum, setNextCodeNum] = useState(null);
 
   const loadUser = () =>
     adminApi.getUserDetails(id).then((data) => {
       setUser(data.user);
       setForm(toForm(data.user));
+      setNextCodeNum(data.nextEmployeeCodeNumber || null);
     });
 
   const loadCustomFields = () => adminApi.listCustomFields(id).then((data) => setCustomFields(data.customFields));
@@ -381,21 +390,36 @@ function EmployeeDetailsContent({ id }) {
             </p>
 
             <div className="form-two-col">
+              <div>
+                <TextInput
+                  label="Employee code"
+                  value={form.employeeCode}
+                  onChange={handleChange("employeeCode")}
+                  error={fieldErrors.employeeCode}
+                />
+                {nextCodeNum && (
+                  <p className="helper-text" style={{ marginTop: 2 }}>
+                    Next number in sequence: <strong>{nextCodeNum}</strong> (e.g. TECH-2026-{nextCodeNum})
+                  </p>
+                )}
+              </div>
               <TextInput
-                label="Employee code"
-                value={form.employeeCode}
-                onChange={handleChange("employeeCode")}
-                error={fieldErrors.employeeCode}
+                label="Personal email"
+                type="email"
+                placeholder="name@gmail.com"
+                value={form.personalEmail}
+                onChange={handleChange("personalEmail")}
+                error={fieldErrors.personalEmail}
               />
+            </div>
+
+            <div className="form-two-col">
               <FormSelect label="Gender" value={form.gender} onChange={handleChange("gender")}>
                 <option value="">Not set</option>
                 <option value="MALE">Male</option>
                 <option value="FEMALE">Female</option>
                 <option value="OTHER">Other</option>
               </FormSelect>
-            </div>
-
-            <div className="form-two-col">
               <TextInput
                 label="Date of birth"
                 type="date"
@@ -405,6 +429,9 @@ function EmployeeDetailsContent({ id }) {
                 onChange={handleChange("birthDate")}
                 error={fieldErrors.birthDate}
               />
+            </div>
+
+            <div className="form-two-col">
               <TextInput
                 label="Date of joining"
                 type="date"
@@ -414,33 +441,30 @@ function EmployeeDetailsContent({ id }) {
                 onChange={handleChange("joiningDate")}
                 error={fieldErrors.joiningDate}
               />
+              <TextInput label="Mobile number" value={form.phone} onChange={handleChange("phone")} />
             </div>
 
             <div className="form-two-col">
-              <TextInput label="Mobile number" value={form.phone} onChange={handleChange("phone")} />
               <FormSelect label="Marital status" value={form.maritalStatus} onChange={handleChange("maritalStatus")}>
                 <option value="">Not set</option>
                 <option value="SINGLE">Single</option>
                 <option value="MARRIED">Married</option>
                 <option value="OTHER">Other</option>
               </FormSelect>
+              <TextInput label="Father's name" value={form.fatherName} onChange={handleChange("fatherName")} />
             </div>
 
             <div className="form-two-col">
-              <TextInput label="Father's name" value={form.fatherName} onChange={handleChange("fatherName")} />
               <TextInput
                 label="Father/Mother Ph. number"
                 value={form.fatherMotherPhone}
                 onChange={handleChange("fatherMotherPhone")}
               />
-            </div>
-
-            <div className="form-two-col">
               <TextInput label="Spouse name" value={form.spouseName} onChange={handleChange("spouseName")} />
-              <TextInput label="Nationality" value={form.nationality} onChange={handleChange("nationality")} />
             </div>
 
             <div className="form-two-col">
+              <TextInput label="Nationality" value={form.nationality} onChange={handleChange("nationality")} />
               <TextInput label="Qualification" value={form.qualification} onChange={handleChange("qualification")} />
             </div>
 
@@ -487,16 +511,25 @@ function EmployeeDetailsContent({ id }) {
             />
 
             <div className="form-two-col">
-              <TextInput label="Ward No" value={form.wardNo} onChange={handleChange("wardNo")} />
-              <TextInput label="MICR code" value={form.micrCode} onChange={handleChange("micrCode")} />
+              <TextInput
+                label="Pin Code"
+                inputMode="numeric"
+                placeholder="6 digits"
+                value={form.pinCode}
+                onChange={handleChange("pinCode")}
+                error={fieldErrors.pinCode}
+              />
+              <FormSelect
+                label="Residential status"
+                value={form.residentialStatus}
+                onChange={handleChange("residentialStatus")}
+              >
+                <option value="">Not set</option>
+                <option value="RESIDENT">Resident</option>
+                <option value="NON_RESIDENT">Non-Resident</option>
+                <option value="RESIDENT_NOT_ORDINARILY_RESIDENT">Resident but Not Ordinarily Resident (RNOR)</option>
+              </FormSelect>
             </div>
-
-            <FormSelect label="Residential status" value={form.residentialStatus} onChange={handleChange("residentialStatus")}>
-              <option value="">Not set</option>
-              <option value="RESIDENT">Resident</option>
-              <option value="NON_RESIDENT">Non-Resident</option>
-              <option value="RESIDENT_NOT_ORDINARILY_RESIDENT">Resident but Not Ordinarily Resident (RNOR)</option>
-            </FormSelect>
 
             <div className="modal-actions" style={{ justifyContent: "flex-start", marginTop: 8 }}>
               <Button type="submit" isLoading={savingSection === "employment"}>

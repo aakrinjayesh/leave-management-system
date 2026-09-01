@@ -56,6 +56,7 @@ const PROFILE_CHANGE_SECTIONS = {
     label: "Personal Information",
     countField: "personalInfoEditCount",
     fields: [
+      "personalEmail",
       "phone",
       "birthDate",
       "gender",
@@ -65,23 +66,37 @@ const PROFILE_CHANGE_SECTIONS = {
       "spouseName",
       "nationality",
       "qualification",
+      "photoUrl",
     ],
   },
   STATUTORY: {
     label: "Statutory Information",
     countField: "statutoryInfoEditCount",
-    fields: ["pan", "panHolderName", "uan", "aadharNumber", "aadharHolderName"],
+    fields: ["pan", "panHolderName", "uan", "aadharNumber", "aadharHolderName", "panDocumentUrl", "aadharDocumentUrl"],
   },
   BANK: {
     label: "Bank Information",
     countField: "bankInfoEditCount",
-    fields: ["bankAccountNumber", "bankName", "ifscCode"],
+    fields: ["bankAccountNumber", "bankName", "ifscCode", "bankDocumentUrl"],
   },
 };
 
 // User columns in the above that are dates, so a stored JSON string gets
 // coerced back to a Date when an admin accepts the request.
 const PROFILE_CHANGE_DATE_FIELDS = new Set(["birthDate"]);
+
+// User columns in the above that hold an uploaded-file URL. These come from an
+// actual file the employee attached to the section form (never a raw value in
+// the request body), and need S3 cleanup when a request is accepted (old file)
+// or rejected (the pending file). `uploadField` is the multipart field name the
+// frontend sends the file under.
+const PROFILE_CHANGE_DOCUMENTS = {
+  photoUrl: { uploadField: "photo", pdfOnly: false, folder: "employee-documents/pending/profile" },
+  panDocumentUrl: { uploadField: "panDocument", pdfOnly: false, folder: "employee-documents/pending/pan" },
+  aadharDocumentUrl: { uploadField: "aadharDocument", pdfOnly: true, folder: "employee-documents/pending/aadhar" },
+  bankDocumentUrl: { uploadField: "bankDocument", pdfOnly: false, folder: "employee-documents/pending/bank" },
+};
+const PROFILE_CHANGE_DOCUMENT_FIELDS = new Set(Object.keys(PROFILE_CHANGE_DOCUMENTS));
 
 const RESIGNATION_STATUS = {
   PENDING: "PENDING",
@@ -110,6 +125,8 @@ module.exports = {
   SELF_PROFILE_EDIT_LIMIT,
   PROFILE_CHANGE_SECTIONS,
   PROFILE_CHANGE_DATE_FIELDS,
+  PROFILE_CHANGE_DOCUMENTS,
+  PROFILE_CHANGE_DOCUMENT_FIELDS,
   INTRO_PROMPT_KEYS,
   INTRO_ANSWER_MAX_LENGTH,
 };

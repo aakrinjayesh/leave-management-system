@@ -79,7 +79,6 @@ const streamIncomeTaxComputationPdf = ({ generation, employee }, res) => {
     ["Residential Address", employee.residentialAddress],
     ["Status", "Individual"],
     ["Assessment Year", fyLabel(generation.financialYear + 1)],
-    ["Ward No", employee.wardNo],
     ["Financial Year", fyLabel(generation.financialYear)],
   ];
   const rightRows = [
@@ -88,7 +87,7 @@ const streamIncomeTaxComputationPdf = ({ generation, employee }, res) => {
     ["Email Address", employee.email],
     ["Residential Status", RESIDENTIAL_STATUS_LABELS[employee.residentialStatus] || null],
     ["Name of Bank", employee.bankName],
-    ["MICR Code", employee.micrCode],
+    ["Pin Code", employee.pinCode],
     ["IFSC Code", employee.ifscCode],
     ["Account No.", employee.bankAccountNumber],
   ];

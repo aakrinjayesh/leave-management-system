@@ -107,6 +107,11 @@ model User {
     email    String  @unique
     password String?
 
+    // Personal (non-work) email - contact info only, never a login identity,
+    // so it isn't unique. Admin can edit it; employee can self-edit it as part
+    // of their Personal Information section.
+    personalEmail String?
+
     phone       String?
     joiningDate DateTime?
     birthDate   DateTime?
@@ -164,8 +169,7 @@ model User {
     // Extra identity fields only needed for the annual Income Tax Computation
     // Statement - admin-managed only, same as the other HR/payroll fields.
     residentialAddress String?
-    wardNo             String?
-    micrCode           String?
+    pinCode            String?
     residentialStatus  ResidentialStatus?
 
     // Uploaded document filenames (stored on disk, same pattern as leave

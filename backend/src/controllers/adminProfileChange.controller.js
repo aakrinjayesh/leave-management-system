@@ -3,7 +3,12 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const notificationService = require("../services/notification.service");
-const { PROFILE_CHANGE_SECTIONS, PROFILE_CHANGE_DATE_FIELDS } = require("../utils/constants");
+const { deleteFromS3 } = require("../utils/s3.util");
+const {
+  PROFILE_CHANGE_SECTIONS,
+  PROFILE_CHANGE_DATE_FIELDS,
+  PROFILE_CHANGE_DOCUMENT_FIELDS,
+} = require("../utils/constants");
 
 const normalise = (value) => {
   if (value === null || value === undefined) return null;
@@ -21,6 +26,7 @@ const withDiff = (request, user) => ({
     field,
     current: normalise(user?.[field]),
     requested,
+    isDocument: PROFILE_CHANGE_DOCUMENT_FIELDS.has(field),
   })),
 });
 
@@ -98,9 +104,14 @@ const accept = asyncHandler(async (req, res) => {
 
   const config = PROFILE_CHANGE_SECTIONS[request.section];
   const data = {};
+  const supersededFiles = [];
   for (const [field, value] of Object.entries(request.changes || {})) {
     if (!config.fields.includes(field)) continue; // ignore anything unexpected
     data[field] = PROFILE_CHANGE_DATE_FIELDS.has(field) && value ? new Date(value) : value;
+    // The document this new file replaces - delete it from S3 once applied.
+    if (PROFILE_CHANGE_DOCUMENT_FIELDS.has(field) && request.user[field] && request.user[field] !== value) {
+      supersededFiles.push(request.user[field]);
+    }
   }
 
   const [, updated] = await prisma.$transaction([
@@ -113,6 +124,9 @@ const accept = asyncHandler(async (req, res) => {
 
   new ApiResponse(200, "Change request approved and applied.", { request: updated }).send(res);
 
+  for (const oldUrl of supersededFiles) {
+    deleteFromS3(oldUrl).catch((err) => console.error("Failed to delete superseded profile document:", err));
+  }
   await notifyDecided(request, true);
 });
 
@@ -128,6 +142,12 @@ const reject = asyncHandler(async (req, res) => {
 
   new ApiResponse(200, "Change request rejected.", { request: updated }).send(res);
 
+  // The uploaded-but-not-approved files are now dead weight - remove them.
+  for (const [field, value] of Object.entries(request.changes || {})) {
+    if (PROFILE_CHANGE_DOCUMENT_FIELDS.has(field) && value) {
+      deleteFromS3(value).catch((err) => console.error("Failed to delete rejected profile document:", err));
+    }
+  }
   await notifyDecided(request, false, remarks);
 });
 

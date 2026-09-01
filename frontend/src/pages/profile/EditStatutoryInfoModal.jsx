@@ -5,6 +5,7 @@ import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import * as profileApi from "../../api/profile.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import ProfileDocField from "./ProfileDocField";
 
 // pan/uan/aadharNumber arrive already masked (e.g. "******234F") - there's
 // no way to prefill an editable field with the real value, so these start
@@ -19,10 +20,13 @@ export default function EditStatutoryInfoModal({ user, editsRemaining, onClose, 
     aadharNumber: "",
     aadharHolderName: user?.aadharHolderName || "",
   });
+  const [panFile, setPanFile] = useState(null);
+  const [aadharFile, setAadharFile] = useState(null);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const isDirty =
+    Boolean(panFile) || Boolean(aadharFile) ||
     form.pan || form.uan || form.aadharNumber ||
     form.panHolderName !== (user?.panHolderName || "") ||
     form.aadharHolderName !== (user?.aadharHolderName || "");
@@ -34,7 +38,7 @@ export default function EditStatutoryInfoModal({ user, editsRemaining, onClose, 
     setError("");
     setIsSaving(true);
     try {
-      await profileApi.updateMyStatutoryInfo(form);
+      await profileApi.updateMyStatutoryInfo(form, { panDocument: panFile, aadharDocument: aadharFile });
       onSaved();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save your changes. Please try again."));
@@ -87,6 +91,24 @@ export default function EditStatutoryInfoModal({ user, editsRemaining, onClose, 
           value={form.aadharHolderName}
           onChange={(e) => update("aadharHolderName", e.target.value)}
         />
+
+        <div className="form-two-col">
+          <ProfileDocField
+            label="PAN card document"
+            docType="pan"
+            hasDocument={Boolean(user?.hasPanDocument)}
+            file={panFile}
+            onPick={setPanFile}
+          />
+          <ProfileDocField
+            label="Aadhaar card (PDF only)"
+            docType="aadhar"
+            hasDocument={Boolean(user?.hasAadharDocument)}
+            file={aadharFile}
+            onPick={setAadharFile}
+            accept=".pdf"
+          />
+        </div>
 
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>

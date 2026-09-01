@@ -1333,3 +1333,67 @@
 .att-modal-project { display: flex; flex-direction: column; gap: 6px; }
 .att-modal-project-name { font-weight: 600; color: var(--text-primary); }
 .att-toggle-btn.is-on.is-absent { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+
+/* Manage Accounts table: freeze the first TWO columns (employee code + name)
+   so both stay visible while the wide action columns scroll. */
+.acct-code-col { width: 140px; min-width: 140px; }
+
+.data-table.sticky-first-two th:first-child,
+.data-table.sticky-first-two td:first-child,
+.data-table.sticky-first-two th:nth-child(2),
+.data-table.sticky-first-two td:nth-child(2) {
+  position: sticky;
+  z-index: 1;
+  background-color: var(--color-white);
+}
+.data-table.sticky-first-two th:first-child,
+.data-table.sticky-first-two td:first-child { left: 0; }
+.data-table.sticky-first-two th:nth-child(2),
+.data-table.sticky-first-two td:nth-child(2) {
+  left: 140px;
+  border-right: 1px solid var(--border-color);
+}
+.data-table.sticky-first-two thead th:first-child,
+.data-table.sticky-first-two thead th:nth-child(2) {
+  z-index: 2;
+  background-color: var(--color-gray-50);
+}
+
+/* Manage Accounts: compact, centred name search above the table. */
+.acct-search {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.acct-search .field {
+  margin-bottom: 0;
+  flex: 0 1 320px;
+}
+.acct-search .field-input {
+  padding: 6px 12px 6px 32px;
+  font-size: 0.85rem;
+  border-radius: var(--radius-full);
+}
+.acct-search .field-icon {
+  left: 11px;
+}
+.acct-search-count {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Compact button (e.g. Manage Accounts "Add account"). */
+.btn.btn-sm {
+  padding: 7px 14px;
+  font-size: 0.85rem;
+}
+
+/* Slimmer stat cards - Manage Accounts opts in via .stats-compact. */
+.stat-card-grid.stats-compact { margin-bottom: 18px; }
+.stat-card-grid.stats-compact .stat-card { padding: 12px 16px; gap: 12px; }
+.stat-card-grid.stats-compact .stat-card-icon { width: 36px; height: 36px; }
+.stat-card-grid.stats-compact .stat-card-value { font-size: 1.25rem; }
+.stat-card-grid.stats-compact .stat-card-label { font-size: 0.8rem; }

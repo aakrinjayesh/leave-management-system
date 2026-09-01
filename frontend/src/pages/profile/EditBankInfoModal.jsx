@@ -5,6 +5,7 @@ import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import * as profileApi from "../../api/profile.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import ProfileDocField from "./ProfileDocField";
 
 // bankAccountNumber arrives already masked - same reasoning as
 // EditStatutoryInfoModal, it starts blank and is only sent if the employee
@@ -15,10 +16,12 @@ export default function EditBankInfoModal({ user, editsRemaining, onClose, onSav
     bankName: user?.bankName || "",
     ifscCode: user?.ifscCode || "",
   });
+  const [bankFile, setBankFile] = useState(null);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const isDirty =
+    Boolean(bankFile) ||
     form.bankAccountNumber ||
     form.bankName !== (user?.bankName || "") ||
     form.ifscCode !== (user?.ifscCode || "");
@@ -30,7 +33,7 @@ export default function EditBankInfoModal({ user, editsRemaining, onClose, onSav
     setError("");
     setIsSaving(true);
     try {
-      await profileApi.updateMyBankInfo(form);
+      await profileApi.updateMyBankInfo(form, { bankDocument: bankFile });
       onSaved();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save your changes. Please try again."));
@@ -60,6 +63,14 @@ export default function EditBankInfoModal({ user, editsRemaining, onClose, onSav
           <TextInput label="Bank name" value={form.bankName} onChange={(e) => update("bankName", e.target.value)} />
           <TextInput label="IFSC code" value={form.ifscCode} onChange={(e) => update("ifscCode", e.target.value)} />
         </div>
+
+        <ProfileDocField
+          label="Bank proof (passbook / cancelled cheque)"
+          docType="bank"
+          hasDocument={Boolean(user?.hasBankDocument)}
+          file={bankFile}
+          onPick={setBankFile}
+        />
 
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>

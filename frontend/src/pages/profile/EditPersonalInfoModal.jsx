@@ -6,11 +6,13 @@ import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import * as profileApi from "../../api/profile.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import ProfileDocField from "./ProfileDocField";
 
 const toDateInputValue = (date) => (date ? new Date(date).toISOString().slice(0, 10) : "");
 
 export default function EditPersonalInfoModal({ user, editsRemaining, onClose, onSaved }) {
   const [form, setForm] = useState({
+    personalEmail: user?.personalEmail || "",
     phone: user?.phone || "",
     birthDate: toDateInputValue(user?.birthDate),
     gender: user?.gender || "",
@@ -21,13 +23,16 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
     nationality: user?.nationality || "",
     qualification: user?.qualification || "",
   });
+  const [photoFile, setPhotoFile] = useState(null);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const isDirty = Object.keys(form).some((key) => {
-    if (key === "birthDate") return form.birthDate !== toDateInputValue(user?.birthDate);
-    return form[key] !== (user?.[key] || "");
-  });
+  const isDirty =
+    Boolean(photoFile) ||
+    Object.keys(form).some((key) => {
+      if (key === "birthDate") return form.birthDate !== toDateInputValue(user?.birthDate);
+      return form[key] !== (user?.[key] || "");
+    });
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -36,7 +41,7 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
     setError("");
     setIsSaving(true);
     try {
-      await profileApi.updateMyPersonalInfo(form);
+      await profileApi.updateMyPersonalInfo(form, { photo: photoFile });
       onSaved();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save your changes. Please try again."));
@@ -50,17 +55,27 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
       <Alert type="error">{error}</Alert>
       <form onSubmit={handleSubmit} noValidate>
         <p className="helper-text" style={{ marginTop: 0 }}>
-          Name, employee code, and email can only be changed by your admin. Your changes are sent to
+          Name, employee code, and your work email can only be changed by your admin. Your changes are sent to
           admin for approval before they take effect. You have{" "}
           <strong>{editsRemaining}</strong> request{editsRemaining === 1 ? "" : "s"} left for this section.
         </p>
 
         <div className="form-two-col">
           <TextInput
+            label="Personal email"
+            type="email"
+            placeholder="name@gmail.com"
+            value={form.personalEmail}
+            onChange={(e) => update("personalEmail", e.target.value)}
+          />
+          <TextInput
             label="Mobile number"
             value={form.phone}
             onChange={(e) => update("phone", e.target.value)}
           />
+        </div>
+
+        <div className="form-two-col">
           <TextInput
             label="Date of birth"
             type="date"
@@ -68,15 +83,15 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
             value={form.birthDate}
             onChange={(e) => update("birthDate", e.target.value)}
           />
-        </div>
-
-        <div className="form-two-col">
           <FormSelect label="Gender" value={form.gender} onChange={(e) => update("gender", e.target.value)}>
             <option value="">Not set</option>
             <option value="MALE">Male</option>
             <option value="FEMALE">Female</option>
             <option value="OTHER">Other</option>
           </FormSelect>
+        </div>
+
+        <div className="form-two-col">
           <FormSelect
             label="Marital status"
             value={form.maritalStatus}
@@ -87,22 +102,19 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
             <option value="MARRIED">Married</option>
             <option value="OTHER">Other</option>
           </FormSelect>
-        </div>
-
-        <div className="form-two-col">
           <TextInput
             label="Father's name"
             value={form.fatherName}
             onChange={(e) => update("fatherName", e.target.value)}
           />
+        </div>
+
+        <div className="form-two-col">
           <TextInput
             label="Father/Mother Ph. number"
             value={form.fatherMotherPhone}
             onChange={(e) => update("fatherMotherPhone", e.target.value)}
           />
-        </div>
-
-        <div className="form-two-col">
           <TextInput
             label="Spouse name"
             value={form.spouseName}
@@ -122,6 +134,15 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
             onChange={(e) => update("qualification", e.target.value)}
           />
         </div>
+
+        <ProfileDocField
+          label="Profile picture"
+          docType="photo"
+          hasDocument={Boolean(user?.hasPhoto)}
+          file={photoFile}
+          onPick={setPhotoFile}
+          accept=".jpg,.jpeg,.png"
+        />
 
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>

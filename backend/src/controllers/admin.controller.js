@@ -33,12 +33,27 @@ const toSafeUser = (user) => ({
   hasDocument: Boolean(user.documentUrl),
 });
 
+// Trailing digits of an employee code are one running sequence across every
+// (varying) prefix - TECH-2026-001, SALE-2015-002, etc. Accounts with no code
+// (or no number in it) sort after the numbered ones.
+const employeeCodeSeq = (code) => {
+  if (!code) return Number.POSITIVE_INFINITY;
+  const match = code.match(/(\d+)$/);
+  return match ? parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+};
+
 const listUsers = asyncHandler(async (req, res) => {
   const { userType } = req.query;
 
   const users = await prisma.user.findMany({
     where: userType ? { userType } : undefined,
-    orderBy: [{ userType: "asc" }, { firstName: "asc" }],
+  });
+
+  users.sort((a, b) => {
+    const sa = employeeCodeSeq(a.employeeCode);
+    const sb = employeeCodeSeq(b.employeeCode);
+    if (sa !== sb) return sa - sb;
+    return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
   });
 
   new ApiResponse(200, "OK", { users: users.map(toSafeUser) }).send(res);
@@ -393,6 +408,7 @@ const toFullUserDetails = (user) => ({
   firstName: user.firstName,
   lastName: user.lastName,
   email: user.email,
+  personalEmail: user.personalEmail,
   employeeCode: user.employeeCode,
   phone: user.phone,
   birthDate: user.birthDate,
@@ -409,8 +425,7 @@ const toFullUserDetails = (user) => ({
   location: user.location,
   taxRegime: user.taxRegime,
   residentialAddress: user.residentialAddress,
-  wardNo: user.wardNo,
-  micrCode: user.micrCode,
+  pinCode: user.pinCode,
   residentialStatus: user.residentialStatus,
   pan: user.pan,
   panHolderName: user.panHolderName,
@@ -441,8 +456,29 @@ const getUserDetails = asyncHandler(async (req, res) => {
     orderBy: { createdAt: "asc" },
   });
 
-  new ApiResponse(200, "OK", { user: toFullUserDetails(user), customFields }).send(res);
+  new ApiResponse(200, "OK", {
+    user: toFullUserDetails(user),
+    customFields,
+    nextEmployeeCodeNumber: await nextEmployeeCodeNumber(),
+  }).send(res);
 });
+
+// The next running number for an employee code, derived from the trailing
+// digits of every existing code (prefixes vary - TECH-2023-001, SALE-2015-002,
+// etc - but the tail number is a single sequence). Zero-padded to 3 digits,
+// grows past that (012, 013, ... 100). Just a hint shown next to the field -
+// the admin still types the full code.
+const nextEmployeeCodeNumber = async () => {
+  const rows = await prisma.user.findMany({
+    where: { employeeCode: { not: null } },
+    select: { employeeCode: true },
+  });
+  const maxSeq = rows.reduce((max, { employeeCode }) => {
+    const match = employeeCode.match(/(\d+)$/);
+    return match ? Math.max(max, parseInt(match[1], 10)) : max;
+  }, 0);
+  return String(maxSeq + 1).padStart(3, "0");
+};
 
 const updateUserDetails = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);

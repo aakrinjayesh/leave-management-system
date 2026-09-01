@@ -68,6 +68,7 @@ const toSafeUser = async (user) => {
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
+    personalEmail: user.personalEmail,
     phone: user.phone,
     birthDate: user.birthDate,
     joiningDate: user.joiningDate,
@@ -86,6 +87,11 @@ const toSafeUser = async (user) => {
     // /profile/photo endpoint (no public URL exists) - this just tells the
     // frontend whether it's worth fetching at all.
     hasPhoto: Boolean(user.photoUrl),
+    // Same idea for the ID/bank scans - a boolean so the profile page can show
+    // "Uploaded / Not uploaded"; the file streams through /profile/me/documents/:type.
+    hasPanDocument: Boolean(user.panDocumentUrl),
+    hasAadharDocument: Boolean(user.aadharDocumentUrl),
+    hasBankDocument: Boolean(user.bankDocumentUrl),
     taxRegime: user.taxRegime,
     pan: maskTail(user.pan),
     panHolderName: user.panHolderName,
