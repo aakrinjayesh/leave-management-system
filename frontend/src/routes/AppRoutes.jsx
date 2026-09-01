@@ -44,6 +44,9 @@ import WfhRequestsPage from "../pages/admin/WfhRequestsPage";
 import ProfilePage from "../pages/profile/ProfilePage";
 import MyTimesheetPage from "../pages/timesheet/MyTimesheetPage";
 import MyWfhPage from "../pages/wfh/MyWfhPage";
+import MyAttendancePage from "../pages/attendance/MyAttendancePage";
+import TeamAttendancePage from "../pages/manager/TeamAttendancePage";
+import AllAttendancePage from "../pages/admin/AllAttendancePage";
 
 const isNotAdmin = (user) => user.userType !== "ADMIN";
 const isManager = (user) => user.isManager;
@@ -84,6 +87,7 @@ export default function AppRoutes() {
         <Route path="/employee/calendar" element={<LeaveCalendarPage />} />
         <Route path="/timesheet" element={<MyTimesheetPage />} />
         <Route path="/wfh" element={<MyWfhPage />} />
+        <Route path="/attendance" element={<MyAttendancePage />} />
       </Route>
 
       {/* Profile - available to every authenticated account, Admin included
@@ -97,6 +101,7 @@ export default function AppRoutes() {
           included, can end up here if someone reports to them. */}
       <Route element={<ProtectedRoute check={isManager} />}>
         <Route path="/manager/dashboard" element={<ManagerDashboard />} />
+        <Route path="/manager/attendance" element={<TeamAttendancePage />} />
         <Route path="/manager/employees" element={<EmployeesListPage />} />
         <Route path="/manager/employees/:id" element={<EmployeeDetailPage />} />
         <Route path="/manager/leave-requests" element={<TeamLeaveRequestsPage />} />
@@ -113,6 +118,7 @@ export default function AppRoutes() {
         <Route path="/admin/leave-requests" element={<AllLeaveRequestsPage />} />
         <Route path="/admin/timesheets" element={<AllTimesheetsPage />} />
         <Route path="/admin/calendar" element={<AllCalendarPage />} />
+        <Route path="/admin/attendance" element={<AllAttendancePage />} />
         <Route path="/admin/manage-leaves" element={<ManageLeavesPage />} />
         <Route path="/admin/users/:id/timesheet" element={<AdminEmployeeTimesheetPage />} />
         <Route path="/admin/users/:id/leaves" element={<EmployeeLeaveDetailPage />} />

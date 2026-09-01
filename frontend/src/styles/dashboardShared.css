@@ -1083,3 +1083,253 @@
 .pcr-reject-box {
   margin-top: 10px;
 }
+
+/* ===================================================================== */
+/* Attendance                                                            */
+/* ===================================================================== */
+
+/* Status palette - one accent per derived state, reused by chips, grid cells
+   and legend swatches. */
+.att-chip,
+.att-cell,
+.att-legend-swatch {
+  --att-fg: var(--color-gray-600);
+  --att-bg: var(--color-gray-100);
+  --att-bd: var(--color-gray-200);
+}
+/* Bold, saturated - these are the states worth noticing. */
+.is-present.att-chip, .is-present.att-cell, .is-present.att-legend-swatch { --att-fg: #047857; --att-bg: #d1fae5; --att-bd: #34d399; }
+.is-half.att-chip, .is-half.att-cell, .is-half.att-legend-swatch { --att-fg: #b45309; --att-bg: #fef3c7; --att-bd: #fbbf24; }
+.is-wfh.att-chip, .is-wfh.att-cell, .is-wfh.att-legend-swatch { --att-fg: #6d28d9; --att-bg: #ede9fe; --att-bd: #a78bfa; }
+.is-leave.att-chip, .is-leave.att-cell, .is-leave.att-legend-swatch { --att-fg: #1d4ed8; --att-bg: #dbeafe; --att-bd: #60a5fa; }
+.is-holiday.att-chip, .is-holiday.att-cell, .is-holiday.att-legend-swatch { --att-fg: #0e7490; --att-bg: #cffafe; --att-bd: #22d3ee; }
+/* Muted - "missing" states, deliberately quiet so a low-attendance month
+   doesn't look like an emergency. */
+.is-absent.att-chip, .is-absent.att-cell, .is-absent.att-legend-swatch { --att-fg: #f87171; --att-bg: #fef2f2; --att-bd: #fee2e2; }
+.is-notmarked.att-chip, .is-notmarked.att-cell, .is-notmarked.att-legend-swatch { --att-fg: #94a3b8; --att-bg: var(--color-gray-50); --att-bd: var(--color-gray-200); }
+.att-cell.is-weekend { --att-bg: var(--color-gray-100); --att-bd: transparent; }
+.att-cell.is-nottracked { --att-bg: transparent; --att-bd: transparent; }
+.att-cell.is-future  { --att-bg: var(--color-white); --att-bd: var(--color-gray-100); }
+
+.att-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--att-fg);
+  background: var(--att-bg);
+  border: 1px solid var(--att-bd);
+  white-space: nowrap;
+}
+.att-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---- Employee: today card, one per project ---- */
+.att-today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.att-today-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+.att-today-card-project {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.att-today-card-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.att-today-card .btn { margin-top: 2px; }
+
+/* ---- Summary tiles ---- */
+.att-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.att-summary-tile {
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+.att-summary-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.att-summary-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* ---- Today board (manager / admin) ---- */
+.att-board-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--color-gray-50);
+  font-size: 0.85rem;
+}
+.att-board-summary b { color: var(--text-primary); }
+
+/* ---- Month grid ---- */
+.att-grid-wrap { overflow-x: auto; }
+.att-grid {
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-size: 0.75rem;
+}
+.att-grid th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 4px 2px;
+  text-align: center;
+  white-space: nowrap;
+}
+.att-grid th.att-grid-namecol,
+.att-grid td.att-grid-namecol {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface-card);
+  text-align: left;
+  min-width: 190px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border-color);
+}
+.att-grid-emp { font-weight: 600; color: var(--text-primary); }
+.att-grid-proj { font-size: 0.72rem; color: var(--text-secondary); }
+.att-grid-daynum { font-variant-numeric: tabular-nums; }
+.att-grid-daynum.is-today { color: var(--color-primary-600); font-weight: 700; }
+
+.att-cell {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  text-align: center;
+  vertical-align: middle;
+  font-weight: 700;
+  color: var(--att-fg);
+  background: var(--att-bg);
+  border: 1px solid var(--att-bd);
+}
+.att-cell.is-clickable { cursor: pointer; }
+.att-cell.is-clickable:hover { outline: 2px solid var(--color-primary-400); outline-offset: 1px; }
+/* Blank "not tracked" cells are invisible until you realise they're editable. */
+.att-cell.is-nottracked.is-clickable { border: 1px dashed var(--color-gray-300); }
+
+.att-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 14px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.att-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.att-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--att-bg);
+  border: 1px solid var(--att-bd);
+}
+
+/* ---- Employee: mark-attendance table (last N days) ---- */
+.att-mark-table td { vertical-align: middle; }
+.att-mark-date { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.att-mark-project { color: var(--text-secondary); }
+
+.att-toggle { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.att-toggle-btn {
+  padding: 5px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: var(--color-white);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.att-toggle-btn:hover:not(:disabled) { border-color: var(--color-primary-400); color: var(--text-primary); }
+.att-toggle-btn:disabled { opacity: 0.55; cursor: default; }
+.att-toggle-btn.is-on.is-present { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+.att-toggle-btn.is-on.is-half { background: #fffbeb; border-color: #fcd34d; color: #b45309; }
+.att-mark-hint { font-size: 0.75rem; color: #b91c1c; }
+
+/* Roster grid: dim weekend day-number headers, and a "worked / working" tally
+   column pinned on the right. */
+.att-grid th.att-grid-daynum-th.is-weekend-col { color: var(--color-gray-300); }
+.att-grid th.att-grid-worked,
+.att-grid td.att-grid-worked {
+  position: sticky;
+  right: 0;
+  background: var(--surface-card);
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+.att-grid-worked-value { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.att-grid-worked-of { color: var(--text-secondary); }
+.att-summary-of { font-size: 1rem; font-weight: 500; color: var(--text-secondary); }
+
+/* ---- Employee: clickable month calendar ---- */
+.att-cal { width: 100%; border-spacing: 4px; }
+.att-cal th { padding-bottom: 4px; }
+.att-cal-cell {
+  width: 100%;
+  min-width: 40px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 8px;
+  font: inherit;
+  color: var(--att-fg);
+  background: var(--att-bg);
+  border: 1px solid var(--att-bd);
+  cursor: default;
+}
+.att-cal-cell:disabled { opacity: 1; }
+.att-cal-cell.is-clickable { cursor: pointer; border-style: dashed; border-color: var(--color-primary-400); }
+.att-cal-cell.is-clickable.is-present,
+.att-cal-cell.is-clickable.is-half { border-style: solid; }
+.att-cal-cell.is-clickable:hover { background: var(--color-primary-50); }
+.att-cal-mark { font-size: 0.72rem; font-weight: 700; }
+
+/* ---- Employee: mark modal ---- */
+.att-modal-projects { display: flex; flex-direction: column; gap: 14px; margin-bottom: 8px; }
+.att-modal-project { display: flex; flex-direction: column; gap: 6px; }
+.att-modal-project-name { font-weight: 600; color: var(--text-primary); }
+.att-toggle-btn.is-on.is-absent { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }

@@ -13,6 +13,7 @@ import {
   BarChart3,
   FileWarning,
   Home,
+  CalendarCheck,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -58,6 +59,11 @@ const buildNavItems = (user) => {
       icon: CalendarDays,
     });
     items.push({
+      to: "/admin/attendance",
+      label: "All Attendance",
+      icon: CalendarCheck,
+    });
+    items.push({
       to: "/admin/wfh-requests",
       label: "All WFH Requests",
       icon: Home,
@@ -82,6 +88,7 @@ const buildNavItems = (user) => {
     });
     items.push({ to: "/timesheet", label: "Timesheet", icon: Clock });
     items.push({ to: "/wfh", label: "WFH", icon: Home });
+    items.push({ to: "/attendance", label: "Attendance", icon: CalendarCheck });
   }
 
   if (user?.isManager && !isAdmin) {
@@ -91,6 +98,11 @@ const buildNavItems = (user) => {
     // Resignations were view-only mirrors of the admin's own WFH / Resignations
     // pages (also promoted up top).
     items.push({ to: "/manager/employees", label: "Employees", icon: Users });
+    items.push({
+      to: "/manager/attendance",
+      label: "Team Attendance",
+      icon: CalendarCheck,
+    });
     items.push({
       to: "/manager/leave-requests",
       label: "Leave Requests",

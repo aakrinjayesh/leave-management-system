@@ -244,6 +244,9 @@ model User {
 
     profileChangeRequests        ProfileChangeRequest[]
     decidedProfileChangeRequests ProfileChangeRequest[] @relation("ProfileChangeRequestsDecidedBy")
+
+    attendances         Attendance[]
+    correctedAttendances Attendance[] @relation("AttendanceCorrectedBy")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
@@ -1064,6 +1067,7 @@ model Project {
     timesheetSubmissions TimesheetSubmission[]
     timesheetEntries     TimesheetEntry[]
     memberships          ProjectMembership[]
+    attendances          Attendance[]
 }
 
 // One row per (employee, project) they're currently assigned to - an
@@ -1091,4 +1095,51 @@ model ProjectMembership {
     @@unique([userId, projectId])
     @@index([userId])
     @@index([projectId])
+}
+
+enum AttendanceSource {
+    SELF // the employee tapped "Mark me present"
+    ADMIN // an admin created or edited the record on their behalf
+}
+
+// One row per (employee, project, day) - created when the employee marks
+// present / half-day for that project. Attendance is a self-reported log, not
+// a request: there's no approval step. The employee can mark or change any day
+// within the backfill window (today + a few days back); only an admin can
+// touch older days (source ADMIN). Weekend / holiday / on-leave / WFH states
+// are derived at read time from WeekendPolicy + Holiday + approved
+// LeaveRequest / WfhRequest, never stored, so a row always means "present"
+// (full or half day).
+model Attendance {
+    id Int @id @default(autoincrement())
+
+    userId    Int
+    projectId Int
+
+    // Calendar day this attendance is for, at UTC midnight.
+    date DateTime @db.Date
+
+    // When the employee actually marked (or when admin recorded it).
+    markedAt DateTime @default(now())
+
+    // A half day counts as 0.5 present in the summary tallies.
+    isHalfDay Boolean @default(false)
+
+    source AttendanceSource @default(SELF)
+    note   String?
+
+    correctedById Int?
+    correctedAt   DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    correctedBy User?   @relation("AttendanceCorrectedBy", fields: [correctedById], references: [id])
+
+    @@unique([userId, projectId, date])
+    @@index([userId])
+    @@index([projectId])
+    @@index([date])
 }
