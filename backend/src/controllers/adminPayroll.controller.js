@@ -126,6 +126,56 @@ const recordSalaryStructure = asyncHandler(async (req, res) => {
   }
 });
 
+// In-place correction of the most recent structure entry (no new revision) -
+// see payrollService.updateLatestSalaryStructure.
+const updateLatestSalaryStructure = asyncHandler(async (req, res) => {
+  const userId = Number(req.params.id);
+  const {
+    ctc,
+    effectiveFrom,
+    basicPercentOfCtc,
+    hraPercentOfBasic,
+    ltaPercentOfBasic,
+    guaranteedAllowancePercentOfBasic,
+    conveyanceMonthly,
+    pfMonthlyAmount,
+    professionalTax,
+    professionalTaxThreshold,
+  } = req.body;
+
+  const history = await payrollService.updateLatestSalaryStructure(
+    userId,
+    {
+      ctc,
+      effectiveFrom,
+      basicPercentOfCtc,
+      hraPercentOfBasic,
+      ltaPercentOfBasic,
+      guaranteedAllowancePercentOfBasic,
+      conveyanceMonthly,
+      pfMonthlyAmount,
+      professionalTax,
+      professionalTaxThreshold,
+    },
+    req.user.id
+  );
+
+  new ApiResponse(200, "Salary structure updated.", { history }).send(res);
+
+  try {
+    await notificationService.notify({
+      userId,
+      type: notificationService.NOTIFICATION_TYPES.SALARY_STRUCTURE_UPDATED,
+      title: "Salary structure updated",
+      message: `Your CTC has been updated to ₹${Number(ctc).toLocaleString("en-IN")}, effective ${formatDateShort(
+        effectiveFrom
+      )}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create salary structure notification:", err);
+  }
+});
+
 const downloadPayslipPdf = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
@@ -157,4 +207,5 @@ module.exports = {
   downloadPayslipPdf,
   getSalaryStructureHistory,
   recordSalaryStructure,
+  updateLatestSalaryStructure,
 };

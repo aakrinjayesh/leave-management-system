@@ -8,6 +8,24 @@ const MEMBER_SELECT = {
   user: { select: { id: true, firstName: true, lastName: true, email: true } },
 };
 
+// Every Project scalar EXCEPT clientName - what an employee is allowed to see
+// about a project on their own timesheet. clientName is admin-only.
+const EMPLOYEE_PROJECT_SELECT = {
+  id: true,
+  name: true,
+  isActive: true,
+  projectType: true,
+  timezone: true,
+  workStartTime: true,
+  workEndTime: true,
+  startDate: true,
+  endDate: true,
+  submissionFrequency: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 // Flattens a ProjectMembership row into the shape the frontend actually
 // wants to render (member fields alongside assignedAt/endDate, not nested
 // under `user`).
@@ -128,9 +146,11 @@ const listProjectsForEmployee = (userId) =>
   prisma.project.findMany({
     where: { memberships: { some: { userId } } },
     orderBy: { name: "asc" },
+    select: EMPLOYEE_PROJECT_SELECT,
   });
 
 module.exports = {
+  EMPLOYEE_PROJECT_SELECT,
   listAllProjects,
   createProject,
   renameProject,

@@ -8,6 +8,9 @@ const DEFAULTS = {
   allowPastLeave: false,
   allowFutureLeave: true,
   maxFutureDays: 90,
+  supportContactName: "Krishna Dadi",
+  supportContactEmail: "krishna.dadi@aakrin.com",
+  supportContactPhone: "+91 90000 00000",
 };
 
 const getSettings = async () => {

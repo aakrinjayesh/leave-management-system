@@ -120,6 +120,10 @@ export default function ManageProjectMembersModal({
 
           <dl className="pm-detail-grid">
             <div>
+              <dt>Client</dt>
+              <dd>{project.clientName || "—"}</dd>
+            </div>
+            <div>
               <dt>Working hours</dt>
               <dd>{formatWorkingHours(project)}</dd>
             </div>

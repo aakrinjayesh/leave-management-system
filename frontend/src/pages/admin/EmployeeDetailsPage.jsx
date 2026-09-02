@@ -184,6 +184,7 @@ function EmployeeDetailsContent({ id }) {
   const [busyDocType, setBusyDocType] = useState(null);
   const [structureHistory, setStructureHistory] = useState(null);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
+  const [isEditStructureModalOpen, setIsEditStructureModalOpen] = useState(false);
 
   const [customFields, setCustomFields] = useState(null);
   const [newField, setNewField] = useState({ label: "", value: "", file: null });
@@ -749,9 +750,12 @@ function EmployeeDetailsContent({ id }) {
             <p className="card-section-subtitle">No salary structure recorded yet for this employee.</p>
           )}
 
-          <div className="modal-actions" style={{ justifyContent: "flex-start" }}>
+          <div className="modal-actions" style={{ justifyContent: "space-between" }}>
             <Button type="button" onClick={() => setIsStructureModalOpen(true)}>
               Update Salary Structure
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setIsEditStructureModalOpen(true)}>
+              Edit Salary
             </Button>
           </div>
         </div>
@@ -815,6 +819,20 @@ function EmployeeDetailsContent({ id }) {
           onClose={() => setIsStructureModalOpen(false)}
           onSuccess={() => {
             setIsStructureModalOpen(false);
+            setSuccess("Salary structure updated.");
+            loadUser();
+            loadStructureHistory();
+          }}
+        />
+      )}
+
+      {isEditStructureModalOpen && (
+        <UpdateSalaryStructureModal
+          userId={id}
+          mode="edit"
+          onClose={() => setIsEditStructureModalOpen(false)}
+          onSuccess={() => {
+            setIsEditStructureModalOpen(false);
             setSuccess("Salary structure updated.");
             loadUser();
             loadStructureHistory();

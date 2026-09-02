@@ -249,6 +249,7 @@ function EmployeeListCard({
 
 const DEFAULT_NEW_PROJECT = {
   name: "",
+  clientName: "",
   projectType: "",
   timezone: "",
   workStartTime: "",
@@ -441,20 +442,26 @@ function ManageProjectsCard() {
                   </option>
                 ))}
               </FormSelect>
-              <div className="form-two-col" style={{ margin: 0 }}>
-                <TextInput
-                  label="Project Start date"
-                  type="date"
-                  value={newProject.startDate}
-                  onChange={handleNewProjectChange("startDate")}
-                />
-                <TextInput
-                  label="Project End date"
-                  type="date"
-                  value={newProject.endDate}
-                  onChange={handleNewProjectChange("endDate")}
-                />
-              </div>
+              <TextInput
+                label="Client name (optional)"
+                placeholder="e.g. Acme Corp"
+                value={newProject.clientName}
+                onChange={handleNewProjectChange("clientName")}
+              />
+            </div>
+            <div className="form-two-col">
+              <TextInput
+                label="Project Start date"
+                type="date"
+                value={newProject.startDate}
+                onChange={handleNewProjectChange("startDate")}
+              />
+              <TextInput
+                label="Project End date"
+                type="date"
+                value={newProject.endDate}
+                onChange={handleNewProjectChange("endDate")}
+              />
             </div>
             <div className="form-three-col">
               <TextInput
@@ -545,6 +552,9 @@ function ManageProjectsCard() {
               >
                 <td className="table-cell-primary">{project.name}</td>
                 <td className="table-cell-secondary">
+                  {project.clientName || "—"}
+                </td>
+                <td className="table-cell-secondary">
                   {formatProjectType(project.projectType)}
                 </td>
                 <td className="table-cell-secondary">
@@ -580,6 +590,7 @@ function ManageProjectsCard() {
               <thead>
                 <tr>
                   <th>Project name</th>
+                  <th>Client</th>
                   <th>Type</th>
                   <th>Working hours</th>
                   <th>Start date</th>

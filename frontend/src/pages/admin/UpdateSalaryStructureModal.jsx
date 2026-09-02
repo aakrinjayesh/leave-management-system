@@ -24,15 +24,19 @@ const STRUCTURE_FIELDS = [
 
 const BLANK_FORM = { ctc: "", effectiveFrom: "", ...Object.fromEntries(STRUCTURE_FIELDS.map((f) => [f, ""])) };
 
+const isoToMonth = (value) => (value ? new Date(value).toISOString().slice(0, 7) : "");
+
 // Pre-fills CTC + structure fields from the most recent entry on file (so
 // admin only tweaks what changed), or starts fully blank for an employee
-// who has never had a structure recorded yet.
-const toStartingForm = (history) => {
+// who has never had a structure recorded yet. In "edit" mode the effective
+// month is pre-filled too (you're correcting that exact entry); in "update"
+// mode it's left blank so the admin picks a new month for the revision.
+const toStartingForm = (history, mode) => {
   if (!history || history.length === 0) return BLANK_FORM;
   const latest = history[0];
   return {
     ctc: latest.ctc,
-    effectiveFrom: "",
+    effectiveFrom: mode === "edit" ? isoToMonth(latest.effectiveFrom) : "",
     ...Object.fromEntries(STRUCTURE_FIELDS.map((f) => [f, latest[f]])),
   };
 };
@@ -40,7 +44,8 @@ const toStartingForm = (history) => {
 // Replaces the old company-wide Salary Structure settings - each employee
 // now has their own CTC + Basic/HRA/LTA/etc. percentages, recorded per
 // effective month exactly like CTC history worked before.
-export default function UpdateSalaryStructureModal({ userId, onClose, onSuccess }) {
+export default function UpdateSalaryStructureModal({ userId, mode = "update", onClose, onSuccess }) {
+  const isEdit = mode === "edit";
   const [history, setHistory] = useState(null);
   const [form, setForm] = useState(BLANK_FORM);
   const [error, setError] = useState("");
@@ -49,7 +54,7 @@ export default function UpdateSalaryStructureModal({ userId, onClose, onSuccess 
   const loadHistory = () =>
     adminApi.getSalaryStructureHistory(userId).then((data) => {
       setHistory(data.history);
-      setForm(toStartingForm(data.history));
+      setForm(toStartingForm(data.history, mode));
     });
 
   useEffect(() => {
@@ -78,13 +83,18 @@ export default function UpdateSalaryStructureModal({ userId, onClose, onSuccess 
 
     setIsSaving(true);
     try {
-      await adminApi.recordSalaryStructure(userId, {
+      const payload = {
         ctc: Number(form.ctc),
         effectiveFrom: form.effectiveFrom,
         ...Object.fromEntries(STRUCTURE_FIELDS.map((f) => [f, Number(form[f])])),
-      });
+      };
+      if (isEdit) {
+        await adminApi.updateLatestSalaryStructure(userId, payload);
+      } else {
+        await adminApi.recordSalaryStructure(userId, payload);
+      }
       await loadHistory();
-      setForm((prev) => ({ ...prev, effectiveFrom: "" }));
+      if (!isEdit) setForm((prev) => ({ ...prev, effectiveFrom: "" }));
       onSuccess();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save this salary structure. Please try again."));
@@ -94,13 +104,13 @@ export default function UpdateSalaryStructureModal({ userId, onClose, onSuccess 
   };
 
   return (
-    <Modal title="Update salary structure" onClose={onClose}>
+    <Modal title={isEdit ? "Edit salary" : "Update salary structure"} onClose={onClose}>
       <Alert type="error">{error}</Alert>
 
       <p className="helper-text">
-        Each entry is this employee's CTC and salary breakdown effective from a given month onward - payslips use
-        whichever entry was effective for their own month. Backdating an entry only affects past-month
-        calculations; it won't change what's currently active unless it's the most recent entry.
+        {isEdit
+          ? "Corrects the current (most recent) salary structure in place - the values below are pre-filled from it. Saving overwrites that same entry; it does not create a new revision or a past-structure entry."
+          : "Each entry is this employee's CTC and salary breakdown effective from a given month onward - payslips use whichever entry was effective for their own month. Backdating an entry only affects past-month calculations; it won't change what's currently active unless it's the most recent entry."}
       </p>
 
       {!history ? (
@@ -192,7 +202,7 @@ export default function UpdateSalaryStructureModal({ userId, onClose, onSuccess 
 
           <div className="modal-actions" style={{ justifyContent: "flex-start" }}>
             <Button type="submit" isLoading={isSaving}>
-              Add entry
+              {isEdit ? "Save changes" : "Add entry"}
             </Button>
           </div>
         </form>

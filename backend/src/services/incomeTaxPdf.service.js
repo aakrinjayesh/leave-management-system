@@ -14,6 +14,18 @@ const RESIDENTIAL_STATUS_LABELS = {
   RESIDENT_NOT_ORDINARILY_RESIDENT: "Resident but Not Ordinarily Resident",
 };
 
+// Centered semi-transparent logo behind the content on every page - same
+// treatment as the offer letter / payslip / relieving letter PDFs.
+const drawWatermark = (doc) => {
+  if (!fs.existsSync(LOGO_PATH)) return;
+  const width = doc.page.width * 0.55;
+  const x = (doc.page.width - width) / 2;
+  const y = (doc.page.height - width) / 2;
+  doc.opacity(0.12);
+  doc.image(LOGO_PATH, x, y, { width });
+  doc.opacity(1);
+};
+
 const money = (value) => (value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dash = (value) => (value ? value : "-");
 const fyLabel = (year) => `${year}-${String(year + 1).slice(-2)}`;
@@ -46,6 +58,9 @@ const drawTwoColRow = (doc, leftX, rightX, colWidth, rowY, leftLabel, leftValue,
 const streamIncomeTaxComputationPdf = ({ generation, employee }, res) => {
   const doc = new PDFDocument({ size: "A4", margin: 40 });
   doc.pipe(res);
+
+  doc.on("pageAdded", () => drawWatermark(doc));
+  drawWatermark(doc);
 
   const headerTop = doc.y;
   const hasLogo = fs.existsSync(LOGO_PATH);

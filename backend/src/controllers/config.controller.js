@@ -11,6 +11,11 @@ const getConfig = asyncHandler(async (req, res) => {
     allowPastLeave: settings.allowPastLeave,
     allowFutureLeave: settings.allowFutureLeave,
     maxFutureDays: settings.maxFutureDays,
+    supportContact: {
+      name: settings.supportContactName || null,
+      email: settings.supportContactEmail || null,
+      phone: settings.supportContactPhone || null,
+    },
   }).send(res);
 });
 

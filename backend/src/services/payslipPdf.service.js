@@ -22,6 +22,18 @@ const MONTH_NAMES = [
   "DECEMBER",
 ];
 
+// Centered semi-transparent logo behind the content on every page - same
+// treatment as the offer letter / relieving letter PDFs.
+const drawWatermark = (doc) => {
+  if (!fs.existsSync(LOGO_PATH)) return;
+  const width = doc.page.width * 0.55;
+  const x = (doc.page.width - width) / 2;
+  const y = (doc.page.height - width) / 2;
+  doc.opacity(0.12);
+  doc.image(LOGO_PATH, x, y, { width });
+  doc.opacity(1);
+};
+
 const money = (value) => (value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-");
 const dash = (value) => (value ? value : "-");
@@ -93,6 +105,9 @@ const streamPayslipPdf = ({ payslip, employee, ytd }, res) => {
   const doc = new PDFDocument({ size: "A4", margin: 40 });
   doc.pipe(res);
 
+  doc.on("pageAdded", () => drawWatermark(doc));
+  drawWatermark(doc);
+
   const headerTop = doc.y;
   const hasLogo = fs.existsSync(LOGO_PATH);
   if (hasLogo) {
@@ -156,12 +171,19 @@ const streamPayslipPdf = ({ payslip, employee, ytd }, res) => {
   let tableY = infoY + infoRowH * leftRows.length + 12;
   const colWidth = pageWidth / 2 - 6;
 
+  // Earnings: hide any line that's zero for both the month and YTD (e.g. LTA /
+  // Special Allowance / Guaranteed Allowance when the structure doesn't use
+  // them). Deductions still list every line.
+  const visibleEarningRows = EARNING_ROWS.filter(
+    ([, field]) => (payslip[field] || 0) !== 0 || (ytd[field] || 0) !== 0
+  );
+
   const earnings = drawColumnTable(doc, {
     x: infoX,
     width: colWidth,
     y: tableY,
     title: "Earnings",
-    rows: EARNING_ROWS,
+    rows: visibleEarningRows,
     payslip,
     ytd,
   });
@@ -178,14 +200,16 @@ const streamPayslipPdf = ({ payslip, employee, ytd }, res) => {
   // PF Employer - informational only (part of CTC, not part of take-home).
   let leftBottomY = earnings.bottomY;
   const rowH = 16;
-  doc.font("Helvetica").fontSize(9);
-  doc.rect(infoX, leftBottomY, colWidth * 0.5, rowH).stroke();
-  doc.rect(infoX + colWidth * 0.5, leftBottomY, colWidth * 0.25, rowH).stroke();
-  doc.rect(infoX + colWidth * 0.75, leftBottomY, colWidth * 0.25, rowH).stroke();
-  doc.text("PF Employer", infoX + 4, leftBottomY + 4, { width: colWidth * 0.5 - 8 });
-  doc.text(money(payslip.pfEmployer), infoX + colWidth * 0.5 + 4, leftBottomY + 4, { width: colWidth * 0.25 - 8, align: "right" });
-  doc.text(money(ytd.pfEmployer), infoX + colWidth * 0.75 + 4, leftBottomY + 4, { width: colWidth * 0.25 - 8, align: "right" });
-  leftBottomY += rowH;
+  if ((payslip.pfEmployer || 0) !== 0 || (ytd.pfEmployer || 0) !== 0) {
+    doc.font("Helvetica").fontSize(9);
+    doc.rect(infoX, leftBottomY, colWidth * 0.5, rowH).stroke();
+    doc.rect(infoX + colWidth * 0.5, leftBottomY, colWidth * 0.25, rowH).stroke();
+    doc.rect(infoX + colWidth * 0.75, leftBottomY, colWidth * 0.25, rowH).stroke();
+    doc.text("PF Employer", infoX + 4, leftBottomY + 4, { width: colWidth * 0.5 - 8 });
+    doc.text(money(payslip.pfEmployer), infoX + colWidth * 0.5 + 4, leftBottomY + 4, { width: colWidth * 0.25 - 8, align: "right" });
+    doc.text(money(ytd.pfEmployer), infoX + colWidth * 0.75 + 4, leftBottomY + 4, { width: colWidth * 0.25 - 8, align: "right" });
+    leftBottomY += rowH;
+  }
 
   const bottomY = Math.max(leftBottomY, deductions.bottomY);
 

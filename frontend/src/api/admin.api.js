@@ -139,6 +139,10 @@ export const getSalaryStructureHistory = (userId) =>
 export const recordSalaryStructure = (userId, payload) =>
   unwrap(axiosClient.post(`/admin/users/${userId}/salary-structure-history`, payload));
 
+// In-place correction of the latest structure entry - no new history row.
+export const updateLatestSalaryStructure = (userId, payload) =>
+  unwrap(axiosClient.patch(`/admin/users/${userId}/salary-structure-history/latest`, payload));
+
 export const previewPayslip = (userId, year, month, tds, annualBonusPay) =>
   unwrap(axiosClient.get(`/admin/users/${userId}/payslips/preview`, { params: { year, month, tds, annualBonusPay } }));
 

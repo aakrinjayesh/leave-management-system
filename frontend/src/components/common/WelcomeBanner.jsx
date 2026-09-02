@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, IdCard, Mail, Phone, User } from "lucide-react";
+import { CalendarDays, IdCard, Mail, PartyPopper, Phone, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import * as profileApi from "../../api/profile.api";
+import * as commonApi from "../../api/common.api";
 import { formatDate } from "../../utils/formatDate";
+import { formatTenureShort } from "../../utils/tenure";
 import "./WelcomeBanner.css";
-
-// Placeholder until there's a real "who do I contact for help" setting -
-// hardcoded for now, swap for real data once that exists.
-const SUPPORT_CONTACT = {
-  name: "Krishna Dadi",
-  email: "krishna.dadi@aakrin.com",
-  phone: "+91 90000 00000",
-};
 
 const ROLE_LABELS = { MANAGER: "Manager", ADMIN: "Admin", EMPLOYEE: "Employee" };
 
@@ -31,8 +25,9 @@ const longToday = () =>
   });
 
 const initialsOf = (name) =>
-  name
+  (name || "")
     .split(" ")
+    .filter(Boolean)
     .map((part) => part[0])
     .join("")
     .toUpperCase();
@@ -45,6 +40,16 @@ export default function WelcomeBanner() {
   const { user } = useAuth();
   const roleLabel = ROLE_LABELS[user?.userType] || "Employee";
   const [photoUrl, setPhotoUrl] = useState(null);
+  // "We're here to assist you" contact - admin-editable (Manage Accounts),
+  // served to every logged-in user through /config. Any field can be blank.
+  const [supportContact, setSupportContact] = useState(null);
+
+  useEffect(() => {
+    commonApi
+      .getConfig()
+      .then((data) => setSupportContact(data.supportContact || null))
+      .catch(() => setSupportContact(null));
+  }, []);
 
   // Admin-uploaded (see Employee Details "Photo" field) - fetched through
   // the authenticated /profile/photo endpoint since there's no public URL
@@ -81,6 +86,16 @@ export default function WelcomeBanner() {
           </span>
           <span className="welcome-banner-greeting-date">{longToday()}</span>
         </div>
+
+        {user?.joiningDate && (
+          <div className="welcome-banner-tenure">
+            <PartyPopper size={18} className="welcome-banner-tenure-icon" />
+            <div className="welcome-banner-tenure-text">
+              <span className="welcome-banner-tenure-eyebrow">With Aakrin for</span>
+              <span className="welcome-banner-tenure-value">{formatTenureShort(user.joiningDate)}</span>
+            </div>
+          </div>
+        )}
 
         <div className="welcome-banner-photo" aria-hidden="true">
           {photoUrl ? (
@@ -121,23 +136,31 @@ export default function WelcomeBanner() {
         </div>
       </div>
 
-      <div className="welcome-banner-assist">
-        <span className="welcome-banner-assist-title">We're here to assist you</span>
-        <div className="welcome-banner-assist-row">
-          <span className="welcome-banner-assist-avatar" aria-hidden="true">
-            {initialsOf(SUPPORT_CONTACT.name)}
-          </span>
-          <span className="welcome-banner-assist-name">{SUPPORT_CONTACT.name}</span>
+      {supportContact && (supportContact.name || supportContact.email || supportContact.phone) && (
+        <div className="welcome-banner-assist">
+          <span className="welcome-banner-assist-title">We're here to assist you</span>
+          {supportContact.name && (
+            <div className="welcome-banner-assist-row">
+              <span className="welcome-banner-assist-avatar" aria-hidden="true">
+                {initialsOf(supportContact.name)}
+              </span>
+              <span className="welcome-banner-assist-name">{supportContact.name}</span>
+            </div>
+          )}
+          {supportContact.phone && (
+            <a className="welcome-banner-assist-link" href={`tel:${supportContact.phone}`}>
+              <Phone size={13} />
+              {supportContact.phone}
+            </a>
+          )}
+          {supportContact.email && (
+            <a className="welcome-banner-assist-link" href={`mailto:${supportContact.email}`}>
+              <Mail size={13} />
+              {supportContact.email}
+            </a>
+          )}
         </div>
-        <a className="welcome-banner-assist-link" href={`tel:${SUPPORT_CONTACT.phone}`}>
-          <Phone size={13} />
-          {SUPPORT_CONTACT.phone}
-        </a>
-        <a className="welcome-banner-assist-link" href={`mailto:${SUPPORT_CONTACT.email}`}>
-          <Mail size={13} />
-          {SUPPORT_CONTACT.email}
-        </a>
-      </div>
+      )}
     </div>
   );
 }

@@ -8,22 +8,21 @@ const leaveCalendarService = require("./leaveCalendar.service");
 // projects has N mark controls each day: "Present" or "Half day". There's no
 // approval step and no late/on-time judgement.
 //
-// The employee can mark or change any day within the backfill window
-// (today and the previous BACKFILL_DAYS days) - useful when they forget. Older
-// days can only be touched by an admin.
+// The employee can mark or change any working day from the tracking start
+// (see TRACKING_START) or their joining date, whichever is later, right up to
+// today - useful when they forget. Days before that floor can only be touched
+// by an admin.
 //
 // Weekend / holiday / on-leave / WFH states are NEVER stored: they're derived
 // here from WeekendPolicy + Holiday + approved LeaveRequest / WfhRequest, so a
 // stored Attendance row always just means "present" (full or half day).
 // ---------------------------------------------------------------------------
 
-const BACKFILL_DAYS = 10;
-
-// The feature went live at the start of Sep 2026 - there's no attendance data
-// before this, so days earlier than max(this, joiningDate) show as "not
-// tracked" (blank) rather than a misleading wall of "absent", and don't count
-// toward the worked / working-days ratio.
-const TRACKING_START = "2026-09-01";
+// Attendance tracking begins here. Days earlier than max(this, joiningDate)
+// show as "not tracked" (blank), don't count toward the worked / working-days
+// ratio, and can't be self-marked. This is also the earliest day an employee
+// can backfill: from this date up to today, every working day is editable.
+const TRACKING_START = "2026-08-01";
 
 const STATUS = {
   WEEKEND: "WEEKEND",
@@ -46,11 +45,6 @@ const trackingFloorKey = (joiningDate) => {
 
 const toDateKey = (date) => new Date(date).toISOString().slice(0, 10);
 const dateFromKey = (key) => new Date(`${key}T00:00:00.000Z`);
-const shiftKey = (key, days) => {
-  const d = dateFromKey(key);
-  d.setUTCDate(d.getUTCDate() + days);
-  return toDateKey(d);
-};
 
 // Which calendar day it currently is in the company's timezone.
 const todayKeyInCompanyTz = (timezone) => {
@@ -209,16 +203,16 @@ const markAttendance = async (userId, projectId, dateKey, status) => {
   if (targetKey > todayKey) {
     throw ApiError.badRequest("You can't mark attendance for a future date.");
   }
-  // The backfill window is the last BACKFILL_DAYS days (even if some fall
-  // before the display "tracking start") - the only hard floor is the
-  // employee's own joining date.
-  if (targetKey < shiftKey(todayKey, -BACKFILL_DAYS)) {
+  // Self-marking is open from the tracking floor (max of TRACKING_START and
+  // the employee's joining date) up to today. Anything older is admin-only.
+  const floorKey = trackingFloorKey(me?.joiningDate);
+  if (targetKey < floorKey) {
+    if (me?.joiningDate && floorKey === toDateKey(me.joiningDate)) {
+      throw ApiError.badRequest("That's before your joining date.");
+    }
     throw ApiError.badRequest(
-      `You can only mark attendance for the last ${BACKFILL_DAYS} days. Ask your admin to record anything older.`
+      `You can only mark attendance from ${TRACKING_START} onward. Ask your admin to record anything older.`
     );
-  }
-  if (me?.joiningDate && targetKey < toDateKey(me.joiningDate)) {
-    throw ApiError.badRequest("That's before your joining date.");
   }
 
   await assertRecordableDay(userId, targetKey);
@@ -231,10 +225,7 @@ const getMyAttendance = async (userId, year, month) => {
   const { timezone } = await companySettingsService.getSettings();
   const todayKey = todayKeyInCompanyTz(timezone);
   const { start, end } = monthRange(year, month);
-
-  // Backfill window can reach into the previous month, so widen the fetch.
-  const windowStart = dateFromKey(shiftKey(todayKey, -BACKFILL_DAYS));
-  const fetchStart = windowStart < start ? windowStart : start;
+  const fetchStart = start;
 
   const [me, projects, calendar, marks, { leaveDays, wfhDays }] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { joiningDate: true } }),
@@ -249,12 +240,9 @@ const getMyAttendance = async (userId, year, month) => {
   ]);
 
   const floorKey = trackingFloorKey(me?.joiningDate); // display: NOT_TRACKED before this
-  const joinKeyRaw = me?.joiningDate ? toDateKey(me.joiningDate) : null;
-  const backfillStartKey = shiftKey(todayKey, -BACKFILL_DAYS);
-  // Employee can backfill the whole 10-day window, capped only by their
-  // joining date - not by the display tracking-start.
-  const earliestMarkableKey =
-    joinKeyRaw && joinKeyRaw > backfillStartKey ? joinKeyRaw : backfillStartKey;
+  // Employee can self-mark any working day from the tracking floor up to
+  // today - same floor that gates display and the ratio.
+  const earliestMarkableKey = floorKey;
 
   const weekendSet = new Set(calendar.weekendDates);
   const holidaySet = new Set(calendar.holidays.map((h) => h.date));
@@ -295,7 +283,7 @@ const getMyAttendance = async (userId, year, month) => {
       onLeave: leaveDays.has(dayKey),
       onWfh: wfhDays.has(dayKey),
       // The employee can click this day to mark/change it: a working day,
-      // within the last BACKFILL_DAYS, on/after their tracking floor.
+      // on/after their tracking floor, not in the future.
       markable:
         !weekendSet.has(dayKey) &&
         !holidaySet.has(dayKey) &&
@@ -322,7 +310,7 @@ const getMyAttendance = async (userId, year, month) => {
   return {
     timezone,
     todayKey,
-    backfillDays: BACKFILL_DAYS,
+    backfillStartKey: earliestMarkableKey,
     projects,
     month: { year, month, days },
     summary: {
@@ -455,7 +443,7 @@ const correctAttendance = async ({ adminId, userId, projectId, dateKey, action, 
 
 module.exports = {
   STATUS,
-  BACKFILL_DAYS,
+  TRACKING_START,
   markAttendance,
   getMyAttendance,
   getRosterAttendance,

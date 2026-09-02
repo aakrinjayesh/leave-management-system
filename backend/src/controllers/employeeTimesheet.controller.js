@@ -62,7 +62,8 @@ const getMyEntries = asyncHandler(async (req, res) => {
     }),
     prisma.timesheetSubmission.findUnique({
       where: { userId_weekStartDate_projectId: { userId: req.user.id, weekStartDate, projectId: project.id } },
-      include: { project: true },
+      // Narrowed select (no clientName) - this is the employee's own view.
+      include: { project: { select: projectService.EMPLOYEE_PROJECT_SELECT } },
     }),
   ]);
 

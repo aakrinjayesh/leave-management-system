@@ -17,6 +17,7 @@ const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
 
 const toForm = (project) => ({
   name: project.name,
+  clientName: project.clientName || "",
   projectType: project.projectType,
   timezone: toEditableTimezoneValue(project.timezone),
   workStartTime: project.workStartTime,
@@ -98,12 +99,19 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
             ))}
           </FormSelect>
           <TextInput
-            label="Timezone"
-            placeholder="e.g. India (IST, UTC+5:30)"
-            value={form.timezone}
-            onChange={handleChange("timezone")}
+            label="Client name (optional)"
+            placeholder="e.g. Acme Corp"
+            value={form.clientName}
+            onChange={handleChange("clientName")}
           />
         </div>
+
+        <TextInput
+          label="Timezone"
+          placeholder="e.g. India (IST, UTC+5:30)"
+          value={form.timezone}
+          onChange={handleChange("timezone")}
+        />
 
         <hr className="modal-section-divider" />
         <p className="modal-section-title">Schedule &amp; working hours</p>

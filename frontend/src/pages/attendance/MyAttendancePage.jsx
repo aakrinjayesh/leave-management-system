@@ -139,7 +139,15 @@ export default function MyAttendancePage() {
           </div>
 
           <p className="card-section-subtitle" style={{ marginTop: 10, marginBottom: 10 }}>
-            Click a highlighted day to mark it. You can fill in the last {data.backfillDays} days.
+            Click a highlighted day to mark it. You can fill in any working day from{" "}
+            {data.backfillStartKey
+              ? new Date(`${data.backfillStartKey}T00:00:00`).toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })
+              : "the tracking start date"}{" "}
+            up to today. Older days can only be set by an admin.
           </p>
 
           <div className="att-grid-wrap" style={{ marginTop: 4 }}>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   UserCog,
-  PartyPopper,
   Briefcase,
   Wallet,
   History,
@@ -17,7 +16,6 @@ import DashboardLayout from "../../components/layout/DashboardLayout";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
-import StatCard from "../../components/common/StatCard";
 import StatusBadge from "../../components/common/StatusBadge";
 import AnniversaryCelebration from "../../components/common/AnniversaryCelebration";
 import ResignationModal from "./ResignationModal";
@@ -32,6 +30,7 @@ import * as profileApi from "../../api/profile.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { openBlobInNewTab } from "../../utils/openBlob";
 import { formatDate } from "../../utils/formatDate";
+import { getTenureParts } from "../../utils/tenure";
 import "../../styles/dashboardShared.css";
 
 const GENDER_LABELS = { MALE: "Male", FEMALE: "Female", OTHER: "Other" };
@@ -42,39 +41,6 @@ const formatCtc = (value) =>
   value == null ? "Not set" : new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
 
 const formatMonth = (date) => new Date(date).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
-
-// Calendar-aware years/months/days completed since joining.
-const getTenureParts = (joiningDateValue) => {
-  const start = new Date(joiningDateValue);
-  const now = new Date();
-
-  let years = now.getFullYear() - start.getFullYear();
-  let months = now.getMonth() - start.getMonth();
-  let days = now.getDate() - start.getDate();
-
-  if (days < 0) {
-    months -= 1;
-    days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
-  }
-  if (months < 0) {
-    years -= 1;
-    months += 12;
-  }
-
-  return { years, months, days };
-};
-
-// e.g. "1 year, 4 months, 20 days" - matches how tenure is normally described.
-const formatTenure = (joiningDateValue) => {
-  const { years, months, days } = getTenureParts(joiningDateValue);
-
-  const parts = [];
-  if (years > 0) parts.push(`${years} year${years !== 1 ? "s" : ""}`);
-  if (months > 0) parts.push(`${months} month${months !== 1 ? "s" : ""}`);
-  if (days > 0 || parts.length === 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
-
-  return parts.join(", ");
-};
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -227,9 +193,6 @@ export default function ProfilePage() {
           <h1>Profile</h1>
           <p>Your account details and reporting line.</p>
         </div>
-        {user?.joiningDate && (
-          <StatCard icon={<PartyPopper size={20} />} label="With Aakrin for" value={formatTenure(user.joiningDate)} />
-        )}
       </div>
 
       <Alert type="success">{profileMessage}</Alert>

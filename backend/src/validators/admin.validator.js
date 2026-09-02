@@ -186,8 +186,33 @@ const generatePayslipSchema = z.object({
   annualBonusPay: z.coerce.number().min(0).optional().default(0),
 });
 
+// Like nullableString, but an omitted field stays `undefined` (Prisma leaves
+// it untouched) instead of becoming null - company settings is updated by two
+// separate forms that each send only their own fields.
+const optionalNullableString = (max) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value || null));
+
+const optionalNullablePattern = (regex, message, max) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value || null))
+    .refine((value) => value == null || regex.test(value), { message });
+
 const updateCompanySettingsSchema = z.object({
-  fiscalYearStartMonth: z.coerce.number().int().min(1).max(12),
+  fiscalYearStartMonth: z.coerce.number().int().min(1).max(12).optional(),
+  // "We're here to assist you" support contact - any field may be cleared,
+  // an empty string is stored as null. Omitted fields are left untouched.
+  supportContactName: optionalNullableString(150),
+  supportContactEmail: optionalNullablePattern(EMAIL_REGEX, "Please enter a valid support email address.", 255),
+  supportContactPhone: optionalNullableString(30),
 });
 
 // Declared once per employee per financial year - only meaningful for Old
@@ -237,6 +262,9 @@ const TIME_OF_DAY_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const projectDetailsSchema = {
   projectType: z.enum(["ASSIGNED", "NOT_ASSIGNED"], { message: "Please select whether this is a client or internal project." }),
+  // Admin-only label for the client this project is for - optional, empty
+  // string stored as null. Never shown to employees.
+  clientName: nullableString(150),
   submissionFrequency: z.enum(["WEEKLY", "MONTHLY"], {
     message: "Please select whether timesheets on this project are submitted weekly or monthly.",
   }),

@@ -2,4 +2,4 @@
 // DashboardLayout and AuthLayout) - edit this one string to update the year
 // or wording everywhere at once.
 export const COPYRIGHT_TEXT =
-  "© Copyright 2025 | All rights reserved Aakrin Consulting Services | Design & Developed by YTECH RAJ LLP";
+  "© Copyright 2025 | All rights reserved Aakrin Consulting Services | Design & Developement";

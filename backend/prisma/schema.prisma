@@ -775,6 +775,13 @@ model CompanySettings {
 
     maxFutureDays Int @default(90)
 
+    // "We're here to assist you" contact shown on every dashboard's welcome
+    // banner. Admin-editable (Manage Accounts). Any field may be blank - the
+    // banner just drops that row.
+    supportContactName String?
+    supportContactEmail String?
+    supportContactPhone String?
+
     createdAt DateTime @default(now())
 
     updatedAt DateTime @updatedAt
@@ -1030,6 +1037,11 @@ model Project {
     id Int @id @default(autoincrement())
 
     name String @unique
+
+    // Admin-only. The client this project is for - shown in the admin Projects
+    // table and editable there, but deliberately NOT sent to employees on
+    // their own timesheet (see listProjectsForEmployee).
+    clientName String?
 
     isActive Boolean @default(true)
 

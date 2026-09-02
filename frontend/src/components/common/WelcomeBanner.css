@@ -13,15 +13,58 @@
   background: linear-gradient(135deg, #6d28d9 0%, #581c87 55%, #3b0764 100%);
 }
 
-/* Time-aware greeting, top-left of the cover - fills what was empty space. */
+/* Time-aware greeting, top-left of the cover - fills what was empty space.
+   right is kept clear for the tenure badge that sits top-right. */
 .welcome-banner-greeting {
   position: absolute;
   top: 26px;
   left: 26px;
-  right: 26px;
+  right: 230px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Tenure badge, top-right of the cover - glassy so it reads on the gradient. */
+.welcome-banner-tenure {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 15px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(4px);
+}
+
+.welcome-banner-tenure-icon {
+  color: rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+}
+
+.welcome-banner-tenure-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.welcome-banner-tenure-eyebrow {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.welcome-banner-tenure-value {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
 }
 
 .welcome-banner-greeting-eyebrow {
@@ -202,22 +245,33 @@
 
 @media (max-width: 640px) {
   .welcome-banner-cover {
-    height: 300px;
+    height: 372px;
+  }
+
+  .welcome-banner-greeting {
+    right: 26px;
   }
 
   .welcome-banner-greeting-main {
-    font-size: 1.35rem;
+    font-size: 1.3rem;
+  }
+
+  /* Tenure badge stacks under the greeting instead of top-right. */
+  .welcome-banner-tenure {
+    top: 108px;
+    right: auto;
+    left: 24px;
+  }
+
+  .welcome-banner-photo {
+    bottom: auto;
+    top: 172px;
   }
 
   .welcome-banner-identity {
     left: 24px;
     bottom: auto;
-    top: 190px;
-  }
-
-  .welcome-banner-photo {
-    bottom: auto;
-    top: 122px;
+    top: 266px;
   }
 
   .welcome-banner-assist {

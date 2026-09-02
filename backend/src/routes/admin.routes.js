@@ -112,6 +112,11 @@ router.post(
   validate(recordSalaryStructureSchema),
   payrollController.recordSalaryStructure
 );
+router.patch(
+  "/users/:id/salary-structure-history/latest",
+  validate(recordSalaryStructureSchema),
+  payrollController.updateLatestSalaryStructure
+);
 router.get("/users/:id/payslips/preview", payrollController.previewPayslip);
 router.post("/users/:id/payslips", validate(generatePayslipSchema), payrollController.generatePayslip);
 router.get("/users/:id/payslips", payrollController.listPayslips);
