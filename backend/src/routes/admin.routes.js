@@ -11,6 +11,8 @@ const {
   updateHolidaySchema,
   updateUserDetailsSchema,
   generatePayslipSchema,
+  contractPaymentStructureSchema,
+  generateContractPaymentSchema,
   updateCompanySettingsSchema,
   customFieldSchema,
   recordSalaryStructureSchema,
@@ -38,6 +40,7 @@ const offerLetterController = require("../controllers/adminOfferLetter.controlle
 const resignationController = require("../controllers/adminResignation.controller");
 const wfhController = require("../controllers/adminWfh.controller");
 const profileChangeController = require("../controllers/adminProfileChange.controller");
+const contractPaymentController = require("../controllers/adminContractPayment.controller");
 const { uploadSingleEmployeeDocument } = require("../config/employeeDocumentUpload");
 const { USER_TYPE } = require("../utils/constants");
 
@@ -121,6 +124,28 @@ router.get("/users/:id/payslips/preview", payrollController.previewPayslip);
 router.post("/users/:id/payslips", validate(generatePayslipSchema), payrollController.generatePayslip);
 router.get("/users/:id/payslips", payrollController.listPayslips);
 router.get("/payslips/:id/pdf", payrollController.downloadPayslipPdf);
+
+// Contract-hire payment (employmentType = CONTRACT) - fully separate from the
+// employee salary structure / payslips above.
+router.get("/users/:id/contract-payment-structure-history", contractPaymentController.getStructureHistory);
+router.post(
+  "/users/:id/contract-payment-structure-history",
+  validate(contractPaymentStructureSchema),
+  contractPaymentController.recordStructure
+);
+router.patch(
+  "/users/:id/contract-payment-structure-history/latest",
+  validate(contractPaymentStructureSchema),
+  contractPaymentController.updateLatestStructure
+);
+router.get("/users/:id/contract-payments/preview", contractPaymentController.previewPayment);
+router.post(
+  "/users/:id/contract-payments",
+  validate(generateContractPaymentSchema),
+  contractPaymentController.generatePayment
+);
+router.get("/users/:id/contract-payments", contractPaymentController.listPayments);
+router.get("/contract-payments/:id/pdf", contractPaymentController.downloadPaymentPdf);
 
 router.get("/users/:id/tax-declaration", taxController.getTaxDeclaration);
 router.put("/users/:id/tax-declaration", validate(taxDeclarationSchema), taxController.upsertTaxDeclaration);

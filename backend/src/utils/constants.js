@@ -12,6 +12,13 @@ const USER_TYPE = {
   ADMIN: "ADMIN",
 };
 
+// Label only - see the EmploymentType enum comment in schema.prisma.
+const EMPLOYMENT_TYPE = {
+  EMPLOYEE: "EMPLOYEE",
+  INTERN: "INTERN",
+  CONTRACT: "CONTRACT",
+};
+
 const USER_STATUS = {
   PENDING: "PENDING",
   ACTIVE: "ACTIVE",
@@ -116,6 +123,7 @@ module.exports = {
   REFRESH_TOKEN_COOKIE,
   OTP_PURPOSE,
   USER_TYPE,
+  EMPLOYMENT_TYPE,
   USER_STATUS,
   GENDER,
   MARITAL_STATUS,

@@ -8,6 +8,7 @@ import FormSelect from "../../components/common/FormSelect";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
+import ContractPaymentsSection from "./ContractPaymentsSection";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { downloadBlobAsFile, getFilenameFromResponse, openBlobInNewTab } from "../../utils/openBlob";
@@ -242,6 +243,10 @@ function EmployeePayslipsContent({ id }) {
       <Alert type="error">{error}</Alert>
       <Alert type="success">{success}</Alert>
 
+      {user.employmentType === "CONTRACT" ? (
+        <ContractPaymentsSection userId={id} employeeName={`${user.firstName} ${user.lastName}`} />
+      ) : (
+      <>
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">
           <span className="card-section-title">Generate payslip</span>
@@ -621,6 +626,8 @@ function EmployeePayslipsContent({ id }) {
           )}
         </div>
       </div>
+      </>
+      )}
     </DashboardLayout>
   );
 }

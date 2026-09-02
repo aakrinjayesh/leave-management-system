@@ -24,6 +24,7 @@ const toSafeUser = (user) => ({
   lastName: user.lastName,
   email: user.email,
   userType: user.userType,
+  employmentType: user.employmentType,
   status: user.status,
   exitDate: user.exitDate,
   isPasswordSet: user.isPasswordSet,
@@ -60,7 +61,7 @@ const listUsers = asyncHandler(async (req, res) => {
 });
 
 const createUser = asyncHandler(async (req, res) => {
-  const { firstName, lastName, email, userType } = req.body;
+  const { firstName, lastName, email, userType, employmentType } = req.body;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -73,6 +74,7 @@ const createUser = asyncHandler(async (req, res) => {
       lastName,
       email,
       userType,
+      employmentType,
       status: USER_STATUS.PENDING,
       isPasswordSet: false,
     },
@@ -410,6 +412,7 @@ const toFullUserDetails = (user) => ({
   email: user.email,
   personalEmail: user.personalEmail,
   employeeCode: user.employeeCode,
+  employmentType: user.employmentType,
   phone: user.phone,
   birthDate: user.birthDate,
   joiningDate: user.joiningDate,

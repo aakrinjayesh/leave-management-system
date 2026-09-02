@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { USER_TYPE, GENDER, MARITAL_STATUS, TAX_REGIME, RESIDENTIAL_STATUS } = require("../utils/constants");
+const { USER_TYPE, EMPLOYMENT_TYPE, GENDER, MARITAL_STATUS, TAX_REGIME, RESIDENTIAL_STATUS } = require("../utils/constants");
 const { isEmployeeDomainEmail } = require("../utils/emailDomain.util");
 const env = require("../config/env");
 
@@ -15,6 +15,11 @@ const createUserSchema = z.object({
     .email("Please enter a valid email address.")
     .refine(isEmployeeDomainEmail, { message: `Please use an @${env.EMPLOYEE_EMAIL_DOMAIN} email.` }),
   userType: z.enum([USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER, USER_TYPE.ADMIN]),
+  // Label only (Employee / Intern / Contract) - no permission effect.
+  employmentType: z
+    .enum([EMPLOYMENT_TYPE.EMPLOYEE, EMPLOYMENT_TYPE.INTERN, EMPLOYMENT_TYPE.CONTRACT])
+    .optional()
+    .default(EMPLOYMENT_TYPE.EMPLOYEE),
 });
 
 const updateManagerSchema = z.object({
@@ -186,6 +191,26 @@ const generatePayslipSchema = z.object({
   annualBonusPay: z.coerce.number().min(0).optional().default(0),
 });
 
+// ── Contract-hire payment (employmentType = CONTRACT only) ────────────────
+const monthStringToDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}$/, "Please choose a valid month.")
+  .transform((value) => {
+    const [year, month] = value.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, 1));
+  });
+
+const contractPaymentStructureSchema = z.object({
+  grossPayment: z.coerce.number().min(0, "Gross Payment can't be negative."),
+  tdsRatePercent: z.coerce.number().refine((v) => v === 2 || v === 10, "TDS rate must be 2% or 10%."),
+  effectiveFrom: monthStringToDate,
+});
+
+const generateContractPaymentSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+});
+
 // Like nullableString, but an omitted field stays `undefined` (Prisma leaves
 // it untouched) instead of becoming null - company settings is updated by two
 // separate forms that each send only their own fields.
@@ -342,6 +367,8 @@ module.exports = {
   updateUserDetailsSchema,
   customFieldSchema,
   generatePayslipSchema,
+  contractPaymentStructureSchema,
+  generateContractPaymentSchema,
   updateCompanySettingsSchema,
   recordSalaryStructureSchema,
   recordExitSchema,

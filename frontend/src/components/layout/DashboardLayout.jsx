@@ -29,6 +29,13 @@ const ROLE_LABELS = {
   EMPLOYEE: "Employee",
 };
 
+// Employment type is a label that overrides the role label in the top-right
+// corner (interns/contractors are still EMPLOYEE userType under the hood).
+const EMPLOYMENT_TYPE_LABELS = {
+  INTERN: "Intern",
+  CONTRACT: "Contract",
+};
+
 // Nav is driven by isManager (derived: does anyone currently report to this
 // account) rather than userType, so it stays correct as employees pick and
 // change their own manager.
@@ -160,7 +167,8 @@ export default function DashboardLayout({ title, children }) {
 
   const initials =
     `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
-  const roleLabel = ROLE_LABELS[user?.userType] || "Employee";
+  const roleLabel =
+    EMPLOYMENT_TYPE_LABELS[user?.employmentType] || ROLE_LABELS[user?.userType] || "Employee";
   const navItems = buildNavItems(user);
 
   const handleLogout = async () => {

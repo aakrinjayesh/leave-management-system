@@ -10,6 +10,7 @@ import Spinner from "../../components/common/Spinner";
 import DocumentUploadField from "./DocumentUploadField";
 import ProfileChangeRequestsCard from "./ProfileChangeRequestsCard";
 import UpdateSalaryStructureModal from "./UpdateSalaryStructureModal";
+import ContractPaymentSection from "./ContractPaymentSection";
 import TaxComputationSection from "./TaxComputationSection";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -696,6 +697,11 @@ function EmployeeDetailsContent({ id }) {
         </div>
       </div>
 
+      {user.employmentType === "CONTRACT" && (
+        <ContractPaymentSection userId={id} onNotify={setSuccess} />
+      )}
+
+      {user.employmentType !== "CONTRACT" && (
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-section">
           <span className="card-section-title">Salary</span>
@@ -760,8 +766,9 @@ function EmployeeDetailsContent({ id }) {
           </div>
         </div>
       </div>
+      )}
 
-      {pastStructures.length > 0 && (
+      {user.employmentType !== "CONTRACT" && pastStructures.length > 0 && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-section">
             <span className="card-section-title">Past salary structures</span>
@@ -840,7 +847,9 @@ function EmployeeDetailsContent({ id }) {
         />
       )}
 
-      <TaxComputationSection userId={id} taxRegime={user.taxRegime} joiningDate={user.joiningDate} />
+      {user.employmentType !== "CONTRACT" && (
+        <TaxComputationSection userId={id} taxRegime={user.taxRegime} joiningDate={user.joiningDate} />
+      )}
 
       <div className="card">
         <div className="card-section">

@@ -197,19 +197,10 @@ const streamPayslipPdf = ({ payslip, employee, ytd }, res) => {
     ytd,
   });
 
-  // PF Employer - informational only (part of CTC, not part of take-home).
-  let leftBottomY = earnings.bottomY;
+  // PF Employer row is intentionally not shown on the payslip PDF - it's part
+  // of CTC, not take-home, and the user asked to drop it from the Earnings side.
   const rowH = 16;
-  if ((payslip.pfEmployer || 0) !== 0 || (ytd.pfEmployer || 0) !== 0) {
-    doc.font("Helvetica").fontSize(9);
-    doc.rect(infoX, leftBottomY, colWidth * 0.5, rowH).stroke();
-    doc.rect(infoX + colWidth * 0.5, leftBottomY, colWidth * 0.25, rowH).stroke();
-    doc.rect(infoX + colWidth * 0.75, leftBottomY, colWidth * 0.25, rowH).stroke();
-    doc.text("PF Employer", infoX + 4, leftBottomY + 4, { width: colWidth * 0.5 - 8 });
-    doc.text(money(payslip.pfEmployer), infoX + colWidth * 0.5 + 4, leftBottomY + 4, { width: colWidth * 0.25 - 8, align: "right" });
-    doc.text(money(ytd.pfEmployer), infoX + colWidth * 0.75 + 4, leftBottomY + 4, { width: colWidth * 0.25 - 8, align: "right" });
-    leftBottomY += rowH;
-  }
+  const leftBottomY = earnings.bottomY;
 
   const bottomY = Math.max(leftBottomY, deductions.bottomY);
 

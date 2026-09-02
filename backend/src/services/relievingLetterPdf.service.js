@@ -36,7 +36,13 @@ const streamRelievingLetterPdf = ({ employee, exitRecord }, res) => {
   doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke();
   doc.moveDown(1.2);
 
-  doc.font("Helvetica-Bold").fontSize(13).text("RELIEVING LETTER", { align: "center" });
+  // Interns get an "Internship Relieving Letter" heading/subject; everyone
+  // else (regular employees, contract hires) keeps the plain wording.
+  const isIntern = employee.employmentType === "INTERN";
+  const heading = isIntern ? "INTERNSHIP RELIEVING LETTER" : "RELIEVING LETTER";
+  const subject = isIntern ? "Subject: Internship Relieving Letter" : "Subject: Relieving Letter";
+
+  doc.font("Helvetica-Bold").fontSize(13).text(heading, { align: "center" });
   doc.moveDown(1.2);
 
   doc.font("Helvetica").fontSize(10).text(`Date: ${formatDate(exitRecord.createdAt)}`);
@@ -48,7 +54,7 @@ const streamRelievingLetterPdf = ({ employee, exitRecord }, res) => {
   }
   doc.moveDown(1);
 
-  doc.font("Helvetica-Bold").fontSize(10.5).text("Subject: Relieving Letter", { underline: true });
+  doc.font("Helvetica-Bold").fontSize(10.5).text(subject, { underline: true });
   doc.moveDown(1);
 
   doc.font("Helvetica").fontSize(10.5).text(exitRecord.relievingLetterText, {

@@ -7,7 +7,7 @@ import Alert from "../../components/common/Alert";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 
-const INITIAL_FORM = { firstName: "", lastName: "", email: "", userType: "" };
+const INITIAL_FORM = { firstName: "", lastName: "", email: "", employmentType: "" };
 
 export default function AddUserModal({ onClose, onSuccess }) {
   const [form, setForm] = useState(INITIAL_FORM);
@@ -24,8 +24,8 @@ export default function AddUserModal({ onClose, onSuccess }) {
       setError("Please fill in first name, last name, and email.");
       return;
     }
-    if (!form.userType) {
-      setError("Please select an account type.");
+    if (!form.employmentType) {
+      setError("Please select an employment type.");
       return;
     }
 
@@ -35,7 +35,11 @@ export default function AddUserModal({ onClose, onSuccess }) {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim().toLowerCase(),
-        userType: form.userType,
+        // Interns and contractors are ordinary employee-permission accounts;
+        // employmentType is only a label. Admin access is granted later via
+        // the "Make admin" action on the account row.
+        userType: "EMPLOYEE",
+        employmentType: form.employmentType,
       });
       onSuccess();
     } catch (err) {
@@ -66,10 +70,15 @@ export default function AddUserModal({ onClose, onSuccess }) {
           Must be an @aakrin.com email, for every account type.
         </p>
 
-        <FormSelect label="Account type" value={form.userType} onChange={handleChange("userType")}>
+        <FormSelect
+          label="Employment type"
+          value={form.employmentType}
+          onChange={handleChange("employmentType")}
+        >
           <option value="" hidden></option>
           <option value="EMPLOYEE">Employee</option>
-          <option value="ADMIN">Admin</option>
+          <option value="INTERN">Intern</option>
+          <option value="CONTRACT">Hire to contract</option>
         </FormSelect>
 
         <div className="modal-actions">

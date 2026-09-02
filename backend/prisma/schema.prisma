@@ -13,6 +13,17 @@ enum UserType {
     ADMIN
 }
 
+// How the person is engaged - purely a label (shown in the top-right corner
+// of their dashboard and on the Accounts list). It has NO effect on
+// permissions or any other logic: interns and contractors are still ordinary
+// EMPLOYEE userType accounts. Defaults to EMPLOYEE so every existing row is
+// unaffected.
+enum EmploymentType {
+    EMPLOYEE
+    INTERN
+    CONTRACT
+}
+
 enum UserStatus {
     PENDING
     ACTIVE
@@ -180,8 +191,9 @@ model User {
     photoUrl          String?
     documentUrl       String?
 
-    userType UserType
-    status   UserStatus @default(ACTIVE)
+    userType       UserType
+    employmentType EmploymentType @default(EMPLOYEE)
+    status         UserStatus     @default(ACTIVE)
 
     // Latest exit date, shown on the Accounts table - cleared on reactivate.
     // Full history of every exit/rehire cycle lives in ExitRecord below.
@@ -227,6 +239,14 @@ model User {
 
     salaryStructureHistory         SalaryStructureHistory[]
     recordedSalaryStructureEntries SalaryStructureHistory[] @relation("SalaryStructureHistoryRecordedBy")
+
+    // Contract-hire (employmentType = CONTRACT) only - a completely separate
+    // payment model (Gross - TDS = Net), never mixed with the employee
+    // salary structure / payslip above.
+    contractPaymentStructures         ContractPaymentStructure[]
+    recordedContractPaymentStructures ContractPaymentStructure[] @relation("ContractPaymentStructureRecordedBy")
+    contractPayments                  ContractPayment[]
+    generatedContractPayments         ContractPayment[]         @relation("ContractPaymentsGenerated")
 
     exitRecords         ExitRecord[]
     recordedExitRecords ExitRecord[] @relation("ExitRecordsRecordedBy")
@@ -447,6 +467,61 @@ model SalaryStructureHistory {
     recordedBy User? @relation("SalaryStructureHistoryRecordedBy", fields: [recordedById], references: [id])
 
     @@index([userId, effectiveFrom])
+}
+
+// ── Contract-hire payment model (employmentType = CONTRACT only) ──────────
+// Deliberately separate from SalaryStructureHistory / Payslip above. A
+// contract hire is paid a flat Gross Payment, minus TDS at either 2% or 10%,
+// giving the Net Payment. No Basic/HRA/PF, no proration, no income-tax
+// computation.
+
+// One row per Gross/TDS change, effective from a given month - mirrors how
+// SalaryStructureHistory works so the admin UI ("Update" adds a dated row,
+// "Edit" fixes the latest) behaves identically.
+model ContractPaymentStructure {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    grossPayment   Float
+    tdsRatePercent Float // 2 or 10
+    effectiveFrom  DateTime
+
+    createdAt    DateTime @default(now())
+    recordedById Int?
+
+    user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+    recordedBy User? @relation("ContractPaymentStructureRecordedBy", fields: [recordedById], references: [id])
+
+    @@index([userId, effectiveFrom])
+}
+
+// One immutable slip per contract hire per month - the contract-hire
+// equivalent of Payslip.
+model ContractPayment {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    month Int
+    year  Int
+
+    grossPayment   Float
+    tdsRatePercent Float
+    tdsAmount      Float
+    netPayment     Float
+
+    pdfUrl String?
+
+    generatedById Int
+    generatedAt   DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    generatedBy User @relation("ContractPaymentsGenerated", fields: [generatedById], references: [id])
+
+    @@unique([userId, month, year])
+    @@index([userId])
 }
 
 // One row per employee per financial year - only meaningful for employees on

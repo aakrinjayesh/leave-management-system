@@ -153,6 +153,29 @@ export const listPayslips = (userId) => unwrap(axiosClient.get(`/admin/users/${u
 export const downloadPayslipPdf = (payslipId) =>
   axiosClient.get(`/admin/payslips/${payslipId}/pdf`, { responseType: "blob" });
 
+// ---------- Contract-hire payment (employmentType = CONTRACT only) ----------
+
+export const getContractPaymentStructureHistory = (userId) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/contract-payment-structure-history`));
+
+export const recordContractPaymentStructure = (userId, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/contract-payment-structure-history`, payload));
+
+export const updateLatestContractPaymentStructure = (userId, payload) =>
+  unwrap(axiosClient.patch(`/admin/users/${userId}/contract-payment-structure-history/latest`, payload));
+
+export const previewContractPayment = (userId, year, month) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/contract-payments/preview`, { params: { year, month } }));
+
+export const generateContractPayment = (userId, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/contract-payments`, payload));
+
+export const listContractPayments = (userId) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/contract-payments`));
+
+export const downloadContractPaymentPdf = (paymentId) =>
+  axiosClient.get(`/admin/contract-payments/${paymentId}/pdf`, { responseType: "blob" });
+
 export const getCompanySettings = () => unwrap(axiosClient.get("/admin/company-settings"));
 
 export const getTaxDeclaration = (userId, financialYear) =>

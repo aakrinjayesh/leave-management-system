@@ -144,6 +144,7 @@ const toSafeUser = async (user) => {
       })),
     customFields,
     userType: user.userType,
+    employmentType: user.employmentType,
     status: user.status,
     managerId: user.managerId,
     manager,
