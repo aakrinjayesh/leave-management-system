@@ -100,6 +100,8 @@ const getSubmissionsOverlappingRange = (userId, start, end, projectId) =>
       managerRemarks: true,
       attachmentOriginalName: true,
       projectAssigned: true,
+      createdByManager: true,
+      createdByAdmin: true,
       project: { select: { name: true } },
     },
     orderBy: { weekStartDate: "asc" },

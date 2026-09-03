@@ -46,6 +46,24 @@ export const exportPayrollTimesheet = (date) =>
 export const downloadTimesheetSubmissionAttachment = (submissionId) =>
   axiosClient.get(`/admin/timesheet-submissions/${submissionId}/attachment`, { responseType: "blob" });
 
+// --- Log a timesheet on any employee's behalf ---
+
+export const getTimesheetLogPeriod = (userId, projectId, date) =>
+  unwrap(
+    axiosClient.get(`/admin/users/${userId}/timesheet/log-period`, {
+      params: { ...(projectId ? { projectId } : {}), ...(date ? { date } : {}) },
+    })
+  );
+
+export const uploadTimesheetLogAttachment = (userId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return unwrap(axiosClient.post(`/admin/users/${userId}/timesheet/log-attachment`, formData));
+};
+
+export const logTimesheetForEmployee = (userId, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/timesheet/log`, payload));
+
 export const getEmployeeTimesheetSummary = () => unwrap(axiosClient.get("/admin/timesheet-summary"));
 
 export const approveTimesheetSubmission = (id, remarks) =>

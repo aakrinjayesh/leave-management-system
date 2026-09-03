@@ -6,7 +6,8 @@ const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
 const projectService = require("../services/project.service");
 const timesheetDecisionService = require("../services/timesheetDecision.service");
-const { isS3Url } = require("../utils/s3.util");
+const timesheetLogService = require("../services/timesheetLog.service");
+const { isS3Url, uploadToS3 } = require("../utils/s3.util");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const listTeamSubmissions = asyncHandler(async (req, res) => {
@@ -151,6 +152,51 @@ const decideSubmission = (decision) =>
 const approveSubmission = decideSubmission("APPROVED");
 const rejectSubmission = decideSubmission("REJECTED");
 
+// ---------- Log timesheet on a direct report's behalf ----------
+
+const getDirectReportOr404 = async (employeeId, managerId) => {
+  const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+  if (!employee || employee.managerId !== managerId) {
+    throw ApiError.notFound("Employee not found.");
+  }
+  return employee;
+};
+
+const getLogPeriod = asyncHandler(async (req, res) => {
+  const employee = await getDirectReportOr404(Number(req.params.id), req.user.id);
+
+  const data = await timesheetLogService.getLogPeriod({
+    employee,
+    projectId: req.query.projectId,
+    anchorDate: req.query.date,
+  });
+
+  new ApiResponse(200, "OK", data).send(res);
+});
+
+const uploadLogAttachment = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw ApiError.badRequest("Please choose a file to upload.");
+  }
+  const { url } = await uploadToS3(req.file, "timesheet-attachments");
+  new ApiResponse(201, "File uploaded.", {
+    attachmentStoredName: url,
+    attachmentOriginalName: req.file.originalname,
+  }).send(res);
+});
+
+const logTimesheet = asyncHandler(async (req, res) => {
+  const employee = await getDirectReportOr404(Number(req.params.id), req.user.id);
+
+  const { submission } = await timesheetLogService.logTimesheetForEmployee({
+    employee,
+    actor: req.user,
+    ...req.body,
+  });
+
+  new ApiResponse(201, "Timesheet logged and approved.", { submission }).send(res);
+});
+
 module.exports = {
   listTeamSubmissions,
   getEmployeeTimesheet,
@@ -158,4 +204,7 @@ module.exports = {
   exportEmployeeTimesheet,
   approveSubmission,
   rejectSubmission,
+  getLogPeriod,
+  uploadLogAttachment,
+  logTimesheet,
 };

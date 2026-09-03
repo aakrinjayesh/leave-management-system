@@ -1084,6 +1084,15 @@ model TimesheetSubmission {
 
     rejectedAt DateTime?
 
+    // Set when a manager or admin logged this timesheet directly on the
+    // employee's behalf (auto-approved at creation) rather than the employee
+    // submitting it themselves. createdByAdmin narrows it to an admin who
+    // isn't the employee's manager - drives the "Logged by admin" vs "Logged
+    // by manager" tag, same pattern as LeaveRequest.
+    createdByManager Boolean @default(false)
+
+    createdByAdmin Boolean @default(false)
+
     createdAt DateTime @default(now())
 
     updatedAt DateTime @updatedAt

@@ -11,9 +11,10 @@ const companySettingsService = require("../services/companySettings.service");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
 const timesheetDecisionService = require("../services/timesheetDecision.service");
+const timesheetLogService = require("../services/timesheetLog.service");
 const notificationService = require("../services/notification.service");
 const { sendAdminAccessRemovedEmail } = require("../utils/email.util");
-const { isS3Url } = require("../utils/s3.util");
+const { isS3Url, uploadToS3 } = require("../utils/s3.util");
 const { UPLOAD_DIR } = require("../config/upload");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
@@ -269,6 +270,52 @@ const getTimesheetSubmissionAttachment = asyncHandler(async (req, res) => {
       res.status(404).json({ success: false, message: "Attachment file not found." });
     }
   });
+});
+
+// ---------- Log timesheet on any employee's behalf (admin) ----------
+
+const getEmployeeOr404 = async (employeeId) => {
+  const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+  if (!employee || employee.userType === USER_TYPE.ADMIN) {
+    throw ApiError.notFound("Employee not found.");
+  }
+  return employee;
+};
+
+const getTimesheetLogPeriod = asyncHandler(async (req, res) => {
+  const employee = await getEmployeeOr404(Number(req.params.id));
+
+  const data = await timesheetLogService.getLogPeriod({
+    employee,
+    projectId: req.query.projectId,
+    anchorDate: req.query.date,
+  });
+
+  new ApiResponse(200, "OK", data).send(res);
+});
+
+const uploadTimesheetLogAttachment = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw ApiError.badRequest("Please choose a file to upload.");
+  }
+  const { url } = await uploadToS3(req.file, "timesheet-attachments");
+  new ApiResponse(201, "File uploaded.", {
+    attachmentStoredName: url,
+    attachmentOriginalName: req.file.originalname,
+  }).send(res);
+});
+
+const logTimesheetForEmployee = asyncHandler(async (req, res) => {
+  const employee = await getEmployeeOr404(Number(req.params.id));
+
+  const { submission } = await timesheetLogService.logTimesheetForEmployee({
+    employee,
+    actor: req.user,
+    loggedByAdmin: true,
+    ...req.body,
+  });
+
+  new ApiResponse(201, "Timesheet logged and approved.", { submission }).send(res);
 });
 
 // Unrestricted version of the manager's employee-detail view (balances +
@@ -656,6 +703,9 @@ module.exports = {
   listEmployeeTimesheetSummary,
   approveTimesheetSubmission,
   rejectTimesheetSubmission,
+  getTimesheetLogPeriod,
+  uploadTimesheetLogAttachment,
+  logTimesheetForEmployee,
   getUserLeaveDetail,
   getUserCalendar,
   getCompanyCalendar,

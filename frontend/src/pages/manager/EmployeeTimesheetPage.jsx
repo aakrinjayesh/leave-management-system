@@ -23,6 +23,11 @@ export default function EmployeeTimesheetPage() {
         fetchTimesheet={(view, date, projectId) => managerTimesheetApi.getEmployeeTimesheet(id, view, date, projectId)}
         exportTimesheet={(view, date, projectId) => managerTimesheetApi.exportEmployeeTimesheet(id, view, date, projectId)}
         downloadAttachment={(submissionId) => managerTimesheetApi.downloadSubmissionAttachment(submissionId)}
+        logApi={{
+          getPeriod: (employeeId, projectId, date) => managerTimesheetApi.getLogPeriod(employeeId, projectId, date),
+          uploadAttachment: (employeeId, file) => managerTimesheetApi.uploadLogAttachment(employeeId, file),
+          submit: (employeeId, payload) => managerTimesheetApi.logTimesheet(employeeId, payload),
+        }}
         onDataLoad={setEmployee}
       />
     </DashboardLayout>

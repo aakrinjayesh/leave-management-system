@@ -27,6 +27,11 @@ export default function AdminEmployeeTimesheetPage() {
           approve: (submissionId) => adminApi.approveTimesheetSubmission(submissionId),
           reject: (submissionId, remarks) => adminApi.rejectTimesheetSubmission(submissionId, remarks),
         }}
+        logApi={{
+          getPeriod: (employeeId, projectId, date) => adminApi.getTimesheetLogPeriod(employeeId, projectId, date),
+          uploadAttachment: (employeeId, file) => adminApi.uploadTimesheetLogAttachment(employeeId, file),
+          submit: (employeeId, payload) => adminApi.logTimesheetForEmployee(employeeId, payload),
+        }}
         onDataLoad={setEmployee}
       />
     </DashboardLayout>

@@ -165,6 +165,11 @@ export default function TeamTimesheetsPage() {
                       <td>{formatHoursMinutes(submission.totalHours)}</td>
                       <td>
                         <StatusBadge status={submission.status} />
+                        {submission.createdByManager && (
+                          <span className="logged-by-manager-tag">
+                            {submission.createdByAdmin ? "Logged by admin" : "Logged by manager"}
+                          </span>
+                        )}
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
                         {submission.status === "PENDING" && (

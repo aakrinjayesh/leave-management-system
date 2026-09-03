@@ -520,7 +520,14 @@ export default function MyTimesheetPage() {
                         <tbody>
                           {submissions.map((sub) => (
                             <tr key={sub.id}>
-                              <td className="table-cell-primary">{formatDateRange(sub.weekStartDate, sub.weekEndDate)}</td>
+                              <td className="table-cell-primary">
+                                {formatDateRange(sub.weekStartDate, sub.weekEndDate)}
+                                {sub.createdByManager && (
+                                  <span className="logged-by-manager-tag">
+                                    {sub.createdByAdmin ? "Logged by admin" : "Logged by manager"}
+                                  </span>
+                                )}
+                              </td>
                               <td>{formatHoursMinutes(sub.totalHours)}</td>
                               <td className="table-cell-secondary">
                                 {sub.routedTo ? `${sub.routedTo.firstName} ${sub.routedTo.lastName}` : "—"}

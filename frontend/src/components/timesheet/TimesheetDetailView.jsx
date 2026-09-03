@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, Download, ListChecks, X } from "lucide-react";
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Download, ListChecks, X } from "lucide-react";
 import Spinner from "../common/Spinner";
 import Alert from "../common/Alert";
 import StatusBadge from "../common/StatusBadge";
@@ -12,6 +12,7 @@ import { formatHoursMinutes } from "../../utils/formatDuration";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatProjectAssigned } from "../../utils/formatProjectAssigned";
+import LogTimesheetModal from "./LogTimesheetModal";
 import "../../styles/dashboardShared.css";
 
 function RejectModal({ submission, onClose, onRejected, reject }) {
@@ -78,6 +79,7 @@ export default function TimesheetDetailView({
   exportTimesheet,
   downloadAttachment,
   decisionApi,
+  logApi,
   onDataLoad,
 }) {
   // A caller can deep-link straight to a specific week/day via ?date=... in
@@ -95,6 +97,7 @@ export default function TimesheetDetailView({
   const [actioningId, setActioningId] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [isLogOpen, setIsLogOpen] = useState(false);
 
   useEffect(() => {
     fetchTimesheet(view, anchorDate, projectId).then((res) => {
@@ -174,6 +177,15 @@ export default function TimesheetDetailView({
   return (
     <>
       <Alert type="error">{error}</Alert>
+
+      {logApi && data.employee && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <Button className="page-header-btn" onClick={() => setIsLogOpen(true)}>
+            <CalendarPlus size={16} />
+            Log timesheet
+          </Button>
+        </div>
+      )}
 
       {data.projects && data.projects.length > 1 && (
         <div className="tabs" style={{ marginBottom: 16 }}>
@@ -288,6 +300,11 @@ export default function TimesheetDetailView({
                     <tr key={submission.id}>
                       <td className="table-cell-primary">
                         {formatDateRange(submission.weekStartDate, submission.weekEndDate)}
+                        {submission.createdByManager && (
+                          <span className="logged-by-manager-tag">
+                            {submission.createdByAdmin ? "Logged by admin" : "Logged by manager"}
+                          </span>
+                        )}
                       </td>
                       <td>{formatHoursMinutes(submission.totalHours)}</td>
                       <td className="table-cell-secondary">{formatProjectAssigned(submission.projectAssigned)}</td>
@@ -351,6 +368,18 @@ export default function TimesheetDetailView({
           onClose={() => setRejectTarget(null)}
           onRejected={() => {
             setRejectTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {isLogOpen && logApi && data.employee && (
+        <LogTimesheetModal
+          employee={data.employee}
+          api={logApi}
+          onClose={() => setIsLogOpen(false)}
+          onSuccess={() => {
+            setIsLogOpen(false);
             setReloadKey((k) => k + 1);
           }}
         />

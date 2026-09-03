@@ -28,7 +28,12 @@ const {
 } = require("../validators/admin.validator");
 const { rejectWfhRequestSchema } = require("../validators/wfh.validator");
 const { approveLeaveSchema, rejectLeaveSchema, createLeaveForEmployeeSchema } = require("../validators/leave.validator");
-const { approveTimesheetSchema, rejectTimesheetSchema } = require("../validators/timesheet.validator");
+const {
+  approveTimesheetSchema,
+  rejectTimesheetSchema,
+  logTimesheetSchema,
+} = require("../validators/timesheet.validator");
+const { uploadSingleTimesheetAttachment } = require("../config/timesheetAttachmentUpload");
 const controller = require("../controllers/admin.controller");
 const leaveController = require("../controllers/adminLeave.controller");
 const payrollController = require("../controllers/adminPayroll.controller");
@@ -67,6 +72,13 @@ router.get("/offer-letters/:id/pdf", offerLetterController.downloadOfferLetterPd
 router.delete("/offer-letters/:id", offerLetterController.deleteOfferLetter);
 router.get("/users/:id/timesheet", controller.getUserTimesheet);
 router.get("/users/:id/timesheet/export", controller.exportUserTimesheet);
+router.get("/users/:id/timesheet/log-period", controller.getTimesheetLogPeriod);
+router.post(
+  "/users/:id/timesheet/log-attachment",
+  uploadSingleTimesheetAttachment,
+  controller.uploadTimesheetLogAttachment
+);
+router.post("/users/:id/timesheet/log", validate(logTimesheetSchema), controller.logTimesheetForEmployee);
 router.get("/timesheet-summary", controller.listEmployeeTimesheetSummary);
 router.get("/timesheets/export", controller.exportPayrollTimesheet);
 router.patch("/timesheets/:id/approve", validate(approveTimesheetSchema), controller.approveTimesheetSubmission);
