@@ -15,6 +15,14 @@ const DAY_LABEL = new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "num
 const HOUR_OPTIONS = Array.from({ length: 25 }, (_, i) => i); // 0..24
 const MINUTE_OPTIONS = [0, 15, 30, 45];
 
+const CONSTRAINT_LABEL = {
+  WEEKEND: "Weekend",
+  HOLIDAY: "Company holiday",
+  FULL_LEAVE: "On approved leave",
+  HALF_LEAVE: "Half-day leave",
+};
+const isFullyBlocked = (c) => c && c.type !== "HALF_LEAVE";
+
 const buildPeriodDates = (start, end) => {
   const dates = [];
   const cursor = new Date(start);
@@ -107,20 +115,46 @@ export default function LogTimesheetModal({ employee, api, onClose, onSuccess })
     }
   };
 
+  const constraints = period?.dayConstraints || {};
   const dateKeys = period?.weekStartDate ? buildPeriodDates(period.weekStartDate, period.weekEndDate) : [];
+  const dayWeight = (key) => {
+    const c = constraints[key];
+    if (isFullyBlocked(c)) return 0;
+    return c?.type === "HALF_LEAVE" ? 0.5 : 1;
+  };
   const totalHours = dateKeys.reduce((sum, key) => {
+    if (isFullyBlocked(constraints[key])) return sum;
     const row = rows[key];
     return sum + (row ? combineHoursMinutes(row.hours, row.minutes) : 0);
   }, 0);
+  const workingDays = dateKeys.reduce((n, key) => n + dayWeight(key), 0);
+  const workedDays = dateKeys.reduce((n, key) => {
+    const h = combineHoursMinutes(rows[key]?.hours, rows[key]?.minutes);
+    return n + (h > 0 ? dayWeight(key) : 0);
+  }, 0);
+  const fmtDays = (n) => (Number.isInteger(n) ? String(n) : Number(n).toFixed(1));
 
   const handleSubmit = async () => {
     setError("");
 
-    const days = dateKeys.map((key) => ({
-      date: key,
-      hoursWorked: combineHoursMinutes(rows[key]?.hours, rows[key]?.minutes),
-      description: rows[key]?.description?.trim() || undefined,
-    }));
+    const days = dateKeys.map((key) => {
+      const blocked = isFullyBlocked(constraints[key]);
+      return {
+        date: key,
+        hoursWorked: blocked ? 0 : combineHoursMinutes(rows[key]?.hours, rows[key]?.minutes),
+        description: blocked ? undefined : rows[key]?.description?.trim() || undefined,
+      };
+    });
+
+    const halfOver = dateKeys.find(
+      (key) =>
+        constraints[key]?.type === "HALF_LEAVE" &&
+        combineHoursMinutes(rows[key]?.hours, rows[key]?.minutes) > constraints[key].maxHours
+    );
+    if (halfOver) {
+      setError(`${DAY_LABEL.format(new Date(halfOver))} is a half-day leave — at most ${constraints[halfOver].maxHours}h.`);
+      return;
+    }
 
     if (!days.some((d) => d.hoursWorked > 0)) {
       setError("Enter hours for at least one day.");
@@ -233,6 +267,13 @@ export default function LogTimesheetModal({ employee, api, onClose, onSuccess })
             </button>
           </div>
 
+          {period.weekStartDate && (
+            <p className="helper-text" style={{ margin: "6px 0 0", textAlign: "center" }}>
+              {fmtDays(workedDays)} / {fmtDays(workingDays)} working days
+              {" "}(weekends, holidays and leave excluded)
+            </p>
+          )}
+
           {locked && (
             <Alert type="error">This period is already submitted for this project - pick another period.</Alert>
           )}
@@ -250,43 +291,67 @@ export default function LogTimesheetModal({ employee, api, onClose, onSuccess })
               <tbody>
                 {dateKeys.map((key) => {
                   const row = rows[key] || { hours: "0", minutes: "0", description: "" };
+                  const constraint = constraints[key];
+                  const blockedDay = isFullyBlocked(constraint);
+                  const disabled = locked || blockedDay;
+                  const hourChoices =
+                    constraint?.type === "HALF_LEAVE"
+                      ? HOUR_OPTIONS.filter((h) => h <= constraint.maxHours)
+                      : HOUR_OPTIONS;
                   return (
-                    <tr key={key}>
-                      <td className="table-cell-primary">{DAY_LABEL.format(new Date(key))}</td>
-                      <td style={{ width: 90 }}>
-                        <FormSelect
-                          value={row.hours}
-                          onChange={(e) => updateRow(key, "hours", e.target.value)}
-                          disabled={locked}
-                        >
-                          {HOUR_OPTIONS.map((h) => (
-                            <option key={h} value={h}>
-                              {h}
-                            </option>
-                          ))}
-                        </FormSelect>
+                    <tr key={key} className={blockedDay ? "is-disabled-row" : ""}>
+                      <td className="table-cell-primary">
+                        {DAY_LABEL.format(new Date(key))}
+                        {constraint && (
+                          <span className="table-cell-secondary"> · {CONSTRAINT_LABEL[constraint.type]}</span>
+                        )}
                       </td>
                       <td style={{ width: 90 }}>
-                        <FormSelect
-                          value={row.minutes}
-                          onChange={(e) => updateRow(key, "minutes", e.target.value)}
-                          disabled={locked}
-                        >
-                          {MINUTE_OPTIONS.map((m) => (
-                            <option key={m} value={m}>
-                              {m}
-                            </option>
-                          ))}
-                        </FormSelect>
+                        {blockedDay ? (
+                          "—"
+                        ) : (
+                          <FormSelect
+                            value={row.hours}
+                            onChange={(e) => updateRow(key, "hours", e.target.value)}
+                            disabled={disabled}
+                          >
+                            {hourChoices.map((h) => (
+                              <option key={h} value={h}>
+                                {h}
+                              </option>
+                            ))}
+                          </FormSelect>
+                        )}
+                      </td>
+                      <td style={{ width: 90 }}>
+                        {blockedDay ? (
+                          "—"
+                        ) : (
+                          <FormSelect
+                            value={row.minutes}
+                            onChange={(e) => updateRow(key, "minutes", e.target.value)}
+                            disabled={disabled}
+                          >
+                            {MINUTE_OPTIONS.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </FormSelect>
+                        )}
                       </td>
                       <td>
-                        <TextInput
-                          type="text"
-                          placeholder="Optional"
-                          value={row.description}
-                          onChange={(e) => updateRow(key, "description", e.target.value)}
-                          disabled={locked}
-                        />
+                        {blockedDay ? (
+                          "—"
+                        ) : (
+                          <TextInput
+                            type="text"
+                            placeholder="Optional"
+                            value={row.description}
+                            onChange={(e) => updateRow(key, "description", e.target.value)}
+                            disabled={disabled}
+                          />
+                        )}
                       </td>
                     </tr>
                   );

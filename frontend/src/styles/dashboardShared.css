@@ -289,6 +289,15 @@
   background-color: var(--color-gray-50);
 }
 
+/* Timesheet grid: a day that can't take hours (weekend / holiday / on leave). */
+.data-table tbody tr.is-disabled-row {
+  background-color: var(--color-gray-50);
+}
+.data-table tbody tr.is-disabled-row .table-cell-primary {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .table-cell-primary {
   font-weight: 600;
   color: var(--text-primary);

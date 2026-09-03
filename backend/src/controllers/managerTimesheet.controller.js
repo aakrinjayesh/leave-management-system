@@ -4,6 +4,7 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
+const timesheetConstraints = require("../services/timesheetConstraints.service");
 const projectService = require("../services/project.service");
 const timesheetDecisionService = require("../services/timesheetDecision.service");
 const timesheetLogService = require("../services/timesheetLog.service");
@@ -46,9 +47,16 @@ const getEmployeeTimesheet = asyncHandler(async (req, res) => {
     requestedProjectId && projects.some((p) => p.id === requestedProjectId) ? requestedProjectId : projects[0]?.id ?? null;
 
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
-  const [entries, submissions] = await Promise.all([
+  const activeProject = projects.find((p) => p.id === projectId) || null;
+  const [entries, submissions, blocked] = await Promise.all([
     timesheetService.getSubmittedEntriesInRange(employeeId, start, end, projectId),
     timesheetService.getSubmissionsOverlappingRange(employeeId, start, end, projectId),
+    timesheetConstraints.getBlockedDays({
+      userId: employeeId,
+      start,
+      end,
+      hoursPerDay: timesheetService.getHoursPerDay(activeProject),
+    }),
   ]);
 
   new ApiResponse(200, "OK", {
@@ -60,6 +68,7 @@ const getEmployeeTimesheet = asyncHandler(async (req, res) => {
     rangeEnd: end,
     entries,
     submissions,
+    dayCounts: timesheetConstraints.summarisePeriod(blocked, entries, start, end),
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
 });

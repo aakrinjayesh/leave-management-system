@@ -4,6 +4,7 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
+const timesheetConstraints = require("../services/timesheetConstraints.service");
 const projectService = require("../services/project.service");
 const { sendTimesheetSubmittedEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
@@ -55,7 +56,7 @@ const getMyEntries = asyncHandler(async (req, res) => {
   const weekStartDate = timesheetService.getPeriodStart(anchor, project.submissionFrequency);
   const weekEndDate = timesheetService.getPeriodEnd(weekStartDate, project.submissionFrequency);
 
-  const [entries, submission] = await Promise.all([
+  const [entries, submission, blocked] = await Promise.all([
     prisma.timesheetEntry.findMany({
       where: { userId: req.user.id, projectId: project.id, date: { gte: weekStartDate, lte: weekEndDate } },
       orderBy: [{ date: "asc" }, { id: "asc" }],
@@ -64,6 +65,12 @@ const getMyEntries = asyncHandler(async (req, res) => {
       where: { userId_weekStartDate_projectId: { userId: req.user.id, weekStartDate, projectId: project.id } },
       // Narrowed select (no clientName) - this is the employee's own view.
       include: { project: { select: projectService.EMPLOYEE_PROJECT_SELECT } },
+    }),
+    timesheetConstraints.getBlockedDays({
+      userId: req.user.id,
+      start: weekStartDate,
+      end: weekEndDate,
+      hoursPerDay: timesheetService.getHoursPerDay(project),
     }),
   ]);
 
@@ -74,6 +81,8 @@ const getMyEntries = asyncHandler(async (req, res) => {
     submission,
     project,
     projects,
+    dayConstraints: timesheetConstraints.toConstraintMap(blocked),
+    dayCounts: timesheetConstraints.summarisePeriod(blocked, entries, weekStartDate, weekEndDate),
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
 });
@@ -88,11 +97,21 @@ const saveEntry = asyncHandler(async (req, res) => {
 
   const membership = await prisma.projectMembership.findUnique({
     where: { userId_projectId: { userId: req.user.id, projectId } },
-    include: { project: { select: { submissionFrequency: true } } },
+    include: { project: { select: { submissionFrequency: true, workStartTime: true, workEndTime: true } } },
   });
   if (!membership) {
     throw ApiError.badRequest("You aren't assigned to this project.");
   }
+
+  // Can't log hours on a weekend, company holiday, or an approved full-day
+  // leave; a half-day leave caps the hours at half the working day.
+  const blocked = await timesheetConstraints.getBlockedDays({
+    userId: req.user.id,
+    start: entryDate,
+    end: entryDate,
+    hoursPerDay: timesheetService.getHoursPerDay(membership.project),
+  });
+  timesheetConstraints.assertHoursAllowed(blocked, entryDate.toISOString().slice(0, 10), hoursWorked);
 
   const weekStartDate = timesheetService.getPeriodStart(entryDate, membership.project.submissionFrequency);
 
@@ -209,6 +228,16 @@ const submitWeek = asyncHandler(async (req, res) => {
   if (draftEntries.length === 0) {
     throw ApiError.badRequest("There are no entries to submit for this period.");
   }
+
+  // Re-check every day being submitted - a leave/holiday may have been added
+  // after these entries were saved.
+  const blocked = await timesheetConstraints.getBlockedDays({
+    userId: req.user.id,
+    start: weekStartDate,
+    end: weekEndDate,
+    hoursPerDay: timesheetService.getHoursPerDay(project),
+  });
+  timesheetConstraints.assertEntriesAllowed(blocked, draftEntries);
 
   const totalHours = timesheetService.sumHours(draftEntries);
 

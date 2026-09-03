@@ -61,6 +61,7 @@ function RejectModal({ submission, onClose, onRejected, reject }) {
 }
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
+const fmtDays = (n) => (Number.isInteger(n) ? String(n) : Number(n).toFixed(1));
 
 const VIEWS = [
   { label: "Day", value: "day" },
@@ -223,6 +224,12 @@ export default function TimesheetDetailView({
             </button>
             <span className="card-section-title" style={{ marginBottom: 0 }}>
               {formatDateRange(data.rangeStart, data.rangeEnd)} — {formatHoursMinutes(data.totalHours)}
+              {data.dayCounts && (
+                <span className="table-cell-secondary">
+                  {" "}
+                  · {fmtDays(data.dayCounts.workedDays)} / {fmtDays(data.dayCounts.workingDays)} working days
+                </span>
+              )}
             </span>
             <button type="button" className="link-btn" onClick={() => shiftAnchor(1)}>
               Next <ChevronRight size={14} style={{ verticalAlign: "-2px" }} />

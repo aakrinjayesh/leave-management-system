@@ -23,6 +23,18 @@ const formatDayLabel = (date) => DAY_LABEL_FORMATTER.format(new Date(date));
 
 const HOUR_OPTIONS = Array.from({ length: 25 }, (_, i) => i); // 0..24
 
+// A day can be off-limits (weekend / holiday / full-day leave) or capped
+// (half-day leave). `dayConstraints` comes from the API keyed by "YYYY-MM-DD".
+const CONSTRAINT_LABEL = {
+  WEEKEND: "Weekend",
+  HOLIDAY: "Company holiday",
+  FULL_LEAVE: "On approved leave",
+  HALF_LEAVE: "Half-day leave",
+};
+const isFullyBlocked = (c) => c && c.type !== "HALF_LEAVE";
+
+const fmtDays = (n) => (Number.isInteger(n) ? String(n) : Number(n).toFixed(1));
+
 // Every calendar date from periodStart to periodEnd inclusive - 7 dates for
 // a WEEKLY project's Monday-Sunday grid, ~28-31 for a MONTHLY project's
 // full-month grid. Same table either way, just a longer or shorter list.
@@ -151,15 +163,23 @@ export default function MyTimesheetPage() {
     setSuccessMessage("");
 
     const dateKeys = buildPeriodDates(data.weekStartDate, data.weekEndDate);
+    const constraints = data.dayConstraints || {};
     const toSave = [];
     for (const dateKey of dateKeys) {
       const row = rowState[dateKey];
       if (row.locked) continue;
 
+      const constraint = constraints[dateKey];
+      if (isFullyBlocked(constraint)) continue;
+
       const hoursWorked = combineHoursMinutes(row.hours, row.minutes);
       if (hoursWorked <= 0) continue;
       if (hoursWorked > 24) {
         setError(`Hours for ${formatDayLabel(dateKey)} can't exceed 24.`);
+        return;
+      }
+      if (constraint?.type === "HALF_LEAVE" && hoursWorked > constraint.maxHours) {
+        setError(`${formatDayLabel(dateKey)} is a half-day leave — at most ${constraint.maxHours}h.`);
         return;
       }
       toSave.push({ dateKey, hoursWorked, description: row.description.trim() || undefined });
@@ -206,6 +226,17 @@ export default function MyTimesheetPage() {
   const handleSubmitPeriod = async () => {
     setError("");
     setSuccessMessage("");
+
+    const constraints = data.dayConstraints || {};
+    const badDay = Object.keys(rowState).find(
+      (dateKey) => isFullyBlocked(constraints[dateKey]) && rowState[dateKey]?.id
+    );
+    if (badDay) {
+      setError(
+        `${formatDayLabel(badDay)} is ${CONSTRAINT_LABEL[constraints[badDay].type].toLowerCase()} — delete the hours logged on it before submitting.`
+      );
+      return;
+    }
 
     if (!attachment) {
       setError(`Please upload ${isMonthly ? "this month's" : "this week's"} Excel sheet before submitting.`);
@@ -293,6 +324,14 @@ export default function MyTimesheetPage() {
                       Next {isMonthly ? "month" : "week"} <ChevronRight size={14} style={{ verticalAlign: "-2px" }} />
                     </button>
                   </div>
+
+                  {data.dayCounts && (
+                    <p className="helper-text" style={{ margin: "8px 0 0", textAlign: "center" }}>
+                      Worked <strong>{fmtDays(data.dayCounts.workedDays)}</strong> of{" "}
+                      <strong>{fmtDays(data.dayCounts.workingDays)}</strong> working days
+                      {" "}({isMonthly ? "this month" : "this week"} — weekends, holidays and your leave excluded)
+                    </p>
+                  )}
 
                   {data.submission && (
                     <div className="remarks-note">
@@ -420,16 +459,29 @@ export default function MyTimesheetPage() {
                         {buildPeriodDates(data.weekStartDate, data.weekEndDate).map((dateKey) => {
                           const row = rowState[dateKey] || { hours: "0", minutes: "0", description: "", locked: false };
                           const isBusy = savingDate === dateKey;
+                          const constraint = (data.dayConstraints || {})[dateKey];
+                          const blockedDay = isFullyBlocked(constraint);
+                          const hourChoices =
+                            constraint?.type === "HALF_LEAVE"
+                              ? HOUR_OPTIONS.filter((h) => h <= constraint.maxHours)
+                              : HOUR_OPTIONS;
 
                           return (
-                            <tr key={dateKey}>
-                              <td className="table-cell-primary">{formatDayLabel(dateKey)}</td>
+                            <tr key={dateKey} className={blockedDay ? "is-disabled-row" : ""}>
+                              <td className="table-cell-primary">
+                                {formatDayLabel(dateKey)}
+                                {constraint && (
+                                  <span className="table-cell-secondary"> · {CONSTRAINT_LABEL[constraint.type]}</span>
+                                )}
+                              </td>
                               <td style={{ width: 100 }}>
-                                {row.locked ? (
+                                {blockedDay ? (
+                                  row.id ? row.hours || "0" : "—"
+                                ) : row.locked ? (
                                   row.hours || "0"
                                 ) : (
                                   <FormSelect value={row.hours} onChange={(e) => updateRow(dateKey, "hours", e.target.value)}>
-                                    {HOUR_OPTIONS.map((h) => (
+                                    {hourChoices.map((h) => (
                                       <option key={h} value={h}>
                                         {h}
                                       </option>
@@ -438,7 +490,13 @@ export default function MyTimesheetPage() {
                                 )}
                               </td>
                               <td className="table-cell-secondary">
-                                {row.locked ? (
+                                {blockedDay ? (
+                                  row.id ? (
+                                    <span className="field-error">Remove — this day is off</span>
+                                  ) : (
+                                    "—"
+                                  )
+                                ) : row.locked ? (
                                   row.description || "—"
                                 ) : (
                                   <TextInput

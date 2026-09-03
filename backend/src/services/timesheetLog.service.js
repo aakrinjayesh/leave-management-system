@@ -1,6 +1,7 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const timesheetService = require("./timesheet.service");
+const timesheetConstraints = require("./timesheetConstraints.service");
 const projectService = require("./project.service");
 const notificationService = require("./notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
@@ -56,10 +57,18 @@ const getLogPeriod = async ({ employee, projectId, anchorDate }) => {
 
   const weekEndDate = timesheetService.getPeriodEnd(weekStartDate, freq);
 
-  const entries = await prisma.timesheetEntry.findMany({
-    where: { userId: employee.id, projectId: project.id, date: { gte: weekStartDate, lte: weekEndDate } },
-    orderBy: [{ date: "asc" }, { id: "asc" }],
-  });
+  const [entries, blocked] = await Promise.all([
+    prisma.timesheetEntry.findMany({
+      where: { userId: employee.id, projectId: project.id, date: { gte: weekStartDate, lte: weekEndDate } },
+      orderBy: [{ date: "asc" }, { id: "asc" }],
+    }),
+    timesheetConstraints.getBlockedDays({
+      userId: employee.id,
+      start: weekStartDate,
+      end: weekEndDate,
+      hoursPerDay: timesheetService.getHoursPerDay(project),
+    }),
+  ]);
 
   return {
     projects,
@@ -67,6 +76,8 @@ const getLogPeriod = async ({ employee, projectId, anchorDate }) => {
     weekStartDate,
     weekEndDate,
     entries,
+    dayConstraints: timesheetConstraints.toConstraintMap(blocked),
+    dayCounts: timesheetConstraints.summarisePeriod(blocked, entries, weekStartDate, weekEndDate),
     alreadySubmitted: isLocked(existingSubmission),
   };
 };
@@ -128,6 +139,20 @@ const logTimesheetForEmployee = async ({
   if (cleaned.length === 0) {
     throw ApiError.badRequest("Please enter hours for at least one day.");
   }
+
+  // No hours on weekends / company holidays / approved full-day leave; a
+  // half-day leave caps that day at half the working day.
+  const blocked = await timesheetConstraints.getBlockedDays({
+    userId: employee.id,
+    start: weekStartDate,
+    end: weekEndDate,
+    hoursPerDay: timesheetService.getHoursPerDay(project),
+  });
+  timesheetConstraints.assertEntriesAllowed(
+    blocked,
+    cleaned.map((d) => ({ date: d.date, hoursWorked: d.hoursWorked })),
+    employee.firstName
+  );
 
   const totalHours = cleaned.reduce((sum, d) => sum + d.hoursWorked, 0);
   const projectAssigned = project.projectType;

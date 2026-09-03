@@ -445,6 +445,7 @@ module.exports = {
   getPeriodStart,
   getPeriodEnd,
   getViewRange,
+  getHoursPerDay,
   getSubmittedEntriesInRange,
   getSubmissionsOverlappingRange,
   getRecentProjectMembers,
