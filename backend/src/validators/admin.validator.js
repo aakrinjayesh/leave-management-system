@@ -211,33 +211,8 @@ const generateContractPaymentSchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
 });
 
-// Like nullableString, but an omitted field stays `undefined` (Prisma leaves
-// it untouched) instead of becoming null - company settings is updated by two
-// separate forms that each send only their own fields.
-const optionalNullableString = (max) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .transform((value) => (value === undefined ? undefined : value || null));
-
-const optionalNullablePattern = (regex, message, max) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .transform((value) => (value === undefined ? undefined : value || null))
-    .refine((value) => value == null || regex.test(value), { message });
-
 const updateCompanySettingsSchema = z.object({
-  fiscalYearStartMonth: z.coerce.number().int().min(1).max(12).optional(),
-  // "We're here to assist you" support contact - any field may be cleared,
-  // an empty string is stored as null. Omitted fields are left untouched.
-  supportContactName: optionalNullableString(150),
-  supportContactEmail: optionalNullablePattern(EMAIL_REGEX, "Please enter a valid support email address.", 255),
-  supportContactPhone: optionalNullableString(30),
+  fiscalYearStartMonth: z.coerce.number().int().min(1).max(12),
 });
 
 // Declared once per employee per financial year - only meaningful for Old

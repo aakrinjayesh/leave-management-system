@@ -1359,6 +1359,44 @@
   background-color: var(--color-gray-50);
 }
 
+/* Payroll Report: a single tidy toolbar (Month / View / Search / Export). */
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 14px;
+  margin-bottom: 14px;
+}
+.report-toolbar .field {
+  margin-bottom: 0;
+}
+.report-toolbar .report-toolbar-field {
+  width: 190px;
+}
+.report-toolbar .report-toolbar-search {
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+.report-toolbar .report-toolbar-export {
+  margin-left: auto;
+}
+.report-toolbar select.field-input,
+.report-toolbar .field-input {
+  height: 40px;
+}
+@media (max-width: 720px) {
+  .report-toolbar .report-toolbar-field,
+  .report-toolbar .report-toolbar-search {
+    width: 100%;
+    max-width: none;
+    flex-basis: 100%;
+  }
+  .report-toolbar .report-toolbar-export {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
 /* Manage Accounts: compact, centred name search above the table. */
 .acct-search {
   display: flex;

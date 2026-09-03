@@ -21,6 +21,9 @@ export default function LogLeaveForEmployeeModal({
   employee,
   onClose,
   onSuccess,
+  // Defaults to the manager endpoint (direct reports only). The admin page
+  // passes its own endpoint so it can log leave for any employee.
+  submitFn = managerLeaveApi.createLeaveForEmployee,
 }) {
   const [policies, setPolicies] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
@@ -65,7 +68,7 @@ export default function LogLeaveForEmployeeModal({
 
     setIsSubmitting(true);
     try {
-      await managerLeaveApi.createLeaveForEmployee(employee.id, {
+      await submitFn(employee.id, {
         leavePolicyId: Number(form.leavePolicyId),
         startDate: form.startDate,
         endDate: form.endDate,

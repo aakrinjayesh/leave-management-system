@@ -59,6 +59,11 @@ export const getCompanyCalendar = (year, month) =>
 
 export const getProjectAssignmentReport = () => unwrap(axiosClient.get("/admin/reports/project-assignment"));
 
+// Consolidated payroll register. scope: "employees" | "contract",
+// month: "YYYY-MM", mode: "monthly" | "cumulative".
+export const getPayrollReport = (scope, month, mode) =>
+  unwrap(axiosClient.get("/admin/reports/payroll", { params: { scope, month, mode } }));
+
 export const getProjectHistory = (id) => unwrap(axiosClient.get(`/admin/users/${id}/project-history`));
 
 export const getWeekTimesheetSubmissions = (date) =>
@@ -105,6 +110,9 @@ export const deactivateHoliday = (id) => unwrap(axiosClient.patch(`/admin/holida
 export const reactivateHoliday = (id) => unwrap(axiosClient.patch(`/admin/holidays/${id}/reactivate`));
 
 export const getUserLeaveDetail = (id) => unwrap(axiosClient.get(`/admin/users/${id}/leaves`));
+
+export const logLeaveForEmployee = (id, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${id}/leaves`, payload));
 
 export const getUserCalendar = (id, year, month) =>
   unwrap(axiosClient.get(`/admin/users/${id}/calendar`, { params: { year, month } }));

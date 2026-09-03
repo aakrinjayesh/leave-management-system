@@ -6,7 +6,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
 const companySettingsService = require("../services/companySettings.service");
-const { sendLeaveDecisionEmail } = require("../utils/email.util");
+const leaveLogService = require("../services/leaveLog.service");
 const leaveDecisionService = require("../services/leaveDecision.service");
 const { isS3Url } = require("../utils/s3.util");
 const { UPLOAD_DIR } = require("../config/upload");
@@ -166,105 +166,16 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Employee not found.");
   }
 
-  const leavePolicy = await prisma.leavePolicy.findFirst({ where: { id: leavePolicyId, isActive: true } });
-  if (!leavePolicy) {
-    throw ApiError.notFound("This leave type is not available.");
-  }
-
-  if (isHalfDay && !leavePolicy.allowHalfDay) {
-    throw ApiError.badRequest(`${leavePolicy.leaveName} does not support half-day requests.`);
-  }
-
-  const requestStart = startOfUtcDay(startDate);
-  const requestEnd = startOfUtcDay(endDate);
-
-  // Sandwich rule (weekend between two leave-covered working days in the
-  // same request also gets charged) only applies to Casual Leave.
-  const applySandwichRule = leavePolicy.leaveName === "Casual Leave";
-  const { totalDays, workingDates } = await leaveCalendarService.computeWorkingDays({
-    startDate: requestStart,
-    endDate: requestEnd,
+  const { leaveRequests, wasSplit, leavePolicy } = await leaveLogService.logLeaveForEmployee({
+    employee,
+    actor: req.user,
+    leavePolicyId,
+    startDate,
+    endDate,
     isHalfDay,
-    applySandwichRule,
+    reason,
   });
 
-  const overlapping = await prisma.leaveRequest.findFirst({
-    where: {
-      userId: employeeId,
-      status: { in: ["PENDING", "APPROVED"] },
-      startDate: { lte: requestEnd },
-      endDate: { gte: requestStart },
-    },
-  });
-  if (overlapping) {
-    throw ApiError.badRequest(`${employee.firstName} already has a leave request that overlaps these dates.`);
-  }
-
-  const requestFiscalYear = await companySettingsService.getFiscalYearForDate(requestStart);
-  const balance = await leaveBalanceService.getOrCreateBalance(employeeId, leavePolicy, requestFiscalYear);
-
-  // Default: the whole thing under its own policy, unchanged. Only
-  // recomputed below if it doesn't fit the remaining balance.
-  let requestSpecs = [{ leavePolicyId: leavePolicy.id, startDate: requestStart, endDate: requestEnd, totalDays }];
-  let unpaidPolicy = null;
-  let unpaidBalance = null;
-
-  if (!leavePolicy.isUnlimited && totalDays > balance.remainingLeaves) {
-    // Non-accrual capped policies keep the old hard block - only Sick/
-    // Casual/Earned (accrual policies) auto-split the overage into Unpaid
-    // Leave instead of rejecting the request outright.
-    if (leavePolicy.monthlyAccrualDays == null) {
-      throw ApiError.badRequest(
-        `${employee.firstName} only has ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining.`
-      );
-    }
-
-    unpaidPolicy = await prisma.leavePolicy.findFirst({ where: { isUnpaid: true, isActive: true } });
-    if (!unpaidPolicy) {
-      throw ApiError.badRequest(
-        `${employee.firstName} only has ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining, and no Unpaid Leave policy is set up to cover the rest.`
-      );
-    }
-    unpaidBalance = await leaveBalanceService.getOrCreateBalance(employeeId, unpaidPolicy, requestFiscalYear);
-
-    requestSpecs = leaveBalanceService.splitForOverage({
-      leavePolicy,
-      unpaidPolicyId: unpaidPolicy.id,
-      remainingLeaves: balance.remainingLeaves,
-      workingDates,
-      requestStart,
-      requestEnd,
-      isHalfDay,
-      totalDays,
-    });
-  }
-
-  const leaveRequests = [];
-  for (const spec of requestSpecs) {
-    const specBalance = spec.leavePolicyId === leavePolicy.id ? balance : unpaidBalance;
-    await leaveBalanceService.applyUsage(specBalance.id, spec.totalDays);
-
-    const created = await prisma.leaveRequest.create({
-      data: {
-        userId: employeeId,
-        leavePolicyId: spec.leavePolicyId,
-        routedToId: req.user.id,
-        approvedById: req.user.id,
-        startDate: spec.startDate,
-        endDate: spec.endDate,
-        totalDays: spec.totalDays,
-        weekendsCountAsLeave: applySandwichRule,
-        reason,
-        status: "APPROVED",
-        approvedAt: new Date(),
-        createdByManager: true,
-      },
-      include: { leavePolicy: true },
-    });
-    leaveRequests.push(created);
-  }
-
-  const wasSplit = leaveRequests.length > 1;
   new ApiResponse(
     201,
     wasSplit
@@ -273,24 +184,7 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
     { leaveRequests }
   ).send(res);
 
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  for (const leaveRequest of leaveRequests) {
-    try {
-      await sendLeaveDecisionEmail({
-        to: employee.email,
-        employeeFirstName: employee.firstName,
-        leaveName: leaveRequest.leavePolicy.leaveName,
-        startDate: leaveRequest.startDate,
-        endDate: leaveRequest.endDate,
-        totalDays: leaveRequest.totalDays,
-        status: "APPROVED",
-        managerName: `${req.user.firstName} ${req.user.lastName}`,
-        remarks: `Logged directly by ${req.user.firstName} ${req.user.lastName} on your behalf.`,
-      });
-    } catch (err) {
-      console.error("Failed to send manager-logged leave email:", err);
-    }
-  }
+  await leaveLogService.sendLoggedLeaveEmails({ leaveRequests, employee, actor: req.user });
 });
 
 const listTeamLeaveRequests = asyncHandler(async (req, res) => {

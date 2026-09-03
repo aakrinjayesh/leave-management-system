@@ -27,7 +27,7 @@ const {
   rejectProfileChangeSchema,
 } = require("../validators/admin.validator");
 const { rejectWfhRequestSchema } = require("../validators/wfh.validator");
-const { approveLeaveSchema, rejectLeaveSchema } = require("../validators/leave.validator");
+const { approveLeaveSchema, rejectLeaveSchema, createLeaveForEmployeeSchema } = require("../validators/leave.validator");
 const { approveTimesheetSchema, rejectTimesheetSchema } = require("../validators/timesheet.validator");
 const controller = require("../controllers/admin.controller");
 const leaveController = require("../controllers/adminLeave.controller");
@@ -72,6 +72,7 @@ router.get("/timesheets/export", controller.exportPayrollTimesheet);
 router.patch("/timesheets/:id/approve", validate(approveTimesheetSchema), controller.approveTimesheetSubmission);
 router.patch("/timesheets/:id/reject", validate(rejectTimesheetSchema), controller.rejectTimesheetSubmission);
 router.get("/timesheet-submissions/:id/attachment", controller.getTimesheetSubmissionAttachment);
+router.get("/reports/payroll", reportController.getPayrollReport);
 router.get("/reports/project-assignment", reportController.getProjectAssignmentReport);
 router.get("/users/:id/project-history", reportController.getProjectHistory);
 router.get("/reports/timesheet-submissions", reportController.getWeekTimesheetSubmissions);
@@ -83,6 +84,11 @@ router.get("/projects/:id/recent-members", reportController.getProjectRecentMemb
 router.patch("/projects/:id/deactivate", reportController.deactivateProject);
 router.patch("/projects/:id/reactivate", reportController.reactivateProject);
 router.get("/users/:id/leaves", controller.getUserLeaveDetail);
+router.post(
+  "/users/:id/leaves",
+  validate(createLeaveForEmployeeSchema),
+  leaveController.createLeaveForEmployee
+);
 router.get("/users/:id/calendar", controller.getUserCalendar);
 router.get("/calendar", controller.getCompanyCalendar);
 router.get("/leave-summary", leaveController.listEmployeeLeaveSummary);

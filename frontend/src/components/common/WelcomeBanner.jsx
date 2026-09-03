@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { CalendarDays, IdCard, Mail, PartyPopper, Phone, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import * as profileApi from "../../api/profile.api";
-import * as commonApi from "../../api/common.api";
 import { formatDate } from "../../utils/formatDate";
 import { formatTenureShort } from "../../utils/tenure";
 import "./WelcomeBanner.css";
@@ -40,16 +39,12 @@ export default function WelcomeBanner() {
   const { user } = useAuth();
   const roleLabel = ROLE_LABELS[user?.userType] || "Employee";
   const [photoUrl, setPhotoUrl] = useState(null);
-  // "We're here to assist you" contact - admin-editable (Manage Accounts),
-  // served to every logged-in user through /config. Any field can be blank.
-  const [supportContact, setSupportContact] = useState(null);
 
-  useEffect(() => {
-    commonApi
-      .getConfig()
-      .then((data) => setSupportContact(data.supportContact || null))
-      .catch(() => setSupportContact(null));
-  }, []);
+  // "We're here to assist you" contact = this user's own manager, or the
+  // primary admin if they have no manager (resolved server-side in the auth
+  // payload). Null when it would resolve to the viewer themselves.
+  const assist = user?.assistContact || null;
+  const assistName = assist ? `${assist.firstName} ${assist.lastName}`.trim() : "";
 
   // Admin-uploaded (see Employee Details "Photo" field) - fetched through
   // the authenticated /profile/photo endpoint since there's no public URL
@@ -136,27 +131,27 @@ export default function WelcomeBanner() {
         </div>
       </div>
 
-      {supportContact && (supportContact.name || supportContact.email || supportContact.phone) && (
+      {assist && (assistName || assist.email || assist.phone) && (
         <div className="welcome-banner-assist">
           <span className="welcome-banner-assist-title">We're here to assist you</span>
-          {supportContact.name && (
+          {assistName && (
             <div className="welcome-banner-assist-row">
               <span className="welcome-banner-assist-avatar" aria-hidden="true">
-                {initialsOf(supportContact.name)}
+                {initialsOf(assistName)}
               </span>
-              <span className="welcome-banner-assist-name">{supportContact.name}</span>
+              <span className="welcome-banner-assist-name">{assistName}</span>
             </div>
           )}
-          {supportContact.phone && (
-            <a className="welcome-banner-assist-link" href={`tel:${supportContact.phone}`}>
+          {assist.phone && (
+            <a className="welcome-banner-assist-link" href={`tel:${assist.phone}`}>
               <Phone size={13} />
-              {supportContact.phone}
+              {assist.phone}
             </a>
           )}
-          {supportContact.email && (
-            <a className="welcome-banner-assist-link" href={`mailto:${supportContact.email}`}>
+          {assist.email && (
+            <a className="welcome-banner-assist-link" href={`mailto:${assist.email}`}>
               <Mail size={13} />
-              {supportContact.email}
+              {assist.email}
             </a>
           )}
         </div>

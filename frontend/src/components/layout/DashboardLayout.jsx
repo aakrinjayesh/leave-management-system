@@ -11,6 +11,7 @@ import {
   CalendarRange,
   FileText,
   BarChart3,
+  Table2,
   FileWarning,
   Home,
   CalendarCheck,
@@ -147,6 +148,11 @@ const buildNavItems = (user) => {
       to: "/admin/reports",
       label: "Project",
       icon: BarChart3,
+    });
+    items.push({
+      to: "/admin/report",
+      label: "Report",
+      icon: Table2,
     });
     items.push({
       to: "/admin/manage-leaves",

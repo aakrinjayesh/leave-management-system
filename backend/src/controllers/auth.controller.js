@@ -42,7 +42,7 @@ const toSafeUser = async (user) => {
       user.managerId
         ? prisma.user.findUnique({
             where: { id: user.managerId },
-            select: { id: true, firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true, phone: true },
           })
         : null,
       prisma.user.count({ where: { managerId: user.id } }),
@@ -61,6 +61,22 @@ const toSafeUser = async (user) => {
       // frontend hide the "Apply for leave" button instead of just erroring.
       prisma.resignation.findFirst({ where: { userId: user.id, status: RESIGNATION_STATUS.ACCEPTED } }),
     ]);
+
+  // "We're here to assist you" contact shown on the dashboard welcome banner:
+  // the employee's own manager, or - if they have no manager - the primary
+  // (lowest-id) active admin. Null when that resolves to the viewer
+  // themselves, so nobody is shown as their own help contact.
+  let assistContact = manager;
+  if (!assistContact) {
+    assistContact = await prisma.user.findFirst({
+      where: { userType: USER_TYPE.ADMIN, status: USER_STATUS.ACTIVE },
+      orderBy: { id: "asc" },
+      select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+    });
+  }
+  if (assistContact && assistContact.id === user.id) {
+    assistContact = null;
+  }
 
   return {
     id: user.id,
@@ -148,6 +164,7 @@ const toSafeUser = async (user) => {
     status: user.status,
     managerId: user.managerId,
     manager,
+    assistContact,
     isManager: directReportsCount > 0,
     hasAcceptedResignation: Boolean(acceptedResignation),
   };

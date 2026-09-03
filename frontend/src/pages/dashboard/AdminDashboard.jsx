@@ -6,7 +6,6 @@ import {
   Eye,
   FileDown,
   IdCard,
-  LifeBuoy,
   LogOut,
   RotateCcw,
   ShieldCheck,
@@ -27,7 +26,6 @@ import AddUserModal from "../admin/AddUserModal";
 import AssignManagerModal from "../admin/AssignManagerModal";
 import ExitModal from "../admin/ExitModal";
 import AdminAccessModal from "../admin/AdminAccessModal";
-import SupportContactModal from "../admin/SupportContactModal";
 import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
 import { useAuth } from "../../context/AuthContext";
 import * as adminApi from "../../api/admin.api";
@@ -66,7 +64,6 @@ export default function AdminDashboard() {
   const [managingUser, setManagingUser] = useState(null);
   const [exitingUser, setExitingUser] = useState(null);
   const [adminAccessTarget, setAdminAccessTarget] = useState(null);
-  const [isSupportContactOpen, setIsSupportContactOpen] = useState(false);
   const [actioningId, setActioningId] = useState(null);
   // const [payrollMonth, setPayrollMonth] = useState(currentMonthValue());
   // const [isExportingPayroll, setIsExportingPayroll] = useState(false);
@@ -230,14 +227,6 @@ export default function AdminDashboard() {
             Export payroll
           </Button>
           */}
-          <Button
-            variant="secondary"
-            onClick={() => setIsSupportContactOpen(true)}
-            className="page-header-btn btn-sm"
-          >
-            <LifeBuoy size={16} />
-            Support contact
-          </Button>
           <Button onClick={() => setIsAddOpen(true)} className="page-header-btn btn-sm">
             <UserPlus size={16} />
             Add account
@@ -434,15 +423,6 @@ export default function AdminDashboard() {
       </div>
 
       {isAddOpen && <AddUserModal onClose={() => setIsAddOpen(false)} onSuccess={handleAddSuccess} />}
-      {isSupportContactOpen && (
-        <SupportContactModal
-          onClose={() => setIsSupportContactOpen(false)}
-          onSuccess={() => {
-            setIsSupportContactOpen(false);
-            setSuccess("Support contact updated.");
-          }}
-        />
-      )}
       {managingUser && (
         <AssignManagerModal
           user={managingUser}

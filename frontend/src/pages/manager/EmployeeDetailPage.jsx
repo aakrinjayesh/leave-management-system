@@ -145,7 +145,11 @@ function EmployeeDetailContent({ id }) {
                       <td className="table-cell-secondary">{request.reason}</td>
                       <td>
                         <StatusBadge status={request.status} />
-                        {request.createdByManager && <span className="logged-by-manager-tag">Logged by manager</span>}
+                        {request.createdByManager && (
+                          <span className="logged-by-manager-tag">
+                            {request.createdByAdmin ? "Logged by admin" : "Logged by manager"}
+                          </span>
+                        )}
                       </td>
                       <td className="table-cell-secondary">
                         {request.approvedBy

@@ -38,6 +38,7 @@ import AllCalendarPage from "../pages/admin/AllCalendarPage";
 import PayslipsPage from "../pages/admin/PayslipsPage";
 import EmployeePayslipsPage from "../pages/admin/EmployeePayslipsPage";
 import ReportPage from "../pages/admin/ReportPage";
+import PayrollReportPage from "../pages/admin/PayrollReportPage";
 import ResignationsPage from "../pages/admin/ResignationsPage";
 import WfhRequestsPage from "../pages/admin/WfhRequestsPage";
 
@@ -115,6 +116,7 @@ export default function AppRoutes() {
       <Route element={<ProtectedRoute check={isAdmin} />}>
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/reports" element={<ReportPage />} />
+        <Route path="/admin/report" element={<PayrollReportPage />} />
         <Route path="/admin/leave-requests" element={<AllLeaveRequestsPage />} />
         <Route path="/admin/timesheets" element={<AllTimesheetsPage />} />
         <Route path="/admin/calendar" element={<AllCalendarPage />} />

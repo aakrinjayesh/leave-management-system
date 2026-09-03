@@ -558,7 +558,6 @@ const listEmployeeTimesheetSummary = asyncHandler(async (req, res) => {
 
   const employees = await prisma.user.findMany({
     where: { userType: { not: "ADMIN" } },
-    orderBy: { firstName: "asc" },
     select: {
       id: true,
       firstName: true,
@@ -567,6 +566,13 @@ const listEmployeeTimesheetSummary = asyncHandler(async (req, res) => {
       status: true,
       timesheetSubmissions: { select: { status: true } },
     },
+  });
+
+  employees.sort((a, b) => {
+    const sa = employeeCodeSeq(a.employeeCode);
+    const sb = employeeCodeSeq(b.employeeCode);
+    if (sa !== sb) return sa - sb;
+    return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
   });
 
   const result = await Promise.all(

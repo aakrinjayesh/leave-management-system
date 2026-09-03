@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Search, Users } from "lucide-react";
 import Spinner from "../common/Spinner";
 import Alert from "../common/Alert";
 import Modal from "../common/Modal";
@@ -90,6 +90,7 @@ export default function AttendanceRoster({ title, subtitle, fetchData, canCorrec
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [correctTarget, setCorrectTarget] = useState(null);
+  const [search, setSearch] = useState("");
 
   const goPrev = () => {
     setData(null);
@@ -138,6 +139,13 @@ export default function AttendanceRoster({ title, subtitle, fetchData, canCorrec
   const fmtWorked = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
   const s = data?.todaySummary;
+
+  const nameQuery = search.trim().toLowerCase();
+  const visibleRows = useMemo(() => {
+    const rows = data?.rows || [];
+    if (!nameQuery) return rows;
+    return rows.filter((row) => (row.employeeName || "").toLowerCase().includes(nameQuery));
+  }, [data, nameQuery]);
 
   return (
     <>
@@ -202,6 +210,20 @@ export default function AttendanceRoster({ title, subtitle, fetchData, canCorrec
                 </button>
               </div>
 
+              <div className="acct-search" style={{ marginTop: 12 }}>
+                <TextInput
+                  icon={<Search size={15} />}
+                  placeholder="Search by name"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                {nameQuery && (
+                  <span className="acct-search-count">
+                    {visibleRows.length} of {data.rows.length} rows
+                  </span>
+                )}
+              </div>
+
               <div className="att-grid-wrap" style={{ marginTop: 12 }}>
                 <table className="att-grid">
                   <thead>
@@ -222,7 +244,18 @@ export default function AttendanceRoster({ title, subtitle, fetchData, canCorrec
                     </tr>
                   </thead>
                   <tbody>
-                    {data.rows.map((row) => (
+                    {visibleRows.length === 0 && (
+                      <tr>
+                        <td className="att-grid-namecol" style={{ color: "var(--text-secondary)" }}>
+                          No one matches “{search.trim()}”.
+                        </td>
+                        {dayKeys.map((key) => (
+                          <td key={key} />
+                        ))}
+                        <td className="att-grid-worked" />
+                      </tr>
+                    )}
+                    {visibleRows.map((row) => (
                       <tr key={`${row.userId}-${row.projectId}`}>
                         <td className="att-grid-namecol">
                           <div className="att-grid-emp">{row.employeeName}</div>

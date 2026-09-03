@@ -170,7 +170,11 @@ export default function TeamLeaveRequestsPage() {
                       <td className="table-cell-secondary">{request.reason}</td>
                       <td>
                         <StatusBadge status={request.status} />
-                        {request.createdByManager && <span className="logged-by-manager-tag">Logged by manager</span>}
+                        {request.createdByManager && (
+                          <span className="logged-by-manager-tag">
+                            {request.createdByAdmin ? "Logged by admin" : "Logged by manager"}
+                          </span>
+                        )}
                       </td>
                       <td>
                         <div className="row-actions">

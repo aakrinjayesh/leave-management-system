@@ -6,7 +6,23 @@ const notificationService = require("../services/notification.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
 const leaveDecisionService = require("../services/leaveDecision.service");
 const companySettingsService = require("../services/companySettings.service");
+const leaveLogService = require("../services/leaveLog.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+
+// Trailing digits of an employee code are one running sequence across every
+// prefix (mirrors admin.controller's listUsers sort). No code sorts last.
+const employeeCodeSeq = (code) => {
+  if (!code) return Number.POSITIVE_INFINITY;
+  const match = code.match(/(\d+)$/);
+  return match ? parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+};
+
+const byEmployeeCode = (a, b) => {
+  const sa = employeeCodeSeq(a.employeeCode);
+  const sb = employeeCodeSeq(b.employeeCode);
+  if (sa !== sb) return sa - sb;
+  return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+};
 
 // Notifies every active account - a leave policy change affects the whole
 // company's leave rules, not just the admin who made it.
@@ -364,7 +380,6 @@ const listEmployeeLeaveSummary = asyncHandler(async (req, res) => {
 
   const employees = await prisma.user.findMany({
     where: { userType: { not: "ADMIN" } },
-    orderBy: { firstName: "asc" },
     include: {
       leaveBalances: { where: { year: fiscalYear } },
       leaveRequests: { select: { status: true } },
@@ -398,6 +413,8 @@ const listEmployeeLeaveSummary = asyncHandler(async (req, res) => {
       totalRemaining,
     };
   });
+
+  result.sort(byEmployeeCode);
 
   new ApiResponse(200, "OK", { employees: result }).send(res);
 });
@@ -434,8 +451,43 @@ const decideLeaveRequest = (decision) =>
 const approveLeaveRequest = decideLeaveRequest("APPROVED");
 const rejectLeaveRequest = decideLeaveRequest("REJECTED");
 
+// Admin logs leave on any employee's behalf (auto-approved), regardless of
+// who their manager is - covers the case where the manager is away. Same
+// booking flow the manager uses, just without the "direct report" check.
+const createLeaveForEmployee = asyncHandler(async (req, res) => {
+  const employeeId = Number(req.params.id);
+  const { leavePolicyId, startDate, endDate, isHalfDay, reason } = req.body;
+
+  const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+  if (!employee || employee.userType === "ADMIN") {
+    throw ApiError.notFound("Employee not found.");
+  }
+
+  const { leaveRequests, wasSplit, leavePolicy } = await leaveLogService.logLeaveForEmployee({
+    employee,
+    actor: req.user,
+    leavePolicyId,
+    startDate,
+    endDate,
+    isHalfDay,
+    reason,
+    loggedByAdmin: true,
+  });
+
+  new ApiResponse(
+    201,
+    wasSplit
+      ? `Leave logged and approved - only part of it was covered by ${employee.firstName}'s ${leavePolicy.leaveName} balance, so the rest was booked as Unpaid Leave.`
+      : "Leave logged and approved.",
+    { leaveRequests }
+  ).send(res);
+
+  await leaveLogService.sendLoggedLeaveEmails({ leaveRequests, employee, actor: req.user });
+});
+
 module.exports = {
   listEmployeeLeaveSummary,
+  createLeaveForEmployee,
   approveLeaveRequest,
   rejectLeaveRequest,
   listLeavePolicies,

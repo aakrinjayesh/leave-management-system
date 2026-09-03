@@ -813,6 +813,11 @@ model LeaveRequest {
     // themselves for approval.
     createdByManager Boolean @default(false)
 
+    // Set alongside createdByManager when it was an admin (not the employee's
+    // manager) who logged it - drives the "Logged by admin" vs "Logged by
+    // manager" tag in the UI.
+    createdByAdmin Boolean @default(false)
+
     createdAt DateTime @default(now())
 
     updatedAt DateTime @updatedAt

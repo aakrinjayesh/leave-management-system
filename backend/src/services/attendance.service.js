@@ -404,6 +404,21 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
     };
   });
 
+  // Order rows by employee code (trailing-digit sequence, mirrors the admin
+  // account list), then by project name for a person's multiple rows.
+  const codeSeq = (code) => {
+    if (!code) return Number.POSITIVE_INFINITY;
+    const m = String(code).match(/(\d+)$/);
+    return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
+  };
+  rows.sort((a, b) => {
+    const sa = codeSeq(a.employeeCode);
+    const sb = codeSeq(b.employeeCode);
+    if (sa !== sb) return sa - sb;
+    if (a.employeeName !== b.employeeName) return a.employeeName.localeCompare(b.employeeName);
+    return a.projectName.localeCompare(b.projectName);
+  });
+
   return {
     timezone,
     todayKey,

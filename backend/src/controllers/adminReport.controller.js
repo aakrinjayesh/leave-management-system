@@ -3,7 +3,9 @@ const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
 const projectService = require("../services/project.service");
+const payrollReportService = require("../services/payrollReport.service");
 const notificationService = require("../services/notification.service");
+const ApiError = require("../utils/ApiError");
 
 // Notifies every active account - the project list feeds the timesheet
 // dropdown everyone uses, so a project add/rename/status change is
@@ -146,7 +148,32 @@ const reactivateProject = asyncHandler(async (req, res) => {
   await notifyAllOfProjectChange(`Project "${project.name}" has been reactivated.`);
 });
 
+// Consolidated payroll register - ?scope=employees|contract,
+// ?month=YYYY-MM, ?mode=monthly|cumulative
+const getPayrollReport = asyncHandler(async (req, res) => {
+  const scope = req.query.scope === "contract" ? "contract" : "employees";
+  const mode = req.query.mode === "cumulative" ? "cumulative" : "monthly";
+
+  const match = /^(\d{4})-(\d{2})$/.exec(String(req.query.month || ""));
+  if (!match) {
+    throw ApiError.badRequest("Please provide a valid month (YYYY-MM).");
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) {
+    throw ApiError.badRequest("Please provide a valid month (YYYY-MM).");
+  }
+
+  const data =
+    scope === "contract"
+      ? await payrollReportService.getContractRegister(year, month, mode)
+      : await payrollReportService.getEmployeeRegister(year, month, mode);
+
+  new ApiResponse(200, "OK", { scope, mode, year, month, ...data }).send(res);
+});
+
 module.exports = {
+  getPayrollReport,
   getProjectAssignmentReport,
   getProjectHistory,
   getProjectRecentMembers,

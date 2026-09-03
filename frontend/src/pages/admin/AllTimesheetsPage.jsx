@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users } from "lucide-react";
+import { Search, Users } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
+import TextInput from "../../components/common/TextInput";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatHoursMinutes } from "../../utils/formatDuration";
@@ -16,6 +17,7 @@ export default function AllTimesheetsPage() {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState(null);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     adminApi
@@ -26,6 +28,13 @@ export default function AllTimesheetsPage() {
 
   const pendingTotal = employees?.reduce((sum, e) => sum + e.pendingCount, 0) ?? 0;
   const noneSubmitted = employees?.every((e) => e.totalSubmissions === 0) ?? false;
+
+  const nameQuery = search.trim().toLowerCase();
+  const visibleEmployees = useMemo(() => {
+    if (!employees) return [];
+    if (!nameQuery) return employees;
+    return employees.filter((e) => `${e.firstName} ${e.lastName}`.toLowerCase().includes(nameQuery));
+  }, [employees, nameQuery]);
 
   return (
     <DashboardLayout title="All timesheets">
@@ -69,6 +78,21 @@ export default function AllTimesheetsPage() {
                   "No pending submissions"
                 )}
               </p>
+
+              <div className="acct-search">
+                <TextInput
+                  icon={<Search size={15} />}
+                  placeholder="Search by name"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                {nameQuery && (
+                  <span className="acct-search-count">
+                    {visibleEmployees.length} of {employees.length}
+                  </span>
+                )}
+              </div>
+
               <div className="data-table-wrap">
                 <table className="data-table">
                   <thead>
@@ -81,7 +105,14 @@ export default function AllTimesheetsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {employees.map((employee) => (
+                    {visibleEmployees.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="table-cell-secondary" style={{ textAlign: "center" }}>
+                          No employees match “{search.trim()}”.
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleEmployees.map((employee) => (
                       <tr
                         key={employee.id}
                         className="is-clickable"
@@ -89,9 +120,6 @@ export default function AllTimesheetsPage() {
                       >
                         <td className="table-cell-primary">
                           {employee.firstName} {employee.lastName}
-                          {employee.employeeCode && (
-                            <span className="table-cell-secondary"> · {employee.employeeCode}</span>
-                          )}
                         </td>
                         <td>
                           {employee.pendingCount > 0 ? (
@@ -104,7 +132,8 @@ export default function AllTimesheetsPage() {
                         <td className="table-cell-secondary">{employee.rejectedCount}</td>
                         <td>{formatHoursMinutes(employee.hoursThisMonth)}</td>
                       </tr>
-                    ))}
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

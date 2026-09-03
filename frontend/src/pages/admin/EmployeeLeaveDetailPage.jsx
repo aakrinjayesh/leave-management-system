@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CalendarDays, Check, ListChecks, Paperclip, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, ListChecks, Paperclip, X } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatusBadge from "../../components/common/StatusBadge";
 import StatCard from "../../components/common/StatCard";
@@ -11,6 +11,7 @@ import TextArea from "../../components/common/TextArea";
 import Button from "../../components/common/Button";
 import Calendar from "../../components/common/Calendar";
 import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
+import LogLeaveForEmployeeModal from "../manager/LogLeaveForEmployeeModal";
 import { useMonthNavigation } from "../../hooks/useMonthNavigation";
 import * as adminApi from "../../api/admin.api";
 import { formatDateRange } from "../../utils/formatDate";
@@ -108,6 +109,7 @@ function EmployeeLeaveDetailContent({ id }) {
   const [calendarData, setCalendarData] = useState(null);
   const [actioningId, setActioningId] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
+  const [isLogOpen, setIsLogOpen] = useState(false);
 
   const loadDetail = () => adminApi.getUserLeaveDetail(id).then(setData);
   const loadCalendar = () => adminApi.getUserCalendar(id, year, month).then(setCalendarData);
@@ -174,6 +176,10 @@ function EmployeeLeaveDetailContent({ id }) {
           </h1>
           <p>{employee.email}</p>
         </div>
+        <Button onClick={() => setIsLogOpen(true)} className="page-header-btn">
+          <CalendarPlus size={16} />
+          Log leave
+        </Button>
       </div>
 
       <Alert type="error">{error}</Alert>
@@ -261,7 +267,11 @@ function EmployeeLeaveDetailContent({ id }) {
                       <td className="table-cell-secondary">{request.reason}</td>
                       <td>
                         <StatusBadge status={request.status} />
-                        {request.createdByManager && <span className="logged-by-manager-tag">Logged by manager</span>}
+                        {request.createdByManager && (
+                          <span className="logged-by-manager-tag">
+                            {request.createdByAdmin ? "Logged by admin" : "Logged by manager"}
+                          </span>
+                        )}
                       </td>
                       <td className="table-cell-secondary">
                         {request.approvedBy
@@ -323,6 +333,18 @@ function EmployeeLeaveDetailContent({ id }) {
           onClose={() => setRejectTarget(null)}
           onRejected={() => {
             setRejectTarget(null);
+            refresh();
+          }}
+        />
+      )}
+
+      {isLogOpen && (
+        <LogLeaveForEmployeeModal
+          employee={employee}
+          submitFn={adminApi.logLeaveForEmployee}
+          onClose={() => setIsLogOpen(false)}
+          onSuccess={() => {
+            setIsLogOpen(false);
             refresh();
           }}
         />
