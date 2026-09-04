@@ -25,10 +25,22 @@ const todayValue = () => toDateInputValue(new Date());
 // otherwise go stale if an account is added/deactivated elsewhere while it's
 // open - refreshKey lets the parent force a refetch by passing something
 // that changes on every project-list reload (e.g. the projects array itself).
-export default function ProjectMembersField({ members, onChange, recentHint, refreshKey }) {
+export default function ProjectMembersField({
+  members,
+  onChange,
+  recentHint,
+  refreshKey,
+  // Optional: when the parent renders its own search box (e.g. up in the tab
+  // row), it passes the value + setter and this component hides its internal one.
+  search: searchProp,
+  onSearchChange,
+}) {
   const [employees, setEmployees] = useState(null);
   const [projectsByEmployeeId, setProjectsByEmployeeId] = useState({});
-  const [search, setSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
+  const controlledSearch = typeof onSearchChange === "function";
+  const search = controlledSearch ? searchProp || "" : localSearch;
+  const setSearch = controlledSearch ? onSearchChange : setLocalSearch;
   // Captured once, on mount only - who's already assigned when this field
   // first shows up (e.g. Edit project's existing members). Sorting/grouping
   // against this frozen snapshot instead of the live `members` means
@@ -106,7 +118,7 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
         <label className="field-label" style={{ marginBottom: 0 }}>
           Members {members.length > 0 ? `(${members.length} selected)` : ""}
         </label>
-        {employees && employees.length > 0 && (
+        {!controlledSearch && employees && employees.length > 0 && (
           <div className="member-search">
             <TextInput
               icon={<Search size={15} />}

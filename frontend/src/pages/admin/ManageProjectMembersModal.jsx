@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Ban, Pencil, RotateCcw } from "lucide-react";
+import { Ban, Pencil, RotateCcw, Search } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
+import TextInput from "../../components/common/TextInput";
 import ProjectMembersField from "./ProjectMembersField";
 import ProjectEmployeeTimesheets from "./ProjectEmployeeTimesheets";
 import * as adminApi from "../../api/admin.api";
@@ -38,6 +39,7 @@ export default function ManageProjectMembersModal({
   isToggling = false,
 }) {
   const [tab, setTab] = useState("members");
+  const [memberSearch, setMemberSearch] = useState("");
   const [members, setMembers] = useState(toMembers(project));
   const [recentMembers, setRecentMembers] = useState([]);
   const [error, setError] = useState("");
@@ -150,21 +152,34 @@ export default function ManageProjectMembersModal({
           </dl>
         </div>
 
-        <div className="filter-tabs" style={{ marginBottom: 10 }}>
-          <button
-            type="button"
-            className={`filter-tab ${tab === "members" ? "active" : ""}`}
-            onClick={() => setTab("members")}
-          >
-            Members
-          </button>
-          <button
-            type="button"
-            className={`filter-tab ${tab === "timesheets" ? "active" : ""}`}
-            onClick={() => setTab("timesheets")}
-          >
-            Employee timesheets
-          </button>
+        <div className="pm-tabs-row">
+          <div className="filter-tabs" style={{ marginBottom: 0 }}>
+            <button
+              type="button"
+              className={`filter-tab ${tab === "members" ? "active" : ""}`}
+              onClick={() => setTab("members")}
+            >
+              Members
+            </button>
+            <button
+              type="button"
+              className={`filter-tab ${tab === "timesheets" ? "active" : ""}`}
+              onClick={() => setTab("timesheets")}
+            >
+              Employee timesheets
+            </button>
+          </div>
+
+          {tab === "members" && (
+            <div className="pm-tabs-search">
+              <TextInput
+                icon={<Search size={15} />}
+                placeholder="Search name, employee ID or email"
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+              />
+            </div>
+          )}
         </div>
 
         {tab === "members" ? (
@@ -181,6 +196,8 @@ export default function ManageProjectMembersModal({
                   members={members}
                   onChange={setMembers}
                   recentHint={recentMembers}
+                  search={memberSearch}
+                  onSearchChange={setMemberSearch}
                 />
               </div>
 

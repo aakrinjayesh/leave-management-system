@@ -779,6 +779,25 @@
   min-height: 0;
 }
 
+/* Tab strip with the member search pinned to its right edge. */
+.pm-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.pm-tabs-search {
+  margin-left: auto;
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+
+.pm-tabs-search .field {
+  margin-bottom: 0;
+}
+
 .pm-modal-form {
   display: flex;
   flex-direction: column;
