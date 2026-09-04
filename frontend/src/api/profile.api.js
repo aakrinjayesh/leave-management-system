@@ -31,8 +31,6 @@ export const updateMyBankInfo = (data, files) => patchSection("/profile/me/bank-
 export const downloadMyDocument = (type) =>
   axiosClient.get(`/profile/me/documents/${type}`, { responseType: "blob" });
 
-export const getMyProfileChangeRequests = () => unwrap(axiosClient.get("/profile/me/change-requests"));
-
 export const getMyIntro = () => unwrap(axiosClient.get("/profile/me/intro"));
 
 export const updateMyIntro = (data) => unwrap(axiosClient.put("/profile/me/intro", data));

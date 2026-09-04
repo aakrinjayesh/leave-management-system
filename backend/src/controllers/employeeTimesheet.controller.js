@@ -373,6 +373,62 @@ const getSubmissionAttachment = asyncHandler(async (req, res) => {
   });
 });
 
+// "Do I owe a timesheet?" - drives the dashboard reminder strip. For each of
+// the employee's projects, looks at the most recently COMPLETED submission
+// period (the current one is skipped until it's over) and reports it as
+// pending when there's no submission yet, or it was rejected. Periods where
+// the employee had no working days at all (fully on leave / holiday) are not
+// nagged about.
+const getMyTimesheetStatus = asyncHandler(async (req, res) => {
+  const projects = await projectService.listProjectsForEmployee(req.user.id);
+  const now = new Date();
+  const todayKey = timesheetService.startOfUtcDay(now).toISOString().slice(0, 10);
+
+  const pending = [];
+  for (const project of projects) {
+    const freq = project.submissionFrequency;
+    let periodStart = timesheetService.getPeriodStart(now, freq);
+    let periodEnd = timesheetService.getPeriodEnd(periodStart, freq);
+
+    // Current period not finished yet -> look at the previous one instead.
+    if (periodEnd.toISOString().slice(0, 10) >= todayKey) {
+      const back = new Date(periodStart);
+      if (freq === "MONTHLY") back.setUTCMonth(back.getUTCMonth() - 1);
+      else back.setUTCDate(back.getUTCDate() - 7);
+      periodStart = timesheetService.getPeriodStart(back, freq);
+      periodEnd = timesheetService.getPeriodEnd(periodStart, freq);
+    }
+
+    const submission = await prisma.timesheetSubmission.findUnique({
+      where: {
+        userId_weekStartDate_projectId: { userId: req.user.id, weekStartDate: periodStart, projectId: project.id },
+      },
+    });
+    if (submission && submission.status !== "REJECTED") continue;
+
+    // Skip if they had nothing to log that period (all leave / holiday / weekend).
+    const blocked = await timesheetConstraints.getBlockedDays({
+      userId: req.user.id,
+      start: periodStart,
+      end: periodEnd,
+      hoursPerDay: timesheetService.getHoursPerDay(project),
+    });
+    const { workingDays } = timesheetConstraints.summarisePeriod(blocked, [], periodStart, periodEnd);
+    if (workingDays <= 0) continue;
+
+    pending.push({
+      projectId: project.id,
+      projectName: project.name,
+      periodStart,
+      periodEnd,
+      isMonthly: freq === "MONTHLY",
+      rejected: submission?.status === "REJECTED",
+    });
+  }
+
+  new ApiResponse(200, "OK", { pending }).send(res);
+});
+
 module.exports = {
   listMyProjects,
   getMyEntries,
@@ -382,4 +438,5 @@ module.exports = {
   submitWeek,
   listMySubmissions,
   getSubmissionAttachment,
+  getMyTimesheetStatus,
 };

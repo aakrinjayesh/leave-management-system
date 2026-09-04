@@ -9,6 +9,12 @@ const startOfUtcDay = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.ge
 
 // Notification goes to both the employee and their manager (view-only on
 // WFH requests, same as resignations) - admin is the only one who decides.
+const DECISION_TITLE = {
+  APPROVED: "WFH request approved",
+  REJECTED: "WFH request rejected",
+  CANCELLED: "WFH approval revoked",
+};
+
 const notifyDecision = async (request, status, message) => {
   try {
     const recipientIds = new Set([request.user.id]);
@@ -19,7 +25,7 @@ const notifyDecision = async (request, status, message) => {
 
     await notificationService.notifyMany([...recipientIds], {
       type: notificationService.NOTIFICATION_TYPES.WFH_DECIDED,
-      title: status === "APPROVED" ? "WFH request approved" : "WFH request rejected",
+      title: DECISION_TITLE[status] || "WFH request updated",
       message,
     });
   } catch (err) {
@@ -78,4 +84,22 @@ const rejectWfhRequest = asyncHandler(async (req, res) => {
   );
 });
 
-module.exports = { listWfhRequests, approveWfhRequest, rejectWfhRequest };
+const revokeWfhRequest = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const { remarks } = req.body;
+
+  const request = await wfhService.revokeApprovedWfhRequest(id, req.user.id, remarks);
+
+  new ApiResponse(200, "WFH approval revoked.", { request }).send(res);
+
+  const decidedByName = `${req.user.firstName} ${req.user.lastName}`;
+  await notifyDecision(
+    request,
+    "CANCELLED",
+    `${request.user.firstName} ${request.user.lastName}'s approved WFH request (${formatDateShort(
+      request.startDate
+    )} - ${formatDateShort(request.endDate)}) was revoked by ${decidedByName}.`
+  );
+});
+
+module.exports = { listWfhRequests, approveWfhRequest, rejectWfhRequest, revokeWfhRequest };

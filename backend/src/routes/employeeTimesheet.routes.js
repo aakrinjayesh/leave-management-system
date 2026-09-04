@@ -13,6 +13,7 @@ const router = express.Router();
 router.use(authenticate, authorize(USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER));
 
 router.get("/projects", controller.listMyProjects);
+router.get("/status", controller.getMyTimesheetStatus);
 router.get("/entries", controller.getMyEntries);
 router.post("/entries", validate(saveEntrySchema), controller.saveEntry);
 router.delete("/entries/:id", controller.deleteEntry);

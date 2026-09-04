@@ -37,8 +37,6 @@ router.patch(
 );
 router.get("/me/documents/:type", controller.getMyDocument);
 
-router.get("/me/change-requests", controller.getMyProfileChangeRequests);
-
 router.get("/me/intro", controller.getMyIntro);
 router.put("/me/intro", validate(updateMyIntroSchema), controller.updateMyIntro);
 

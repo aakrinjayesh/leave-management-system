@@ -21,6 +21,25 @@ const applyDecision = async ({ leaveRequest, actor, decision, remarks }) => {
   }
 
   if (decision === "APPROVED") {
+    // Can't be on leave and working from home the same day - if an
+    // overlapping WFH request was already approved, that has to be sorted
+    // out (cancelled) before the leave can be approved.
+    const overlappingWfh = await prisma.wfhRequest.findFirst({
+      where: {
+        userId: leaveRequest.userId,
+        status: "APPROVED",
+        startDate: { lte: leaveRequest.endDate },
+        endDate: { gte: leaveRequest.startDate },
+      },
+    });
+    if (overlappingWfh) {
+      throw ApiError.badRequest(
+        `${leaveRequest.user.firstName} has an approved WFH request (${formatDateShort(
+          overlappingWfh.startDate
+        )} - ${formatDateShort(overlappingWfh.endDate)}) overlapping these dates. Cancel that WFH request first.`
+      );
+    }
+
     const requestFiscalYear = await companySettingsService.getFiscalYearForDate(leaveRequest.startDate);
     const balance = await leaveBalanceService.getOrCreateBalance(
       leaveRequest.userId,

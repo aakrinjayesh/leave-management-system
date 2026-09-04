@@ -56,30 +56,13 @@ export default function ProfilePage() {
   const [editingSection, setEditingSection] = useState(null); // "personal" | "statutory" | "bank" | null
   const [profileMessage, setProfileMessage] = useState("");
   const [docError, setDocError] = useState("");
-  const [pendingSections, setPendingSections] = useState(new Set());
 
   const isAdmin = user?.userType === "ADMIN";
 
-  // Maps this page's section keys to the backend's ProfileChangeSection enum.
-  const SECTION_ENUM = { personal: "PERSONAL", statutory: "STATUTORY", bank: "BANK" };
-  const isSectionPending = (key) => pendingSections.has(SECTION_ENUM[key]);
-
-  const loadChangeRequests = () => {
-    if (isAdmin) return Promise.resolve();
-    return profileApi
-      .getMyProfileChangeRequests()
-      .then((data) => {
-        setPendingSections(
-          new Set(data.requests.filter((r) => r.status === "PENDING").map((r) => r.section)),
-        );
-      })
-      .catch(() => {});
-  };
-
   const handleSectionSaved = async (label) => {
     setEditingSection(null);
-    await Promise.all([refreshUser(), loadChangeRequests()]);
-    setProfileMessage(`${label} change sent to admin for approval.`);
+    await refreshUser();
+    setProfileMessage(`${label} updated.`);
   };
 
   // Right-side control on each editable section header: a pending-approval
@@ -113,20 +96,14 @@ export default function ProfilePage() {
     </div>
   );
 
-  const renderSectionEditControl = (key, editsRemaining) => {
+  const renderSectionEditControl = (key) => {
     if (isAdmin) return null;
-    if (isSectionPending(key)) {
-      return <span className="card-section-header-note">Change awaiting admin approval</span>;
-    }
-    if (editsRemaining > 0) {
-      return (
-        <button type="button" className="link-btn" onClick={() => setEditingSection(key)}>
-          <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-          Edit
-        </button>
-      );
-    }
-    return <span className="card-section-header-note">No self-edits left - contact admin</span>;
+    return (
+      <button type="button" className="link-btn" onClick={() => setEditingSection(key)}>
+        <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+        Edit
+      </button>
+    );
   };
 
   const loadMyResignation = () =>
@@ -138,7 +115,6 @@ export default function ProfilePage() {
   useEffect(() => {
     if (isAdmin) return;
     loadMyResignation();
-    loadChangeRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -352,7 +328,7 @@ export default function ProfilePage() {
               <User size={15} className="profile-title-icon" />
               Personal information
             </span>
-            {renderSectionEditControl("personal", user?.personalInfoEditsRemaining)}
+            {renderSectionEditControl("personal")}
           </div>
           <p className="card-section-subtitle">
             {isAdmin
@@ -433,7 +409,7 @@ export default function ProfilePage() {
               <CreditCard size={15} className="profile-title-icon" />
               Statutory Information
             </span>
-            {renderSectionEditControl("statutory", user?.statutoryInfoEditsRemaining)}
+            {renderSectionEditControl("statutory")}
           </div>
           <p className="card-section-subtitle">
             Sensitive numbers are shown masked.
@@ -478,7 +454,7 @@ export default function ProfilePage() {
               <Landmark size={15} className="profile-title-icon" />
               Bank &amp; salary
             </span>
-            {renderSectionEditControl("bank", user?.bankInfoEditsRemaining)}
+            {renderSectionEditControl("bank")}
           </div>
           {!isAdmin && (
             <p className="card-section-subtitle">
@@ -682,7 +658,6 @@ export default function ProfilePage() {
       {editingSection === "personal" && (
         <EditPersonalInfoModal
           user={user}
-          editsRemaining={user?.personalInfoEditsRemaining ?? 0}
           onClose={() => setEditingSection(null)}
           onSaved={() => handleSectionSaved("Personal information")}
         />
@@ -691,7 +666,6 @@ export default function ProfilePage() {
       {editingSection === "statutory" && (
         <EditStatutoryInfoModal
           user={user}
-          editsRemaining={user?.statutoryInfoEditsRemaining ?? 0}
           onClose={() => setEditingSection(null)}
           onSaved={() => handleSectionSaved("Statutory information")}
         />
@@ -700,7 +674,6 @@ export default function ProfilePage() {
       {editingSection === "bank" && (
         <EditBankInfoModal
           user={user}
-          editsRemaining={user?.bankInfoEditsRemaining ?? 0}
           onClose={() => setEditingSection(null)}
           onSaved={() => handleSectionSaved("Bank information")}
         />

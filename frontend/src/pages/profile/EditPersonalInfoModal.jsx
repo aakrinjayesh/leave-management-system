@@ -10,7 +10,7 @@ import ProfileDocField from "./ProfileDocField";
 
 const toDateInputValue = (date) => (date ? new Date(date).toISOString().slice(0, 10) : "");
 
-export default function EditPersonalInfoModal({ user, editsRemaining, onClose, onSaved }) {
+export default function EditPersonalInfoModal({ user, onClose, onSaved }) {
   const [form, setForm] = useState({
     personalEmail: user?.personalEmail || "",
     phone: user?.phone || "",
@@ -55,9 +55,8 @@ export default function EditPersonalInfoModal({ user, editsRemaining, onClose, o
       <Alert type="error">{error}</Alert>
       <form onSubmit={handleSubmit} noValidate>
         <p className="helper-text" style={{ marginTop: 0 }}>
-          Name, employee code, and your work email can only be changed by your admin. Your changes are sent to
-          admin for approval before they take effect. You have{" "}
-          <strong>{editsRemaining}</strong> request{editsRemaining === 1 ? "" : "s"} left for this section.
+          Name, employee code, and your work email can only be changed by your admin. Other changes take effect
+          immediately.
         </p>
 
         <div className="form-two-col">

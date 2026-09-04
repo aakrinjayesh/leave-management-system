@@ -4,9 +4,10 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const {
-  SELF_PROFILE_EDIT_LIMIT,
   PROFILE_CHANGE_SECTIONS,
   PROFILE_CHANGE_DOCUMENTS,
+  PROFILE_CHANGE_DATE_FIELDS,
+  PROFILE_CHANGE_DOCUMENT_FIELDS,
   INTRO_PROMPT_KEYS,
 } = require("../utils/constants");
 const incomeTaxService = require("../services/incomeTax.service");
@@ -45,12 +46,12 @@ const attachSectionDocuments = async (req, section) => {
   return uploaded;
 };
 
-// Submits the section change request, cleaning up any just-uploaded files if
-// the submission itself is rejected (nothing changed / one already pending).
-const submitSectionWithDocs = async (req, section) => {
+// Applies the section change, cleaning up any just-uploaded files if the
+// apply itself throws (e.g. nothing actually changed).
+const applyProfileSectionWithDocs = async (req, section) => {
   const uploaded = await attachSectionDocuments(req, section);
   try {
-    return await submitProfileChangeRequest(req.user.id, section, req.body);
+    return await applyProfileSectionChange(req.user.id, section, req.body);
   } catch (err) {
     for (const url of uploaded) {
       deleteFromS3(url).catch((e) => console.error("Failed to clean up abandoned profile document:", e));
@@ -105,21 +106,23 @@ const getMyPhoto = asyncHandler(async (req, res) => {
   });
 });
 
-// Lets every active admin know an employee changed their own profile - the
-const notifyAdminsOfProfileChangeRequest = async (employee, sectionLabel) => {
+// FYI in-app notification to every active admin after an employee edits one
+// of their own profile sections - no approval needed anymore, this is just
+// for awareness / an audit trail.
+const notifyAdminsOfProfileChange = async (employee, sectionLabel) => {
   try {
     const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" }, select: { id: true } });
     await notificationService.notifyMany(
       admins.map((admin) => admin.id),
       {
         type: notificationService.NOTIFICATION_TYPES.PROFILE_CHANGE_REQUESTED,
-        title: "Profile change request",
-        message: `${employee.firstName} ${employee.lastName} requested a change to their ${sectionLabel}. Review it on their details page.`,
+        title: "Profile updated",
+        message: `${employee.firstName} ${employee.lastName} updated their ${sectionLabel}.`,
         link: `/admin/users/${employee.id}/details`,
       }
     );
   } catch (err) {
-    console.error("Failed to create profile change request notification:", err);
+    console.error("Failed to create profile change notification:", err);
   }
 };
 
@@ -131,77 +134,52 @@ const normaliseForCompare = (value) => {
   return String(value);
 };
 
-// Shared by all three updateMy*Info handlers - instead of writing to User, it
-// parks the (already-validated) changes in a PENDING ProfileChangeRequest for
-// an admin to accept or reject. Bumps the section's submission counter, and
-// only one PENDING request per section is allowed at a time.
-const submitProfileChangeRequest = async (userId, section, data) => {
+// Shared by all three updateMy*Info handlers - applies the (already-validated)
+// changes straight to the User row. No admin approval, no per-section limit.
+// Superseded document files are cleaned up from S3; admins get an FYI notice.
+const applyProfileSectionChange = async (userId, section, data) => {
   const config = PROFILE_CHANGE_SECTIONS[section];
   const existing = await prisma.user.findUnique({ where: { id: userId } });
 
-  if (existing[config.countField] >= SELF_PROFILE_EDIT_LIMIT) {
-    throw ApiError.forbidden(
-      `You've used all ${SELF_PROFILE_EDIT_LIMIT} change requests for ${config.label}. Contact your admin to make further changes.`
-    );
-  }
-
-  const alreadyPending = await prisma.profileChangeRequest.findFirst({
-    where: { userId, section, status: "PENDING" },
-  });
-  if (alreadyPending) {
-    throw ApiError.badRequest(`Your last ${config.label} change is still awaiting admin approval.`);
-  }
-
   // Keep only the fields the employee actually provided AND that differ from
-  // what's already on record - a no-op save shouldn't create a request.
-  const changes = {};
+  // what's already on record - a no-op save shouldn't do anything.
+  const patch = {};
+  const supersededFiles = [];
   for (const field of config.fields) {
     const value = data[field];
     if (value === undefined) continue;
-    if (normaliseForCompare(existing[field]) !== normaliseForCompare(value)) {
-      changes[field] = value instanceof Date ? value.toISOString() : value;
+    if (normaliseForCompare(existing[field]) === normaliseForCompare(value)) continue;
+
+    patch[field] = PROFILE_CHANGE_DATE_FIELDS.has(field) && value ? new Date(value) : value;
+    if (PROFILE_CHANGE_DOCUMENT_FIELDS.has(field) && existing[field] && existing[field] !== value) {
+      supersededFiles.push(existing[field]);
     }
   }
-  if (Object.keys(changes).length === 0) {
+  if (Object.keys(patch).length === 0) {
     throw ApiError.badRequest("Nothing has changed in this section.");
   }
 
-  const [updatedUser] = await prisma.$transaction([
-    prisma.user.update({
-      where: { id: userId },
-      data: { [config.countField]: { increment: 1 } },
-    }),
-    prisma.profileChangeRequest.create({ data: { userId, section, changes } }),
-  ]);
+  const updatedUser = await prisma.user.update({ where: { id: userId }, data: patch });
 
-  await notifyAdminsOfProfileChangeRequest(updatedUser, config.label);
-
-  return SELF_PROFILE_EDIT_LIMIT - updatedUser[config.countField];
+  for (const oldUrl of supersededFiles) {
+    deleteFromS3(oldUrl).catch((err) => console.error("Failed to delete superseded profile document:", err));
+  }
+  await notifyAdminsOfProfileChange(updatedUser, config.label);
 };
 
 const updateMyPersonalInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await submitSectionWithDocs(req, "PERSONAL");
-  new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
+  await applyProfileSectionWithDocs(req, "PERSONAL");
+  new ApiResponse(200, "Personal information updated.").send(res);
 });
 
 const updateMyStatutoryInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await submitSectionWithDocs(req, "STATUTORY");
-  new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
+  await applyProfileSectionWithDocs(req, "STATUTORY");
+  new ApiResponse(200, "Statutory information updated.").send(res);
 });
 
 const updateMyBankInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await submitSectionWithDocs(req, "BANK");
-  new ApiResponse(200, "Sent to admin for approval.", { editsRemaining }).send(res);
-});
-
-const getMyProfileChangeRequests = asyncHandler(async (req, res) => {
-  const requests = await prisma.profileChangeRequest.findMany({
-    where: { userId: req.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-
-  new ApiResponse(200, "OK", { requests }).send(res);
+  await applyProfileSectionWithDocs(req, "BANK");
+  new ApiResponse(200, "Bank information updated.").send(res);
 });
 
 // Every active admin, plus this employee's own active manager if they have
@@ -446,7 +424,6 @@ const updateMyIntro = asyncHandler(async (req, res) => {
 module.exports = {
   markAnniversaryCelebrationSeen,
   markBirthdayCelebrationSeen,
-  getMyProfileChangeRequests,
   getMyIntro,
   updateMyIntro,
   updateMyPersonalInfo,

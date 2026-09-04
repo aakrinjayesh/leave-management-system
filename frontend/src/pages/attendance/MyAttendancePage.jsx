@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
-import Modal from "../../components/common/Modal";
+import MarkAttendanceModal from "../../components/attendance/MarkAttendanceModal";
 import { useMonthNavigation } from "../../hooks/useMonthNavigation";
 import * as attendanceApi from "../../api/attendance.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -17,80 +17,6 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const LEGEND = ["PRESENT", "HALF_DAY", "WFH", "ON_LEAVE", "ABSENT", "HOLIDAY"];
 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-
-// Modal shown when the employee clicks a markable day - one row per project,
-// each with Present / Half day / Absent.
-function MarkModal({ day, onClose, onSaved }) {
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(null); // `${projectId}|${action}`
-
-  const dateLabel = new Date(`${day.date}T00:00:00`).toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-
-  const set = async (projectId, status) => {
-    setError("");
-    setBusy(`${projectId}|${status}`);
-    try {
-      await attendanceApi.markAttendance({ projectId, date: day.date, status });
-      onSaved();
-    } catch (err) {
-      setError(getErrorMessage(err, "Couldn't save your attendance."));
-      setBusy(null);
-    }
-  };
-
-  return (
-    <Modal title={`Mark attendance — ${dateLabel}`} onClose={onClose}>
-      <Alert type="error">{error}</Alert>
-      <div className="att-modal-projects">
-        {day.perProject.map((p) => {
-          const isPresent = p.status === "PRESENT";
-          const isHalf = p.status === "HALF_DAY";
-          const marked = isPresent || isHalf;
-          return (
-            <div className="att-modal-project" key={p.projectId}>
-              <span className="att-modal-project-name">{p.projectName}</span>
-              <div className="att-toggle">
-                <button
-                  type="button"
-                  className={`att-toggle-btn ${isPresent ? "is-on is-present" : ""}`}
-                  disabled={busy === `${p.projectId}|PRESENT`}
-                  onClick={() => set(p.projectId, "PRESENT")}
-                >
-                  Present
-                </button>
-                <button
-                  type="button"
-                  className={`att-toggle-btn ${isHalf ? "is-on is-half" : ""}`}
-                  disabled={busy === `${p.projectId}|HALF_DAY`}
-                  onClick={() => set(p.projectId, "HALF_DAY")}
-                >
-                  Half day
-                </button>
-                <button
-                  type="button"
-                  className={`att-toggle-btn ${!marked ? "is-on is-absent" : ""}`}
-                  disabled={busy === `${p.projectId}|ABSENT`}
-                  onClick={() => set(p.projectId, "ABSENT")}
-                >
-                  Absent
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="modal-actions">
-        <button type="button" className="btn btn-secondary page-header-btn" onClick={onClose}>
-          Done
-        </button>
-      </div>
-    </Modal>
-  );
-}
 
 export default function MyAttendancePage() {
   const { year, month, goToPrevMonth, goToNextMonth } = useMonthNavigation();
@@ -263,7 +189,7 @@ export default function MyAttendancePage() {
         </>
       )}
 
-      {markDay && <MarkModal day={markDay} onClose={() => setMarkDay(null)} onSaved={reload} />}
+      {markDay && <MarkAttendanceModal day={markDay} onClose={() => setMarkDay(null)} onSaved={reload} />}
     </DashboardLayout>
   );
 }

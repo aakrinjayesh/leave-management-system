@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Clock, Home, X } from "lucide-react";
+import { Check, Clock, Home, Undo2, X } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -98,6 +98,22 @@ export default function WfhRequestsPage() {
       await loadRequests();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't approve this WFH request."));
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleRevoke = async (request) => {
+    if (!window.confirm(`Revoke ${request.user.firstName}'s approved WFH for ${formatDateRange(request.startDate, request.endDate)}?`)) {
+      return;
+    }
+    setError("");
+    setActioningId(request.id);
+    try {
+      await adminApi.revokeWfhRequest(request.id);
+      await loadRequests();
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't revoke this WFH request."));
     } finally {
       setActioningId(null);
     }
@@ -212,6 +228,19 @@ export default function WfhRequestsPage() {
                             >
                               <X size={14} />
                               Reject
+                            </button>
+                          </div>
+                        )}
+                        {request.status === "APPROVED" && (
+                          <div className="row-actions">
+                            <button
+                              type="button"
+                              className="row-action-btn reject"
+                              disabled={actioningId === request.id}
+                              onClick={() => handleRevoke(request)}
+                            >
+                              <Undo2 size={14} />
+                              Revoke
                             </button>
                           </div>
                         )}

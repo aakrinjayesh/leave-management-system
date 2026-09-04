@@ -4,6 +4,7 @@ const leaveCalendarService = require("./leaveCalendar.service");
 const leaveBalanceService = require("./leaveBalance.service");
 const companySettingsService = require("./companySettings.service");
 const { sendLeaveDecisionEmail } = require("../utils/email.util");
+const { formatDateShort } = require("../utils/formatDate.util");
 
 const startOfUtcDay = (date) =>
   new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -55,6 +56,23 @@ const logLeaveForEmployee = async ({
   });
   if (overlapping) {
     throw ApiError.badRequest(`${employee.firstName} already has a leave request that overlaps these dates.`);
+  }
+
+  // Can't be on leave and WFH the same day.
+  const overlappingWfh = await prisma.wfhRequest.findFirst({
+    where: {
+      userId: employee.id,
+      status: "APPROVED",
+      startDate: { lte: requestEnd },
+      endDate: { gte: requestStart },
+    },
+  });
+  if (overlappingWfh) {
+    throw ApiError.badRequest(
+      `${employee.firstName} has an approved WFH request (${formatDateShort(overlappingWfh.startDate)} - ${formatDateShort(
+        overlappingWfh.endDate
+      )}) overlapping these dates. Revoke that WFH request first.`
+    );
   }
 
   const requestFiscalYear = await companySettingsService.getFiscalYearForDate(requestStart);

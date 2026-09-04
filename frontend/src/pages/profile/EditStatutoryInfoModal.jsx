@@ -12,7 +12,7 @@ import ProfileDocField from "./ProfileDocField";
 // blank and only get sent to the backend if the employee actually types a
 // fresh one in (see updateMyStatutoryInfoSchema on the backend, which treats
 // a blank/omitted field as "leave this alone").
-export default function EditStatutoryInfoModal({ user, editsRemaining, onClose, onSaved }) {
+export default function EditStatutoryInfoModal({ user, onClose, onSaved }) {
   const [form, setForm] = useState({
     pan: "",
     panHolderName: user?.panHolderName || "",
@@ -53,8 +53,7 @@ export default function EditStatutoryInfoModal({ user, editsRemaining, onClose, 
       <form onSubmit={handleSubmit} noValidate>
         <p className="helper-text" style={{ marginTop: 0 }}>
           PF number can only be changed by your admin. Sensitive numbers below are shown masked - leave a field
-          blank to keep its current value. Changes are sent to admin for approval before they take effect. You have{" "}
-          <strong>{editsRemaining}</strong> request{editsRemaining === 1 ? "" : "s"} left for this section.
+          blank to keep its current value. Changes take effect immediately.
         </p>
 
         <div className="form-two-col">

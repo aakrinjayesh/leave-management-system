@@ -3,26 +3,41 @@
   overflow: hidden;
 }
 
-/* Brand-gradient cover (same purple used by the sidebar/avatar) standing in
-   for a real cover image until photo upload exists - the soft glow blobs
-   give it some depth instead of a flat fill. */
+/* Deep brand cover - the near-black violet of the logo's ground, with a warm
+   amber glow top-right (echoing the logo's orange arc) and a violet glow
+   bottom-left. */
 .welcome-banner-cover {
   position: relative;
-  height: 232px;
+  height: 236px;
   overflow: hidden;
-  background: linear-gradient(135deg, #6d28d9 0%, #581c87 55%, #3b0764 100%);
+  background:
+    radial-gradient(130% 150% at 92% -25%, rgba(249, 115, 22, 0.32), transparent 46%),
+    radial-gradient(120% 145% at 2% 125%, rgba(139, 92, 246, 0.4), transparent 52%),
+    linear-gradient(122deg, #2c1163 0%, #1f1147 48%, #160a35 100%);
 }
 
-/* Time-aware greeting, top-left of the cover - fills what was empty space.
-   right is kept clear for the tenure badge that sits top-right. */
+/* Big faint logo mark bleeding off the right edge - brand presence without
+   clutter. Sits behind the tenure badge / greeting. */
+.welcome-banner-cover-mark {
+  position: absolute;
+  top: 50%;
+  right: -46px;
+  width: 260px;
+  transform: translateY(-50%);
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+/* Time-aware greeting, top-left of the cover - right is kept clear for the
+   tenure badge that sits top-right. */
 .welcome-banner-greeting {
   position: absolute;
-  top: 26px;
+  top: 28px;
   left: 26px;
   right: 230px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 /* Tenure badge, top-right of the cover - glassy so it reads on the gradient. */
@@ -67,20 +82,12 @@
   white-space: nowrap;
 }
 
-.welcome-banner-greeting-eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
-}
-
 .welcome-banner-greeting-main {
   font-size: 1.6rem;
   font-weight: 700;
   line-height: 1.2;
   color: #fff;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
 .welcome-banner-greeting-date {
@@ -89,13 +96,11 @@
   color: rgba(255, 255, 255, 0.72);
 }
 
+/* Subtle diagonal sheen for a bit of life on the flat gradient. */
 .welcome-banner-cover-glow {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 85% 12%, rgba(249, 115, 22, 0.35), transparent 42%),
-    radial-gradient(circle at 68% 0%, rgba(236, 72, 153, 0.28), transparent 38%),
-    radial-gradient(circle at 4% 92%, rgba(129, 140, 248, 0.35), transparent 45%);
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0.07) 0%, transparent 34%);
   pointer-events: none;
 }
 
@@ -172,16 +177,25 @@
   color: rgba(255, 255, 255, 0.75);
 }
 
-/* Its own section below the cover, not overlapping it - sits on the right
-   rather than spanning the full width. */
+/* The white strip below the cover: holds the "assist you" contact card,
+   which pokes up into the cover. */
+.welcome-banner-footer {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 20px;
+  padding: 0 24px 22px;
+}
+
 .welcome-banner-assist {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
   width: 270px;
-  max-width: calc(100% - 48px);
-  margin: -36px 24px 24px auto;
+  max-width: 100%;
+  margin: -36px 0 0 auto;
   padding: 14px 16px 14px 18px;
   border-radius: var(--radius-lg);
   background: var(--surface-card);
@@ -256,25 +270,36 @@
     font-size: 1.3rem;
   }
 
+  .welcome-banner-cover-mark {
+    right: -70px;
+    width: 220px;
+  }
+
   /* Tenure badge stacks under the greeting instead of top-right. */
   .welcome-banner-tenure {
-    top: 108px;
+    top: 112px;
     right: auto;
     left: 24px;
   }
 
   .welcome-banner-photo {
     bottom: auto;
-    top: 172px;
+    top: 176px;
   }
 
   .welcome-banner-identity {
     left: 24px;
     bottom: auto;
-    top: 266px;
+    top: 270px;
+  }
+
+  .welcome-banner-footer {
+    padding: 16px;
+    gap: 14px;
   }
 
   .welcome-banner-assist {
-    margin-top: 16px;
+    margin: 0;
+    width: 100%;
   }
 }

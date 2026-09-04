@@ -10,7 +10,7 @@ import ProfileDocField from "./ProfileDocField";
 // bankAccountNumber arrives already masked - same reasoning as
 // EditStatutoryInfoModal, it starts blank and is only sent if the employee
 // types a fresh one in.
-export default function EditBankInfoModal({ user, editsRemaining, onClose, onSaved }) {
+export default function EditBankInfoModal({ user, onClose, onSaved }) {
   const [form, setForm] = useState({
     bankAccountNumber: "",
     bankName: user?.bankName || "",
@@ -48,8 +48,7 @@ export default function EditBankInfoModal({ user, editsRemaining, onClose, onSav
       <form onSubmit={handleSubmit} noValidate>
         <p className="helper-text" style={{ marginTop: 0 }}>
           Salary / CTC can only be changed by your admin. Your account number is shown masked - leave it blank to
-          keep the current value. Changes are sent to admin for approval before they take effect. You have{" "}
-          <strong>{editsRemaining}</strong> request{editsRemaining === 1 ? "" : "s"} left for this section.
+          keep the current value. Changes take effect immediately.
         </p>
 
         <TextInput

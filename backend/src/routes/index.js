@@ -11,6 +11,7 @@ const managerTimesheetRoutes = require("./managerTimesheet.routes");
 const notificationRoutes = require("./notification.routes");
 const employeeWfhRoutes = require("./employeeWfh.routes");
 const attendanceRoutes = require("./attendance.routes");
+const holidaysRoutes = require("./holidays.routes");
 
 const router = express.Router();
 
@@ -26,5 +27,6 @@ router.use("/manager/timesheets", managerTimesheetRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/employee/wfh", employeeWfhRoutes);
 router.use("/attendance", attendanceRoutes);
+router.use("/holidays", holidaysRoutes);
 
 module.exports = router;

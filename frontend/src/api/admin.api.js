@@ -150,15 +150,6 @@ export const getUserDetails = (id) => unwrap(axiosClient.get(`/admin/users/${id}
 
 export const updateUserDetails = (id, payload) => unwrap(axiosClient.patch(`/admin/users/${id}/details`, payload));
 
-export const getProfileChangeRequests = (userId) =>
-  unwrap(axiosClient.get(`/admin/users/${userId}/profile-change-requests`));
-
-export const acceptProfileChange = (id) =>
-  unwrap(axiosClient.patch(`/admin/profile-change-requests/${id}/accept`));
-
-export const rejectProfileChange = (id, remarks) =>
-  unwrap(axiosClient.patch(`/admin/profile-change-requests/${id}/reject`, { remarks }));
-
 export const getSalaryStructureHistory = (userId) =>
   unwrap(axiosClient.get(`/admin/users/${userId}/salary-structure-history`));
 
@@ -276,3 +267,6 @@ export const approveWfhRequest = (id) => unwrap(axiosClient.patch(`/admin/wfh-re
 
 export const rejectWfhRequest = (id, remarks) =>
   unwrap(axiosClient.patch(`/admin/wfh-requests/${id}/reject`, { remarks }));
+
+export const revokeWfhRequest = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/wfh-requests/${id}/revoke`, remarks ? { remarks } : {}));

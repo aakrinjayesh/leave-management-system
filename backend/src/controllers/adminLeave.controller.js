@@ -7,6 +7,7 @@ const leaveBalanceService = require("../services/leaveBalance.service");
 const leaveDecisionService = require("../services/leaveDecision.service");
 const companySettingsService = require("../services/companySettings.service");
 const leaveLogService = require("../services/leaveLog.service");
+const holidayImpactService = require("../services/holidayImpact.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 
 // Trailing digits of an employee code are one running sequence across every
@@ -237,6 +238,9 @@ const createHoliday = asyncHandler(async (req, res) => {
       ? `A new holiday has been added: ${holidayName} (${formatDateShort(holidayDate)} - ${formatDateShort(endDate)}).`
       : `A new holiday has been added: ${holidayName} on ${formatDateShort(holidayDate)}.`
   );
+
+  // Fix up any approved leave / WFH that now lands on a holiday.
+  await holidayImpactService.reconcileApprovedTimeOffForHolidays(dates);
 });
 
 const updateHoliday = asyncHandler(async (req, res) => {
@@ -320,6 +324,10 @@ const updateHoliday = asyncHandler(async (req, res) => {
         )}).`
       : `The ${holiday.holidayName} holiday has been updated (now ${formatDateShort(holiday.holidayDate)}).`
   );
+
+  await holidayImpactService.reconcileApprovedTimeOffForHolidays(
+    [holiday, ...newHolidays].map((h) => startOfUtcDay(h.holidayDate))
+  );
 });
 
 const deactivateHoliday = asyncHandler(async (req, res) => {
@@ -358,6 +366,8 @@ const reactivateHoliday = asyncHandler(async (req, res) => {
   await notifyAllOfPolicyChange(
     `The ${holiday.holidayName} holiday on ${formatDateShort(holiday.holidayDate)} has been restored.`
   );
+
+  await holidayImpactService.reconcileApprovedTimeOffForHolidays([startOfUtcDay(holiday.holidayDate)]);
 });
 
 // ---------- All leave requests (admin-wide) ----------

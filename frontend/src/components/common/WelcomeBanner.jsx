@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import * as profileApi from "../../api/profile.api";
 import { formatDate } from "../../utils/formatDate";
 import { formatTenureShort } from "../../utils/tenure";
+import aakrinLogo from "../../assets/aakrin-logo.png";
 import "./WelcomeBanner.css";
 
 const ROLE_LABELS = { MANAGER: "Manager", ADMIN: "Admin", EMPLOYEE: "Employee" };
@@ -73,11 +74,11 @@ export default function WelcomeBanner() {
     <div className="card welcome-banner-card" style={{ marginBottom: 20 }}>
       <div className="welcome-banner-cover">
         <div className="welcome-banner-cover-glow" aria-hidden="true" />
+        <img className="welcome-banner-cover-mark" src={aakrinLogo} alt="" aria-hidden="true" />
 
         <div className="welcome-banner-greeting">
-          <span className="welcome-banner-greeting-eyebrow">{greetingForNow()}</span>
           <span className="welcome-banner-greeting-main">
-            Welcome back, {user?.firstName} <span aria-hidden="true">👋</span>
+            {greetingForNow()}, {user?.firstName} <span aria-hidden="true">👋</span>
           </span>
           <span className="welcome-banner-greeting-date">{longToday()}</span>
         </div>
@@ -131,31 +132,33 @@ export default function WelcomeBanner() {
         </div>
       </div>
 
-      {assist && (assistName || assist.email || assist.phone) && (
-        <div className="welcome-banner-assist">
-          <span className="welcome-banner-assist-title">We're here to assist you</span>
-          {assistName && (
-            <div className="welcome-banner-assist-row">
-              <span className="welcome-banner-assist-avatar" aria-hidden="true">
-                {initialsOf(assistName)}
-              </span>
-              <span className="welcome-banner-assist-name">{assistName}</span>
-            </div>
-          )}
-          {assist.phone && (
-            <a className="welcome-banner-assist-link" href={`tel:${assist.phone}`}>
-              <Phone size={13} />
-              {assist.phone}
-            </a>
-          )}
-          {assist.email && (
-            <a className="welcome-banner-assist-link" href={`mailto:${assist.email}`}>
-              <Mail size={13} />
-              {assist.email}
-            </a>
-          )}
-        </div>
-      )}
+      <div className="welcome-banner-footer">
+        {assist && (assistName || assist.email || assist.phone) && (
+          <div className="welcome-banner-assist">
+            <span className="welcome-banner-assist-title">We're here to assist you</span>
+            {assistName && (
+              <div className="welcome-banner-assist-row">
+                <span className="welcome-banner-assist-avatar" aria-hidden="true">
+                  {initialsOf(assistName)}
+                </span>
+                <span className="welcome-banner-assist-name">{assistName}</span>
+              </div>
+            )}
+            {assist.phone && (
+              <a className="welcome-banner-assist-link" href={`tel:${assist.phone}`}>
+                <Phone size={13} />
+                {assist.phone}
+              </a>
+            )}
+            {assist.email && (
+              <a className="welcome-banner-assist-link" href={`mailto:${assist.email}`}>
+                <Mail size={13} />
+                {assist.email}
+              </a>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -8,7 +8,6 @@ import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
 import DocumentUploadField from "./DocumentUploadField";
-import ProfileChangeRequestsCard from "./ProfileChangeRequestsCard";
 import UpdateSalaryStructureModal from "./UpdateSalaryStructureModal";
 import ContractPaymentSection from "./ContractPaymentSection";
 import TaxComputationSection from "./TaxComputationSection";
@@ -372,8 +371,6 @@ function EmployeeDetailsContent({ id }) {
 
       <Alert type="error">{error}</Alert>
       <Alert type="success">{success}</Alert>
-
-      <ProfileChangeRequestsCard userId={id} onDecided={loadUser} />
 
       <div>
         <form

@@ -24,9 +24,8 @@ const {
   setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
-  rejectProfileChangeSchema,
 } = require("../validators/admin.validator");
-const { rejectWfhRequestSchema } = require("../validators/wfh.validator");
+const { rejectWfhRequestSchema, revokeWfhRequestSchema } = require("../validators/wfh.validator");
 const { approveLeaveSchema, rejectLeaveSchema, createLeaveForEmployeeSchema } = require("../validators/leave.validator");
 const {
   approveTimesheetSchema,
@@ -44,7 +43,6 @@ const reportController = require("../controllers/adminReport.controller");
 const offerLetterController = require("../controllers/adminOfferLetter.controller");
 const resignationController = require("../controllers/adminResignation.controller");
 const wfhController = require("../controllers/adminWfh.controller");
-const profileChangeController = require("../controllers/adminProfileChange.controller");
 const contractPaymentController = require("../controllers/adminContractPayment.controller");
 const { uploadSingleEmployeeDocument } = require("../config/employeeDocumentUpload");
 const { USER_TYPE } = require("../utils/constants");
@@ -109,9 +107,6 @@ router.patch("/leave-requests/:id/reject", validate(rejectLeaveSchema), leaveCon
 router.get("/leave-requests/:id/attachment", controller.getUserLeaveAttachment);
 router.get("/users/:id/details", controller.getUserDetails);
 router.patch("/users/:id/details", validate(updateUserDetailsSchema), controller.updateUserDetails);
-router.get("/users/:id/profile-change-requests", profileChangeController.listForUser);
-router.patch("/profile-change-requests/:id/accept", profileChangeController.accept);
-router.patch("/profile-change-requests/:id/reject", validate(rejectProfileChangeSchema), profileChangeController.reject);
 
 router.get("/leave-policies", leaveController.listLeavePolicies);
 router.get("/leave-policies/history/years", leaveController.getLeavePolicyHistoryYears);
@@ -211,5 +206,6 @@ router.patch("/resignations/:id/reject", resignationController.rejectResignation
 router.get("/wfh-requests", wfhController.listWfhRequests);
 router.patch("/wfh-requests/:id/approve", wfhController.approveWfhRequest);
 router.patch("/wfh-requests/:id/reject", validate(rejectWfhRequestSchema), wfhController.rejectWfhRequest);
+router.patch("/wfh-requests/:id/revoke", validate(revokeWfhRequestSchema), wfhController.revokeWfhRequest);
 
 module.exports = router;
