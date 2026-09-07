@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, FileCheck, ListChecks, Paperclip, Save, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Eye, FileCheck, ListChecks, Paperclip, Save, Trash2 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextInput from "../../components/common/TextInput";
 import FormSelect from "../../components/common/FormSelect";
@@ -17,6 +17,29 @@ import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlo
 import "../../styles/dashboardShared.css";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
+
+// An uploaded-but-not-yet-submitted Excel sheet is held per project+period so
+// it survives switching project tabs / navigating away and back (the file
+// itself is already on S3 - this only remembers its reference). Cleared once
+// the period is actually submitted, or the file is removed.
+const draftAttachmentKey = (projectId, weekStart) =>
+  `ts-draft-attachment:${projectId}:${toDateInputValue(weekStart)}`;
+const readDraftAttachment = (projectId, weekStart) => {
+  try {
+    const raw = sessionStorage.getItem(draftAttachmentKey(projectId, weekStart));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+const writeDraftAttachment = (projectId, weekStart, value) => {
+  try {
+    if (value) sessionStorage.setItem(draftAttachmentKey(projectId, weekStart), JSON.stringify(value));
+    else sessionStorage.removeItem(draftAttachmentKey(projectId, weekStart));
+  } catch {
+    /* sessionStorage unavailable / full - the in-memory copy still works for this session */
+  }
+};
 
 const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short" });
 const formatDayLabel = (date) => DAY_LABEL_FORMATTER.format(new Date(date));
@@ -100,17 +123,23 @@ export default function MyTimesheetPage() {
         };
       });
       setRowState(nextRowState);
+
+      // Bring back an Excel sheet the employee uploaded for this project+period
+      // but hasn't submitted yet - unless the period is already locked
+      // (submitted / approved), where the sheet lives on the submission itself.
+      const periodLocked = res.submission && res.submission.status !== "REJECTED";
+      setAttachment(periodLocked ? null : readDraftAttachment(projectId, res.weekStartDate));
+      setAttachmentError("");
     });
   const loadSubmissions = (projectId) =>
     timesheetApi.getMySubmissions(undefined, projectId).then((res) => setSubmissions(res.submissions));
 
   useEffect(() => {
     if (!activeProjectId) return;
+    // loadPeriod resets the attachment (restoring any not-yet-submitted draft
+    // upload for this project+period) and clears the attachment error itself.
     loadPeriod(weekParam, activeProjectId);
     loadSubmissions(activeProjectId);
-    setAttachment(null);
-    setAttachmentError("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekParam, activeProjectId]);
 
   const handleAttachmentChange = async (e) => {
@@ -123,11 +152,29 @@ export default function MyTimesheetPage() {
     try {
       const uploaded = await timesheetApi.uploadAttachment(file);
       setAttachment(uploaded);
+      writeDraftAttachment(activeProjectId, data.weekStartDate, uploaded);
     } catch (err) {
       setAttachmentError(getErrorMessage(err, "Couldn't upload this file. Please try again."));
     } finally {
       setIsUploadingAttachment(false);
     }
+  };
+
+  const handleRemoveAttachment = () => {
+    setAttachment(null);
+    if (data?.weekStartDate) writeDraftAttachment(activeProjectId, data.weekStartDate, null);
+  };
+
+  // Opens the uploaded sheet so the employee can double-check what they
+  // attached before submitting. A browser can't render .xls/.xlsx itself (and
+  // the S3 object is served as a download), so route it through Microsoft's
+  // free Office web viewer, which renders the sheet from its public S3 URL.
+  const handleViewAttachment = () => {
+    if (!attachment?.attachmentStoredName) return;
+    const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(
+      attachment.attachmentStoredName
+    )}`;
+    window.open(viewerUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleDownloadSubmissionAttachment = async (submission) => {
@@ -256,6 +303,7 @@ export default function MyTimesheetPage() {
       );
       setSuccessMessage("Timesheet submitted for approval.");
       setAttachment(null);
+      writeDraftAttachment(activeProjectId, data.weekStartDate, null);
       await loadPeriod(weekParam, activeProjectId);
       await loadSubmissions(activeProjectId);
     } catch (err) {
@@ -413,7 +461,15 @@ export default function MyTimesheetPage() {
                             <div className="attachment-uploaded-row">
                               <FileCheck size={16} />
                               <span>{attachment.attachmentOriginalName}</span>
-                              <button type="button" className="link-btn" onClick={() => setAttachment(null)}>
+                              <button
+                                type="button"
+                                className="link-btn attachment-row-view"
+                                onClick={handleViewAttachment}
+                              >
+                                <Eye size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                                View
+                              </button>
+                              <button type="button" className="link-btn" onClick={handleRemoveAttachment}>
                                 Remove
                               </button>
                             </div>

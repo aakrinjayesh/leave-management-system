@@ -1672,3 +1672,12 @@
   font-size: 0.78rem;
   color: var(--text-secondary);
 }
+
+/* "View" action alongside "Remove" on an uploaded timesheet Excel sheet. */
+.attachment-uploaded-row .attachment-row-view {
+  margin-left: auto;
+  color: var(--color-primary-600);
+}
+.attachment-uploaded-row .attachment-row-view + .link-btn {
+  margin-left: 14px;
+}
