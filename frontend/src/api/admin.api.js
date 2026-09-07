@@ -9,6 +9,9 @@ export const createUser = (payload) => unwrap(axiosClient.post("/admin/users", p
 export const updateUserManager = (id, managerId) =>
   unwrap(axiosClient.patch(`/admin/users/${id}/manager`, { managerId }));
 
+export const updateEmploymentType = (id, employmentType) =>
+  unwrap(axiosClient.patch(`/admin/users/${id}/employment-type`, { employmentType }));
+
 export const setAdminAccess = (id, grant) => unwrap(axiosClient.patch(`/admin/users/${id}/admin-access`, { grant }));
 
 export const reactivateUser = (id) => unwrap(axiosClient.patch(`/admin/users/${id}/reactivate`));
@@ -166,6 +169,9 @@ export const previewPayslip = (userId, year, month, tds, annualBonusPay) =>
 export const generatePayslip = (userId, payload) => unwrap(axiosClient.post(`/admin/users/${userId}/payslips`, payload));
 
 export const listPayslips = (userId) => unwrap(axiosClient.get(`/admin/users/${userId}/payslips`));
+
+export const emailPayslip = (userId, payslipId) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/payslips/${payslipId}/email`));
 
 export const downloadPayslipPdf = (payslipId) =>
   axiosClient.get(`/admin/payslips/${payslipId}/pdf`, { responseType: "blob" });

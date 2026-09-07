@@ -114,8 +114,7 @@ const toForm = (user) => ({
 // Which form fields belong to which card. Each card saves independently -
 // only its own fields go in the PATCH, so an admin editing one thing doesn't
 // have to scroll to a single button at the bottom (and can't accidentally
-// re-save unrelated sections). uan has no input of its own, so it rides
-// along with the PAN card to keep its stored value intact.
+// re-save unrelated sections).
 const SECTIONS = {
   personal: {
     label: "Personal information",
@@ -138,12 +137,17 @@ const SECTIONS = {
     label: "Employment details",
     fields: ["designation", "location", "taxRegime", "residentialAddress", "pinCode", "residentialStatus"],
   },
-  pan: { label: "PAN details", fields: ["pan", "panHolderName", "uan"] },
+  pan: { label: "PAN details", fields: ["pan", "panHolderName"] },
   aadhaar: { label: "Aadhaar details", fields: ["aadharNumber", "aadharHolderName"] },
-  bank: { label: "Bank details", fields: ["bankAccountNumber", "bankName", "ifscCode", "pfNumber"] },
+  bank: { label: "Bank details", fields: ["bankAccountNumber", "bankName", "ifscCode", "pfNumber", "uan"] },
 };
 
 const ALL_DETAIL_FIELDS = Object.values(SECTIONS).flatMap((section) => section.fields);
+
+// field name -> the section key it belongs to
+const FIELD_TO_SECTION = Object.fromEntries(
+  Object.entries(SECTIONS).flatMap(([key, section]) => section.fields.map((field) => [field, key])),
+);
 
 // Fields whose form value is used as-is (dropdowns, date inputs); everything
 // else is a text field that gets trimmed. pan/ifscCode are also upper-cased.
@@ -179,6 +183,9 @@ function EmployeeDetailsContent({ id }) {
   const [form, setForm] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // Per-section save feedback, shown right above the section being edited
+  // (the page is long - a message at the top would scroll out of view).
+  const [sectionMsg, setSectionMsg] = useState(null); // { section, type, text }
   const [fieldErrors, setFieldErrors] = useState({});
   const [savingSection, setSavingSection] = useState(null);
   const [busyDocType, setBusyDocType] = useState(null);
@@ -216,6 +223,7 @@ function EmployeeDetailsContent({ id }) {
 
   const handleChange = (field) => (e) => {
     setSuccess("");
+    setSectionMsg((m) => (m && FIELD_TO_SECTION[field] === m.section ? null : m));
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
   };
@@ -224,6 +232,7 @@ function EmployeeDetailsContent({ id }) {
     const { label, fields } = SECTIONS[sectionKey];
     setError("");
     setSuccess("");
+    setSectionMsg(null);
 
     const allErrors = validateForm(form);
     const sectionErrors = Object.fromEntries(
@@ -235,7 +244,7 @@ function EmployeeDetailsContent({ id }) {
       return { ...cleared, ...sectionErrors };
     });
     if (Object.keys(sectionErrors).length > 0) {
-      setError(`Please fix the highlighted fields in ${label}.`);
+      setSectionMsg({ section: sectionKey, type: "error", text: `Please fix the highlighted fields in ${label}.` });
       return;
     }
 
@@ -252,13 +261,22 @@ function EmployeeDetailsContent({ id }) {
         ...prev,
         ...Object.fromEntries(fields.map((field) => [field, refreshed[field]])),
       }));
-      setSuccess(`${label} updated.`);
+      setSectionMsg({ section: sectionKey, type: "success", text: `${label} updated.` });
     } catch (err) {
-      setError(getErrorMessage(err, `Couldn't save ${label}. Please try again.`));
+      setSectionMsg({
+        section: sectionKey,
+        type: "error",
+        text: getErrorMessage(err, `Couldn't save ${label}. Please try again.`),
+      });
     } finally {
       setSavingSection(null);
     }
   };
+
+  const sectionAlert = (key) =>
+    sectionMsg && sectionMsg.section === key ? (
+      <Alert type={sectionMsg.type}>{sectionMsg.text}</Alert>
+    ) : null;
 
   const handleDocumentUpload = async (type, file) => {
     setError("");
@@ -373,6 +391,7 @@ function EmployeeDetailsContent({ id }) {
       <Alert type="success">{success}</Alert>
 
       <div>
+        {sectionAlert("personal")}
         <form
           className="card"
           style={{ marginBottom: 20 }}
@@ -475,6 +494,7 @@ function EmployeeDetailsContent({ id }) {
           </div>
         </form>
 
+        {sectionAlert("employment")}
         <form
           className="card"
           style={{ marginBottom: 20 }}
@@ -538,6 +558,7 @@ function EmployeeDetailsContent({ id }) {
           </div>
         </form>
 
+        {sectionAlert("pan")}
         <form
           className="card"
           style={{ marginBottom: 20 }}
@@ -578,6 +599,7 @@ function EmployeeDetailsContent({ id }) {
           </div>
         </form>
 
+        {sectionAlert("aadhaar")}
         <form
           className="card"
           style={{ marginBottom: 20 }}
@@ -623,6 +645,7 @@ function EmployeeDetailsContent({ id }) {
           </div>
         </form>
 
+        {sectionAlert("bank")}
         <form
           className="card"
           style={{ marginBottom: 20 }}
@@ -658,6 +681,16 @@ function EmployeeDetailsContent({ id }) {
                 value={form.pfNumber}
                 onChange={handleChange("pfNumber")}
                 error={fieldErrors.pfNumber}
+              />
+            </div>
+
+            <div className="form-two-col">
+              <TextInput
+                label="UAN"
+                placeholder="12-digit UAN"
+                value={form.uan}
+                onChange={handleChange("uan")}
+                error={fieldErrors.uan}
               />
             </div>
 

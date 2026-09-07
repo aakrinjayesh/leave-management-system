@@ -1541,6 +1541,43 @@
 }
 
 /* Manage Accounts: compact, centred name search above the table. */
+/* Caption on the left, search on the right, one row (All Leave Requests /
+   All Timesheets). Falls to two rows on narrow screens. */
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 14px;
+}
+.list-toolbar > .table-caption {
+  margin: 0;
+}
+.list-toolbar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 320px;
+}
+.list-toolbar-search .field {
+  margin-bottom: 0;
+  flex: 1;
+}
+.list-toolbar-search .field-input {
+  padding: 6px 12px 6px 32px;
+  font-size: 0.85rem;
+  border-radius: var(--radius-full);
+}
+.list-toolbar-search .field-icon {
+  left: 11px;
+}
+@media (max-width: 560px) {
+  .list-toolbar-search {
+    flex-basis: 100%;
+  }
+}
+
 .acct-search {
   display: flex;
   justify-content: center;

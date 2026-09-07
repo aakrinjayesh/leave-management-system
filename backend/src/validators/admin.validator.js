@@ -3,27 +3,38 @@ const { USER_TYPE, EMPLOYMENT_TYPE, GENDER, MARITAL_STATUS, TAX_REGIME, RESIDENT
 const { isEmployeeDomainEmail } = require("../utils/emailDomain.util");
 const env = require("../config/env");
 
-// Every account an admin creates - Employee, Manager, or Admin - must stay
-// on the company domain, same rule as self-registration.
-const createUserSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required.").max(100),
-  lastName: z.string().trim().min(1, "Last name is required.").max(100),
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .email("Please enter a valid email address.")
-    .refine(isEmployeeDomainEmail, { message: `Please use an @${env.EMPLOYEE_EMAIL_DOMAIN} email.` }),
-  userType: z.enum([USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER, USER_TYPE.ADMIN]),
-  // Label only (Employee / Intern / Contract) - no permission effect.
-  employmentType: z
-    .enum([EMPLOYMENT_TYPE.EMPLOYEE, EMPLOYMENT_TYPE.INTERN, EMPLOYMENT_TYPE.CONTRACT])
-    .optional()
-    .default(EMPLOYMENT_TYPE.EMPLOYEE),
-});
+// Employee, Intern and Admin accounts must stay on the company domain (same
+// rule as self-registration). Hire-to-Contract accounts may use a personal
+// email instead - a contractor often isn't issued a company mailbox.
+const createUserSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "First name is required.").max(100),
+    lastName: z.string().trim().min(1, "Last name is required.").max(100),
+    email: z.string().trim().toLowerCase().email("Please enter a valid email address."),
+    userType: z.enum([USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER, USER_TYPE.ADMIN]),
+    // Label only (Employee / Intern / Contract) - no permission effect.
+    employmentType: z
+      .enum([EMPLOYMENT_TYPE.EMPLOYEE, EMPLOYMENT_TYPE.INTERN, EMPLOYMENT_TYPE.CONTRACT])
+      .optional()
+      .default(EMPLOYMENT_TYPE.EMPLOYEE),
+  })
+  .superRefine((data, ctx) => {
+    if (data.employmentType !== EMPLOYMENT_TYPE.CONTRACT && !isEmployeeDomainEmail(data.email)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["email"],
+        message: `Please use an @${env.EMPLOYEE_EMAIL_DOMAIN} email. A personal email is only allowed for Hire-to-Contract accounts.`,
+      });
+    }
+  });
 
 const updateManagerSchema = z.object({
   managerId: z.union([z.coerce.number().int().positive(), z.null()]),
+});
+
+// Employee <-> Intern only. Contract is intentionally not allowed here.
+const updateEmploymentTypeSchema = z.object({
+  employmentType: z.enum([EMPLOYMENT_TYPE.EMPLOYEE, EMPLOYMENT_TYPE.INTERN]),
 });
 
 const setAdminAccessSchema = z.object({
@@ -331,6 +342,7 @@ const setProjectMembersSchema = z.object({
 module.exports = {
   createUserSchema,
   updateManagerSchema,
+  updateEmploymentTypeSchema,
   setAdminAccessSchema,
   createLeavePolicySchema,
   updateLeavePolicySchema,

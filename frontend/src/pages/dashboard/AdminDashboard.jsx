@@ -54,6 +54,8 @@ const STATUS_LABEL = {
   REJECTED: "Rejected",
 };
 
+const EMPLOYMENT_TYPE_LABELS = { EMPLOYEE: "Employee", INTERN: "Intern", CONTRACT: "Hire to contract" };
+
 export default function AdminDashboard() {
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
@@ -65,6 +67,7 @@ export default function AdminDashboard() {
   const [exitingUser, setExitingUser] = useState(null);
   const [adminAccessTarget, setAdminAccessTarget] = useState(null);
   const [actioningId, setActioningId] = useState(null);
+  const [typeSavingId, setTypeSavingId] = useState(null);
   // const [payrollMonth, setPayrollMonth] = useState(currentMonthValue());
   // const [isExportingPayroll, setIsExportingPayroll] = useState(false);
   const [uploadingId, setUploadingId] = useState(null);
@@ -103,6 +106,24 @@ export default function AdminDashboard() {
       setError(getErrorMessage(err, "Couldn't reactivate this account."));
     } finally {
       setActioningId(null);
+    }
+  };
+
+  const handleEmploymentTypeChange = async (targetUser, employmentType) => {
+    if (employmentType === (targetUser.employmentType || "EMPLOYEE")) return;
+    setError("");
+    setSuccess("");
+    setTypeSavingId(targetUser.id);
+    try {
+      await adminApi.updateEmploymentType(targetUser.id, employmentType);
+      setSuccess(
+        `${targetUser.firstName} ${targetUser.lastName} is now ${EMPLOYMENT_TYPE_LABELS[employmentType]}.`,
+      );
+      await loadUsers();
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't change the employment type."));
+    } finally {
+      setTypeSavingId(null);
     }
   };
 
@@ -277,13 +298,14 @@ export default function AdminDashboard() {
                       <th>Manager</th>
                       <th></th>
                       <th>Exit date</th>
+                      <th>Type</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visibleUsers.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={6}
                           style={{ textAlign: "center", padding: "28px 0", color: "var(--text-secondary)" }}
                         >
                           No accounts match &ldquo;{search.trim()}&rdquo;.
@@ -410,6 +432,22 @@ export default function AdminDashboard() {
                       </td>
                       <td className="table-cell-secondary">
                         {user.exitDate ? formatDate(user.exitDate) : "—"}
+                      </td>
+                      <td>
+                        {user.employmentType === "CONTRACT" ? (
+                          <span className="table-cell-secondary">Hire to contract</span>
+                        ) : (
+                          <select
+                            className="field-input"
+                            style={{ height: 30, fontSize: "0.82rem", padding: "0 6px", width: 110 }}
+                            value={user.employmentType || "EMPLOYEE"}
+                            disabled={typeSavingId === user.id}
+                            onChange={(e) => handleEmploymentTypeChange(user, e.target.value)}
+                          >
+                            <option value="EMPLOYEE">Employee</option>
+                            <option value="INTERN">Intern</option>
+                          </select>
+                        )}
                       </td>
                     </tr>
                       ))

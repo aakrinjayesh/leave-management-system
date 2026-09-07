@@ -4,6 +4,7 @@ const validate = require("../middlewares/validate.middleware");
 const {
   createUserSchema,
   updateManagerSchema,
+  updateEmploymentTypeSchema,
   setAdminAccessSchema,
   createLeavePolicySchema,
   updateLeavePolicySchema,
@@ -54,6 +55,11 @@ router.use(authenticate, authorize(USER_TYPE.ADMIN));
 router.get("/users", controller.listUsers);
 router.post("/users", validate(createUserSchema), controller.createUser);
 router.patch("/users/:id/manager", validate(updateManagerSchema), controller.updateUserManager);
+router.patch(
+  "/users/:id/employment-type",
+  validate(updateEmploymentTypeSchema),
+  controller.updateEmploymentType
+);
 router.patch("/users/:id/admin-access", validate(setAdminAccessSchema), controller.setAdminAccess);
 router.patch("/users/:id/reactivate", controller.reactivateUser);
 router.post("/users/:id/exit", validate(recordExitSchema), exitController.recordExit);
@@ -136,6 +142,7 @@ router.patch(
 router.get("/users/:id/payslips/preview", payrollController.previewPayslip);
 router.post("/users/:id/payslips", validate(generatePayslipSchema), payrollController.generatePayslip);
 router.get("/users/:id/payslips", payrollController.listPayslips);
+router.post("/users/:id/payslips/:payslipId/email", payrollController.emailPayslip);
 router.get("/payslips/:id/pdf", payrollController.downloadPayslipPdf);
 
 // Contract-hire payment (employmentType = CONTRACT) - fully separate from the

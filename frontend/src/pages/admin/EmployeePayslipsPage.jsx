@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Calculator, Download, Eye, FileCheck2 } from "lucide-react";
+import { Calculator, Download, Eye, FileCheck2, Mail } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import TextInput from "../../components/common/TextInput";
 import MonthPicker from "../../components/common/MonthPicker";
@@ -82,6 +82,8 @@ function EmployeePayslipsContent({ id }) {
   const [isSaving, setIsSaving] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
   const [previewingId, setPreviewingId] = useState(null);
+  const [emailingId, setEmailingId] = useState(null);
+  const [emailResult, setEmailResult] = useState({}); // payslipId -> { ok, text }
 
   const [taxFinancialYear, setTaxFinancialYear] = useState(getCurrentFinancialYear());
   const [taxPreview, setTaxPreview] = useState(null);
@@ -158,6 +160,22 @@ function EmployeePayslipsContent({ id }) {
       setError(getErrorMessage(err, "Couldn't preview this payslip."));
     } finally {
       setPreviewingId(null);
+    }
+  };
+
+  const handleEmailPayslip = async (payslip) => {
+    setEmailingId(payslip.id);
+    setEmailResult((prev) => ({ ...prev, [payslip.id]: null }));
+    try {
+      const data = await adminApi.emailPayslip(id, payslip.id);
+      setEmailResult((prev) => ({ ...prev, [payslip.id]: { ok: true, text: `Sent to ${data.sentTo}` } }));
+    } catch (err) {
+      setEmailResult((prev) => ({
+        ...prev,
+        [payslip.id]: { ok: false, text: getErrorMessage(err, "Couldn't send the email.") },
+      }));
+    } finally {
+      setEmailingId(null);
     }
   };
 
@@ -406,6 +424,7 @@ function EmployeePayslipsContent({ id }) {
                     <th>Net Pay</th>
                     <th>Generated</th>
                     <th></th>
+                    <th>Email</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -439,6 +458,33 @@ function EmployeePayslipsContent({ id }) {
                             Download
                           </button>
                         </div>
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            disabled={emailingId === payslip.id}
+                            onClick={() => handleEmailPayslip(payslip)}
+                          >
+                            <Mail size={14} />
+                            {emailingId === payslip.id ? "Sending…" : "Send payslip"}
+                          </button>
+                        </div>
+                        {emailResult[payslip.id] && (
+                          <div
+                            style={{
+                              fontSize: "0.78rem",
+                              marginTop: 4,
+                              color: emailResult[payslip.id].ok
+                                ? "var(--color-success-text)"
+                                : "var(--color-danger-text)",
+                            }}
+                          >
+                            {emailResult[payslip.id].ok ? "✓ " : "✗ "}
+                            {emailResult[payslip.id].text}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -210,7 +210,7 @@ export default function ProfilePage() {
               Current salary structure
             </span>
             <p className="card-section-subtitle">
-              How your CTC breaks down, as fixed by admin - effective from{" "}
+              As fixed by your admin - effective from{" "}
               <strong>{formatMonth(user.salaryStructure.effectiveFrom)}</strong> onward.
             </p>
 
@@ -219,6 +219,8 @@ export default function ProfilePage() {
                 <div className="profile-detail-label">CTC (annual)</div>
                 <div className="profile-detail-value">{formatCtc(user.salaryStructure.ctc)}</div>
               </div>
+              {/* Component breakdown hidden from the employee's own profile - they see the
+                  CTC figure only. Kept here (commented) in case it needs to come back.
               <div>
                 <div className="profile-detail-label">Basic</div>
                 <div className="profile-detail-value">{user.salaryStructure.basicPercentOfCtc}% of monthly CTC</div>
@@ -253,6 +255,7 @@ export default function ProfilePage() {
                 <div className="profile-detail-label">PT applies once gross pay reaches</div>
                 <div className="profile-detail-value">{formatCtc(user.salaryStructure.professionalTaxThreshold)}</div>
               </div>
+              */}
             </div>
           </div>
         </div>
@@ -281,6 +284,7 @@ export default function ProfilePage() {
                   <strong>{formatCtc(entry.ctc)}</strong>
                 </p>
 
+                {/* Component breakdown hidden from the employee's own profile - CTC figure only.
                 <div className="profile-detail-grid">
                   <div>
                     <div className="profile-detail-label">Basic</div>
@@ -315,6 +319,7 @@ export default function ProfilePage() {
                     <div className="profile-detail-value">{formatCtc(entry.professionalTaxThreshold)}</div>
                   </div>
                 </div>
+                */}
               </div>
             ))}
           </div>

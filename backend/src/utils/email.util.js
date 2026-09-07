@@ -544,8 +544,44 @@ const sendAdminAccessRemovedEmail = async ({
   });
 };
 
+// Sends the employee a link to their generated payslip PDF (the file itself
+// lives on public S3 with an unguessable key). Our mail pipeline can't carry
+// attachments, so the payslip travels as a download button.
+const sendPayslipEmail = async ({ to, firstName, periodLabel, grossPay, grossDeductions, netPay, downloadUrl }) => {
+  const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const html = `
+  <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #1f2937;">
+    <h2 style="margin-bottom: 8px;">Your payslip for ${periodLabel}</h2>
+    <p>Hi ${firstName || "there"}, your payslip for ${periodLabel} is ready.</p>
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 6px 0; color: #6b7280; font-size: 13px; width: 160px;">Gross pay</td>
+        <td style="padding: 6px 0; font-size: 14px; font-weight: 600;">${money(grossPay)}</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 0; color: #6b7280; font-size: 13px;">Total deductions</td>
+        <td style="padding: 6px 0; font-size: 14px; font-weight: 600;">${money(grossDeductions)}</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px 0; color: #6b7280; font-size: 13px;">Net pay</td>
+        <td style="padding: 6px 0; font-size: 15px; font-weight: 700;">${money(netPay)}</td>
+      </tr>
+    </table>
+    <a href="${downloadUrl}" style="display: inline-block; background: #6d28a8; color: #fff; text-decoration: none; padding: 11px 22px; border-radius: 6px; font-size: 14px; font-weight: 600;">Download payslip (PDF)</a>
+    <p style="margin-top: 28px; color: #6b7280; font-size: 13px;">Employee Portal &middot; Aakrin Consulting Services</p>
+  </div>`;
+
+  return sendMail({
+    to,
+    subject: `Your payslip - ${periodLabel}`,
+    html,
+    logLabel: `Payslip (${periodLabel}) emailed to ${firstName} (${to})`,
+  });
+};
+
 module.exports = {
   sendOtpEmail,
+  sendPayslipEmail,
 
   sendLeaveSubmittedEmail,
   sendManagerOnLeaveNoticeEmail,

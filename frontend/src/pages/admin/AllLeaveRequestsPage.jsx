@@ -65,32 +65,34 @@ export default function AllLeaveRequestsPage() {
             </div>
           ) : (
             <>
-              <p className="table-caption">
-                {employees.length} employee{employees.length === 1 ? "" : "s"}
-                {" · "}
-                {pendingTotal > 0 ? (
-                  <>
-                    <strong>{pendingTotal}</strong> pending request{pendingTotal === 1 ? "" : "s"}
-                  </>
-                ) : noneApplied ? (
-                  "No one has applied for leave yet"
-                ) : (
-                  "No pending requests"
-                )}
-              </p>
+              <div className="list-toolbar">
+                <p className="table-caption">
+                  {employees.length} employee{employees.length === 1 ? "" : "s"}
+                  {" · "}
+                  {pendingTotal > 0 ? (
+                    <>
+                      <strong>{pendingTotal}</strong> pending request{pendingTotal === 1 ? "" : "s"}
+                    </>
+                  ) : noneApplied ? (
+                    "No one has applied for leave yet"
+                  ) : (
+                    "No pending requests"
+                  )}
+                </p>
 
-              <div className="acct-search">
-                <TextInput
-                  icon={<Search size={15} />}
-                  placeholder="Search by name"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                {nameQuery && (
-                  <span className="acct-search-count">
-                    {visibleEmployees.length} of {employees.length}
-                  </span>
-                )}
+                <div className="list-toolbar-search">
+                  <TextInput
+                    icon={<Search size={15} />}
+                    placeholder="Search by name"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                  {nameQuery && (
+                    <span className="acct-search-count">
+                      {visibleEmployees.length} of {employees.length}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="data-table-wrap">

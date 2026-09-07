@@ -7,7 +7,7 @@ import StatusBadge from "../common/StatusBadge";
 import Modal from "../common/Modal";
 import TextArea from "../common/TextArea";
 import Button from "../common/Button";
-import { formatDate, formatDateRange } from "../../utils/formatDate";
+import { formatDateRange } from "../../utils/formatDate";
 import { formatHoursMinutes } from "../../utils/formatDuration";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -62,6 +62,16 @@ function RejectModal({ submission, onClose, onRejected, reject }) {
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
 const fmtDays = (n) => (Number.isInteger(n) ? String(n) : Number(n).toFixed(1));
+
+// "Mon, 7 Sep 2026" - weekday helps when scanning a week's entries.
+const ENTRY_DATE_FMT = new Intl.DateTimeFormat("en-IN", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const formatEntryDate = (date) => ENTRY_DATE_FMT.format(new Date(date));
 
 const VIEWS = [
   { label: "Day", value: "day" },
@@ -272,7 +282,9 @@ export default function TimesheetDetailView({
                 <tbody>
                   {data.entries.map((entry) => (
                     <tr key={entry.id}>
-                      <td className="table-cell-primary">{formatDate(entry.date)}</td>
+                      <td className="table-cell-primary" style={{ whiteSpace: "nowrap" }}>
+                        {formatEntryDate(entry.date)}
+                      </td>
                       <td>{formatHoursMinutes(entry.hoursWorked)}</td>
                       <td className="table-cell-secondary">{entry.description}</td>
                     </tr>

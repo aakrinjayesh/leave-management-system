@@ -3,7 +3,7 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
-const { USER_STATUS, USER_TYPE } = require("../utils/constants");
+const { USER_STATUS, USER_TYPE, EMPLOYMENT_TYPE } = require("../utils/constants");
 const userManagerService = require("../services/userManager.service");
 const timesheetService = require("../services/timesheet.service");
 const projectService = require("../services/project.service");
@@ -112,6 +112,28 @@ const reactivateUser = asyncHandler(async (req, res) => {
   });
 
   new ApiResponse(200, "Account reactivated.", { user: toSafeUser(user) }).send(res);
+});
+
+// Employee <-> Intern label swap (e.g. an intern converted to full-time).
+// Contract is deliberately out of scope here - switching to/from it isn't a
+// pure label change (it drives a separate payment model), so a CONTRACT
+// account can't be changed through this action.
+const updateEmploymentType = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const { employmentType } = req.body;
+
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    throw ApiError.notFound("Account not found.");
+  }
+  if (existing.employmentType === EMPLOYMENT_TYPE.CONTRACT) {
+    throw ApiError.badRequest(
+      "This is a Hire-to-Contract account - converting to or from contract isn't supported here (it uses a separate payment model)."
+    );
+  }
+
+  const user = await prisma.user.update({ where: { id }, data: { employmentType } });
+  new ApiResponse(200, "Employment type updated.", { user: toSafeUser(user) }).send(res);
 });
 
 // Lets an admin set or correct anyone's manager, same effect as the
@@ -703,6 +725,7 @@ module.exports = {
   listUsers,
   createUser,
   reactivateUser,
+  updateEmploymentType,
   updateUserManager,
   setAdminAccess,
   getUserTimesheet,

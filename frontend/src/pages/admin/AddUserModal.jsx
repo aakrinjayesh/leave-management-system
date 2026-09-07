@@ -7,14 +7,30 @@ import Alert from "../../components/common/Alert";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 
-const INITIAL_FORM = { firstName: "", lastName: "", email: "", employmentType: "" };
+const COMPANY_DOMAIN = "aakrin.com";
+const INITIAL_FORM = { firstName: "", lastName: "", email: "", employmentType: "", useCompanyEmail: true };
 
 export default function AddUserModal({ onClose, onSuccess }) {
   const [form, setForm] = useState(INITIAL_FORM);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const isContract = form.employmentType === "CONTRACT";
+  // Non-contract accounts always use a company email; only a contract hire can
+  // opt into a personal one by unchecking the box.
+  const requiresCompanyEmail = !isContract || form.useCompanyEmail;
+
   const handleChange = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const handleTypeChange = (e) => {
+    const employmentType = e.target.value;
+    setForm((prev) => ({
+      ...prev,
+      employmentType,
+      // Leaving Contract snaps the company-email requirement back on.
+      useCompanyEmail: employmentType === "CONTRACT" ? prev.useCompanyEmail : true,
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,13 +44,18 @@ export default function AddUserModal({ onClose, onSuccess }) {
       setError("Please select an employment type.");
       return;
     }
+    const email = form.email.trim().toLowerCase();
+    if (requiresCompanyEmail && !email.endsWith(`@${COMPANY_DOMAIN}`)) {
+      setError(`Please use an @${COMPANY_DOMAIN} email address.`);
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       await adminApi.createUser({
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        email: form.email.trim().toLowerCase(),
+        email,
         // Interns and contractors are ordinary employee-permission accounts;
         // employmentType is only a label. Admin access is granted later via
         // the "Make admin" action on the account row.
@@ -59,27 +80,36 @@ export default function AddUserModal({ onClose, onSuccess }) {
           <TextInput label="Last name" value={form.lastName} onChange={handleChange("lastName")} />
         </div>
 
-        <TextInput
-          label="Email address"
-          type="email"
-          placeholder="firstname.lastname@aakrin.com"
-          value={form.email}
-          onChange={handleChange("email")}
-        />
-        <p className="helper-text" style={{ marginTop: 0 }}>
-          Must be an @aakrin.com email, for every account type.
-        </p>
-
-        <FormSelect
-          label="Employment type"
-          value={form.employmentType}
-          onChange={handleChange("employmentType")}
-        >
+        <FormSelect label="Employment type" value={form.employmentType} onChange={handleTypeChange}>
           <option value="" hidden></option>
           <option value="EMPLOYEE">Employee</option>
           <option value="INTERN">Intern</option>
           <option value="CONTRACT">Hire to contract</option>
         </FormSelect>
+
+        {isContract && (
+          <label className="checkbox-row" style={{ marginTop: 4 }}>
+            <input
+              type="checkbox"
+              checked={form.useCompanyEmail}
+              onChange={(e) => setForm((prev) => ({ ...prev, useCompanyEmail: e.target.checked }))}
+            />
+            This contractor has a company (@{COMPANY_DOMAIN}) email
+          </label>
+        )}
+
+        <TextInput
+          label="Email address"
+          type="email"
+          placeholder={requiresCompanyEmail ? `firstname.lastname@${COMPANY_DOMAIN}` : "their.email@example.com"}
+          value={form.email}
+          onChange={handleChange("email")}
+        />
+        <p className="helper-text" style={{ marginTop: 0 }}>
+          {requiresCompanyEmail
+            ? `Must be an @${COMPANY_DOMAIN} email. Only Hire-to-Contract accounts can use a personal email.`
+            : "A personal email is allowed for this contract hire. They'll sign in and set a password with it."}
+        </p>
 
         <div className="modal-actions">
           <Button type="button" variant="secondary" onClick={onClose}>

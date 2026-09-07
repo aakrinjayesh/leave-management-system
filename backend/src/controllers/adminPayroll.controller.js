@@ -8,6 +8,10 @@ const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
 const { uploadToS3, deleteFromS3 } = require("../utils/s3.util");
+const { sendPayslipEmail } = require("../utils/email.util");
+
+const monthLabel = (year, month) =>
+  new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
 
 // Computes what a payslip would look like without saving it, so admin can
 // see the numbers before confirming.
@@ -200,11 +204,67 @@ const downloadPayslipPdf = asyncHandler(async (req, res) => {
   streamPayslipPdf({ payslip, employee, ytd }, res);
 });
 
+// Emails the employee a link to this payslip's PDF. Generates + stores the
+// PDF first if this (older) payslip never had one.
+const emailPayslip = asyncHandler(async (req, res) => {
+  const userId = Number(req.params.id);
+  const payslipId = Number(req.params.payslipId);
+
+  const payslip = await prisma.payslip.findUnique({ where: { id: payslipId } });
+  if (!payslip || payslip.userId !== userId) {
+    throw ApiError.notFound("Payslip not found.");
+  }
+
+  const employee = await prisma.user.findUnique({ where: { id: userId } });
+  if (!employee) {
+    throw ApiError.notFound("Account not found.");
+  }
+  if (!employee.email) {
+    throw ApiError.badRequest("This account has no email address to send to.");
+  }
+
+  let pdfUrl = payslip.pdfUrl;
+  if (!pdfUrl) {
+    const ytd = await payrollService.getYtdTotals(userId, payslip.year, payslip.month);
+    const buffer = await renderPdfToBuffer(streamPayslipPdf, { payslip, employee, ytd });
+    const uploaded = await uploadToS3(
+      {
+        buffer,
+        originalname: `payslip-${employee.firstName}-${payslip.year}-${String(payslip.month).padStart(2, "0")}.pdf`,
+        mimetype: "application/pdf",
+      },
+      "payslips"
+    );
+    pdfUrl = uploaded.url;
+    await prisma.payslip.update({ where: { id: payslip.id }, data: { pdfUrl } });
+  }
+
+  const periodLabel = monthLabel(payslip.year, payslip.month);
+
+  try {
+    await sendPayslipEmail({
+      to: employee.email,
+      firstName: employee.firstName,
+      periodLabel,
+      grossPay: payslip.grossPay,
+      grossDeductions: payslip.grossDeductions,
+      netPay: payslip.netPay,
+      downloadUrl: pdfUrl,
+    });
+  } catch (err) {
+    console.error("Failed to send payslip email:", err);
+    throw ApiError.badRequest("Couldn't send the email. Please try again.");
+  }
+
+  new ApiResponse(200, "Payslip emailed.", { sentTo: employee.email }).send(res);
+});
+
 module.exports = {
   previewPayslip,
   generatePayslip,
   listPayslips,
   downloadPayslipPdf,
+  emailPayslip,
   getSalaryStructureHistory,
   recordSalaryStructure,
   updateLatestSalaryStructure,
