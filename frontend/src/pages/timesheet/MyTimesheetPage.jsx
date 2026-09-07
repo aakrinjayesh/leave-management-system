@@ -77,6 +77,9 @@ export default function MyTimesheetPage() {
   // Whether the currently active project submits weekly or monthly - drives
   // the grid length, nav step, and labels below.
   const isMonthly = data?.project?.submissionFrequency === "MONTHLY";
+  // Excel sheet upload is only for CLIENT projects (projectType ASSIGNED).
+  // Internal projects (NOT_ASSIGNED) submit the hours grid on its own.
+  const needsExcel = data?.project?.projectType === "ASSIGNED";
 
   const loadPeriod = (param, projectId) =>
     timesheetApi.getMyEntries(param || undefined, projectId).then((res) => {
@@ -238,7 +241,7 @@ export default function MyTimesheetPage() {
       return;
     }
 
-    if (!attachment) {
+    if (needsExcel && !attachment) {
       setError(`Please upload ${isMonthly ? "this month's" : "this week's"} Excel sheet before submitting.`);
       return;
     }
@@ -247,8 +250,8 @@ export default function MyTimesheetPage() {
     try {
       await timesheetApi.submitWeek(
         toDateInputValue(data.weekStartDate),
-        attachment.attachmentOriginalName,
-        attachment.attachmentStoredName,
+        needsExcel ? attachment?.attachmentOriginalName : undefined,
+        needsExcel ? attachment?.attachmentStoredName : undefined,
         activeProjectId
       );
       setSuccessMessage("Timesheet submitted for approval.");
@@ -400,48 +403,52 @@ export default function MyTimesheetPage() {
                         )}
                       </div>
 
-                      <div className="field">
-                        <label className="field-label">{isMonthly ? "This month's" : "This week's"} Excel sheet</label>
+                      {/* Excel sheet upload - CLIENT projects only. Internal
+                          projects submit the hours grid without one. */}
+                      {needsExcel && (
+                        <div className="field">
+                          <label className="field-label">{isMonthly ? "This month's" : "This week's"} Excel sheet</label>
 
-                        {attachment ? (
-                          <div className="attachment-uploaded-row">
-                            <FileCheck size={16} />
-                            <span>{attachment.attachmentOriginalName}</span>
-                            <button type="button" className="link-btn" onClick={() => setAttachment(null)}>
-                              Remove
-                            </button>
-                          </div>
-                        ) : (
-                          <label className="file-upload-box">
-                            <span className="file-upload-box-icon">
-                              <Paperclip size={16} />
-                            </span>
-                            <span className="file-upload-box-text">
-                              <strong>Click to upload</strong> your Excel sheet
-                              <span className="file-upload-box-hint">.xls or .xlsx</span>
-                            </span>
-                            <input
-                              type="file"
-                              className="file-upload-input"
-                              accept=".xls,.xlsx"
-                              onChange={handleAttachmentChange}
-                              disabled={isUploadingAttachment}
-                            />
-                          </label>
-                        )}
+                          {attachment ? (
+                            <div className="attachment-uploaded-row">
+                              <FileCheck size={16} />
+                              <span>{attachment.attachmentOriginalName}</span>
+                              <button type="button" className="link-btn" onClick={() => setAttachment(null)}>
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="file-upload-box">
+                              <span className="file-upload-box-icon">
+                                <Paperclip size={16} />
+                              </span>
+                              <span className="file-upload-box-text">
+                                <strong>Click to upload</strong> your Excel sheet
+                                <span className="file-upload-box-hint">.xls or .xlsx</span>
+                              </span>
+                              <input
+                                type="file"
+                                className="file-upload-input"
+                                accept=".xls,.xlsx"
+                                onChange={handleAttachmentChange}
+                                disabled={isUploadingAttachment}
+                              />
+                            </label>
+                          )}
 
-                        {isUploadingAttachment && (
-                          <p className="helper-text" style={{ marginTop: 8 }}>
-                            Uploading…
+                          {isUploadingAttachment && (
+                            <p className="helper-text" style={{ marginTop: 8 }}>
+                              Uploading…
+                            </p>
+                          )}
+                          {attachmentError && <Alert type="error">{attachmentError}</Alert>}
+
+                          <p className="helper-text" style={{ marginTop: 8, marginBottom: 0 }}>
+                            <Paperclip size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                            Required before submitting.
                           </p>
-                        )}
-                        {attachmentError && <Alert type="error">{attachmentError}</Alert>}
-
-                        <p className="helper-text" style={{ marginTop: 8, marginBottom: 0 }}>
-                          <Paperclip size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                          Required before submitting.
-                        </p>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

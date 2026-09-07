@@ -151,8 +151,45 @@ const getPendingOr404 = async (id) => {
   return request;
 };
 
+// Manager path: a manager can approve/reject a WFH request only from someone
+// who currently reports to them. Same effect as the admin decision, just
+// ownership-scoped and recorded against the manager.
+const decideWfhRequestByManager = async (id, managerId, decision, remarks) => {
+  const request = await getPendingOr404(id);
+  if (request.user.managerId !== managerId) {
+    throw ApiError.notFound("WFH request not found.");
+  }
+
+  if (decision === "APPROVED") {
+    const overlappingLeave = await findOverlappingApprovedLeave(
+      request.userId,
+      request.startDate,
+      request.endDate
+    );
+    if (overlappingLeave) {
+      throw ApiError.badRequest(
+        `Can't approve - ${request.user.firstName} has ${leaveOverlapText(overlappingLeave)}.`
+      );
+    }
+    return prisma.wfhRequest.update({
+      where: { id },
+      data: { status: "APPROVED", decidedById: managerId, decidedAt: new Date() },
+      include: { user: USER_SUMMARY_SELECT, ...DECIDED_BY_SELECT },
+    });
+  }
+
+  return prisma.wfhRequest.update({
+    where: { id },
+    data: { status: "REJECTED", decidedById: managerId, decidedAt: new Date(), adminRemarks: remarks },
+    include: { user: USER_SUMMARY_SELECT, ...DECIDED_BY_SELECT },
+  });
+};
+
 const approveWfhRequest = async (id, adminId) => {
   const request = await getPendingOr404(id);
+  if (request.userId === adminId) {
+    throw ApiError.badRequest("You can't action your own WFH request - another admin or your manager needs to.");
+  }
 
   const overlappingLeave = await findOverlappingApprovedLeave(
     request.userId,
@@ -173,7 +210,10 @@ const approveWfhRequest = async (id, adminId) => {
 };
 
 const rejectWfhRequest = async (id, adminId, remarks) => {
-  await getPendingOr404(id);
+  const request = await getPendingOr404(id);
+  if (request.userId === adminId) {
+    throw ApiError.badRequest("You can't action your own WFH request - another admin or your manager needs to.");
+  }
 
   return prisma.wfhRequest.update({
     where: { id },
@@ -214,6 +254,7 @@ module.exports = {
   withdrawWfhRequest,
   listForManager,
   listForAdmin,
+  decideWfhRequestByManager,
   approveWfhRequest,
   rejectWfhRequest,
   revokeApprovedWfhRequest,

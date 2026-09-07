@@ -201,7 +201,9 @@ const buildProjectStints = (submissions) => {
 // project assigned to them before they activate still shows up here.
 const getProjectAssignmentReport = async () => {
   const users = await prisma.user.findMany({
-    where: { status: { in: ["ACTIVE", "PENDING"] }, userType: { in: ["EMPLOYEE", "MANAGER"] } },
+    // Admins included - they can be assigned to a project and log their own
+    // timesheet now, so they belong in the assignment report too.
+    where: { status: { in: ["ACTIVE", "PENDING"] } },
     orderBy: { firstName: "asc" },
     include: {
       projectMemberships: {

@@ -329,7 +329,8 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
 
   const [memberships, calendar] = await Promise.all([
     prisma.projectMembership.findMany({
-      where: { user: userWhere },
+      // An empty userWhere means "everyone on a project" (company-wide view).
+      where: userWhere && Object.keys(userWhere).length ? { user: userWhere } : {},
       include: {
         user: { select: { id: true, firstName: true, lastName: true, employeeCode: true, joiningDate: true } },
         project: { select: { id: true, name: true } },

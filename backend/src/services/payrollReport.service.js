@@ -67,7 +67,9 @@ const getEmployeeRegister = async (year, month, mode) => {
   const { fiscalYearStartMonth } = await companySettingsService.getSettings();
 
   const users = await prisma.user.findMany({
-    where: { userType: { not: "ADMIN" }, employmentType: { not: "CONTRACT" } },
+    // Admins are on the salaried payslip model too now - only contract hires
+    // (their own flat payment model) are excluded here.
+    where: { employmentType: { not: "CONTRACT" } },
     select: { id: true, firstName: true, lastName: true, employeeCode: true },
   });
   const payslips = await prisma.payslip.findMany({ where: { userId: { in: users.map((u) => u.id) } } });

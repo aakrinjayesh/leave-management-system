@@ -2,6 +2,7 @@ const express = require("express");
 const { authenticate, authorizeManager } = require("../middlewares/auth.middleware");
 const validate = require("../middlewares/validate.middleware");
 const { createLeaveForEmployeeSchema, approveLeaveSchema, rejectLeaveSchema } = require("../validators/leave.validator");
+const { rejectWfhRequestSchema } = require("../validators/wfh.validator");
 const controller = require("../controllers/managerLeave.controller");
 const resignationController = require("../controllers/managerResignation.controller");
 const wfhController = require("../controllers/managerWfh.controller");
@@ -29,5 +30,7 @@ router.get("/calendar", controller.getTeamCalendar);
 
 router.get("/resignations", resignationController.listTeamResignations);
 router.get("/wfh-requests", wfhController.listTeamWfhRequests);
+router.patch("/wfh-requests/:id/approve", wfhController.approveWfhRequest);
+router.patch("/wfh-requests/:id/reject", validate(rejectWfhRequestSchema), wfhController.rejectWfhRequest);
 
 module.exports = router;

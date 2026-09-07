@@ -11,8 +11,11 @@ const saveEntrySchema = z.object({
 
 const submitWeekSchema = z.object({
   weekStartDate: z.coerce.date({ message: "Please choose a valid week." }),
-  attachmentOriginalName: z.string().min(1, "Please upload this week's Excel sheet before submitting."),
-  attachmentStoredName: z.string().min(1, "Please upload this week's Excel sheet before submitting."),
+  // The Excel sheet is only mandatory for CLIENT projects - that "is it
+  // required?" check lives in the submitWeek controller, where the project's
+  // type is known. Here the fields are just optional-but-non-empty-if-present.
+  attachmentOriginalName: z.string().min(1).optional(),
+  attachmentStoredName: z.string().min(1).optional(),
   // projectAssigned isn't taken from the client - it's derived from the
   // chosen project's own admin-set type (see submitWeek controller).
   projectId: z.coerce.number().int().positive({ message: "Please choose which project this timesheet is for." }),
@@ -33,8 +36,10 @@ const logTimesheetSchema = z.object({
       })
     )
     .min(1, "Please enter hours for at least one day."),
-  attachmentOriginalName: z.string().min(1, "Please upload this period's Excel sheet before submitting."),
-  attachmentStoredName: z.string().min(1, "Please upload this period's Excel sheet before submitting."),
+  // Only mandatory for CLIENT projects - enforced in timesheetLog.service.js
+  // where the project type is known.
+  attachmentOriginalName: z.string().min(1).optional(),
+  attachmentStoredName: z.string().min(1).optional(),
 });
 
 const approveTimesheetSchema = z.object({

@@ -9,11 +9,12 @@ const todayValue = () => toDateInputValue(new Date());
 
 // Checkbox list of who's available to assign to a project - shared between
 // "Create project" and "Edit project" since both manage the exact same field
-// (Project.assignedEmployees). An employee can be on several projects at
-// once, so this always shows every non-admin employee - no exclusivity
-// filtering. PENDING employees (admin-created accounts that haven't been
-// activated yet) are included so admin can line up their project up front;
-// they're tagged with a "Pending" badge so it's clear they can't log in yet.
+// (Project.assignedEmployees). An account can be on several projects at
+// once, so this always shows every active/pending account - no exclusivity
+// filtering, and admins are included (they log their own timesheet / mark
+// attendance and so need to be assignable too). PENDING accounts
+// (admin-created, not activated yet) are included so admin can line up their
+// project up front; they're tagged with a "Pending" badge.
 //
 // `members` is the canonical selection: [{ userId, startDate, endDate }].
 // Checking someone defaults their startDate to today (admin can backdate it
@@ -49,10 +50,10 @@ export default function ProjectMembersField({
 
   useEffect(() => {
     adminApi.listUsers().then((data) => {
+      // Admins are included - they can be assigned to a project like anyone
+      // else (needed for them to log their own timesheet / mark attendance).
       setEmployees(
-        data.users.filter(
-          (u) => (u.status === "ACTIVE" || u.status === "PENDING") && u.userType !== "ADMIN",
-        ),
+        data.users.filter((u) => u.status === "ACTIVE" || u.status === "PENDING"),
       );
     });
 

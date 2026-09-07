@@ -86,6 +86,9 @@ export default function LogTimesheetModal({ employee, api, onClose, onSuccess })
   }, [employee.id]);
 
   const isMonthly = period?.project?.submissionFrequency === "MONTHLY";
+  // Excel sheet is only for CLIENT projects (projectType ASSIGNED). Internal
+  // projects (NOT_ASSIGNED) are logged without one.
+  const needsExcel = period?.project?.projectType === "ASSIGNED";
   const locked = Boolean(period?.alreadySubmitted);
 
   const shiftPeriod = (direction) => {
@@ -160,7 +163,7 @@ export default function LogTimesheetModal({ employee, api, onClose, onSuccess })
       setError("Enter hours for at least one day.");
       return;
     }
-    if (!attachment) {
+    if (needsExcel && !attachment) {
       setError(`Upload ${isMonthly ? "this month's" : "this week's"} Excel sheet before submitting.`);
       return;
     }
@@ -171,8 +174,8 @@ export default function LogTimesheetModal({ employee, api, onClose, onSuccess })
         projectId,
         weekStartDate: toDateInputValue(period.weekStartDate),
         days,
-        attachmentOriginalName: attachment.attachmentOriginalName,
-        attachmentStoredName: attachment.attachmentStoredName,
+        attachmentOriginalName: needsExcel ? attachment?.attachmentOriginalName : undefined,
+        attachmentStoredName: needsExcel ? attachment?.attachmentStoredName : undefined,
       });
       onSuccess();
     } catch (err) {
@@ -199,7 +202,7 @@ export default function LogTimesheetModal({ employee, api, onClose, onSuccess })
       ) : (
         <>
           <p className="helper-text" style={{ marginTop: 0 }}>
-            Fill in the hours for each day, attach the Excel sheet, then submit. It's recorded and{" "}
+            Fill in the hours for each day{needsExcel ? ", attach the Excel sheet," : ""} then submit. It's recorded and{" "}
             <strong>approved immediately</strong> - no separate approval step.
           </p>
 
@@ -217,40 +220,43 @@ export default function LogTimesheetModal({ employee, api, onClose, onSuccess })
               ))}
             </FormSelect>
 
-            <div className="field">
-              <label className="field-label">{isMonthly ? "This month's" : "This week's"} Excel sheet</label>
-              {attachment ? (
-                <div className="attachment-uploaded-row">
-                  <FileCheck size={16} />
-                  <span>{attachment.attachmentOriginalName}</span>
-                  <button type="button" className="link-btn" onClick={() => setAttachment(null)}>
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <label className="file-upload-box">
-                  <span className="file-upload-box-icon">
-                    <Paperclip size={16} />
-                  </span>
-                  <span className="file-upload-box-text">
-                    <strong>Click to upload</strong> the Excel sheet
-                    <span className="file-upload-box-hint">.xls or .xlsx</span>
-                  </span>
-                  <input
-                    type="file"
-                    className="file-upload-input"
-                    accept=".xls,.xlsx"
-                    onChange={handleAttachmentChange}
-                    disabled={isUploading || locked}
-                  />
-                </label>
-              )}
-              {isUploading && (
-                <p className="helper-text" style={{ marginTop: 8 }}>
-                  Uploading…
-                </p>
-              )}
-            </div>
+            {/* Excel sheet - CLIENT projects only. */}
+            {needsExcel && (
+              <div className="field">
+                <label className="field-label">{isMonthly ? "This month's" : "This week's"} Excel sheet</label>
+                {attachment ? (
+                  <div className="attachment-uploaded-row">
+                    <FileCheck size={16} />
+                    <span>{attachment.attachmentOriginalName}</span>
+                    <button type="button" className="link-btn" onClick={() => setAttachment(null)}>
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <label className="file-upload-box">
+                    <span className="file-upload-box-icon">
+                      <Paperclip size={16} />
+                    </span>
+                    <span className="file-upload-box-text">
+                      <strong>Click to upload</strong> the Excel sheet
+                      <span className="file-upload-box-hint">.xls or .xlsx</span>
+                    </span>
+                    <input
+                      type="file"
+                      className="file-upload-input"
+                      accept=".xls,.xlsx"
+                      onChange={handleAttachmentChange}
+                      disabled={isUploading || locked}
+                    />
+                  </label>
+                )}
+                {isUploading && (
+                  <p className="helper-text" style={{ marginTop: 8 }}>
+                    Uploading…
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="section-flex-row" style={{ marginTop: 8 }}>

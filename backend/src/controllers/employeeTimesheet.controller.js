@@ -181,7 +181,11 @@ const uploadAttachment = asyncHandler(async (req, res) => {
 const submitWeek = asyncHandler(async (req, res) => {
   const { weekStartDate: rawWeekStart, attachmentOriginalName, attachmentStoredName, projectId } = req.body;
 
-  if (!req.user.managerId) {
+  // Admins may not have a manager assigned - their submission still stands and
+  // gets picked up by another admin from "All timesheets". Everyone else must
+  // have a manager to route to.
+  const isAdmin = req.user.userType === "ADMIN";
+  if (!req.user.managerId && !isAdmin) {
     throw ApiError.badRequest("Please set your manager in your profile before submitting a timesheet.");
   }
 
@@ -205,13 +209,21 @@ const submitWeek = asyncHandler(async (req, res) => {
   }
   const projectAssigned = project.projectType;
 
+  // The Excel sheet is only required for CLIENT projects (projectType
+  // ASSIGNED). Internal projects (NOT_ASSIGNED) submit without one.
+  if (projectAssigned === "ASSIGNED" && (!attachmentOriginalName || !attachmentStoredName)) {
+    throw ApiError.badRequest("Please upload this period's Excel sheet before submitting.");
+  }
+
   // The submission period this covers - a Monday-Sunday week or a full
   // calendar month, depending on this project's own setting.
   const weekStartDate = timesheetService.getPeriodStart(rawWeekStart, project.submissionFrequency);
   const weekEndDate = timesheetService.getPeriodEnd(weekStartDate, project.submissionFrequency);
 
-  const recipient = await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } });
-  if (!recipient) {
+  const recipient = req.user.managerId
+    ? await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } })
+    : null;
+  if (!recipient && !isAdmin) {
     throw ApiError.badRequest("Your assigned manager's account isn't active. Please update your manager in your profile.");
   }
 
@@ -250,15 +262,15 @@ const submitWeek = asyncHandler(async (req, res) => {
         where: { id: existingSubmission.id },
         data: {
           totalHours,
-          routedToId: recipient.id,
+          routedToId: recipient?.id ?? null,
           status: "PENDING",
           managerRemarks: null,
           approvedById: null,
           approvedAt: null,
           rejectedAt: null,
           submittedAt: new Date(),
-          attachmentOriginalName,
-          attachmentStoredName,
+          attachmentOriginalName: attachmentOriginalName ?? null,
+          attachmentStoredName: attachmentStoredName ?? null,
           projectAssigned,
         },
       })
@@ -268,10 +280,10 @@ const submitWeek = asyncHandler(async (req, res) => {
           weekStartDate,
           weekEndDate,
           totalHours,
-          routedToId: recipient.id,
+          routedToId: recipient?.id ?? null,
           status: "PENDING",
-          attachmentOriginalName,
-          attachmentStoredName,
+          attachmentOriginalName: attachmentOriginalName ?? null,
+          attachmentStoredName: attachmentStoredName ?? null,
           projectAssigned,
           projectId,
         },
@@ -289,7 +301,10 @@ const submitWeek = asyncHandler(async (req, res) => {
   // shouldn't fail the submission itself.
   try {
     const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
-    const recipients = [recipient, ...admins.filter((a) => a.id !== recipient.id)];
+    const recipients = [recipient, ...admins]
+      .filter(Boolean)
+      // dedupe (recipient may also be an admin) and never notify the submitter
+      .filter((person, i, list) => list.findIndex((p) => p.id === person.id) === i && person.id !== req.user.id);
     const employeeName = `${req.user.firstName} ${req.user.lastName}`;
 
     for (const person of recipients) {

@@ -23,8 +23,9 @@ export default function PayslipsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [search, setSearch] = useState("");
 
-  const loadUsers = () =>
-    adminApi.listUsers().then((data) => setUsers(data.users.filter((u) => u.userType !== "ADMIN")));
+  // Admins are on the salaried payslip model too - they appear here like any
+  // other employee. (Contract hires are filtered out by the type filter below.)
+  const loadUsers = () => adminApi.listUsers().then((data) => setUsers(data.users));
 
   useEffect(() => {
     loadUsers();

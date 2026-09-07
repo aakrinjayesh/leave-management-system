@@ -32,7 +32,7 @@ const submitMyWfhRequest = asyncHandler(async (req, res) => {
   try {
     const recipients = await getWfhNoticeRecipients(req.user);
     await notificationService.notifyMany(
-      recipients.map((r) => r.id),
+      recipients.filter((r) => r.id !== req.user.id).map((r) => r.id),
       {
         type: notificationService.NOTIFICATION_TYPES.WFH_SUBMITTED,
         title: "New WFH request",

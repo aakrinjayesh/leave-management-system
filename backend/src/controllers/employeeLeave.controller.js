@@ -95,12 +95,20 @@ const applyLeave = asyncHandler(async (req, res) => {
     throw ApiError.notFound("This leave type is not available.");
   }
 
-  if (!req.user.managerId) {
+  // Admins sit at the top of the chain and may not have a manager assigned -
+  // their request is still valid and gets picked up by another admin from the
+  // "All leave requests" view. Everyone else must have an active manager to
+  // route to.
+  const isAdmin = req.user.userType === "ADMIN";
+
+  if (!req.user.managerId && !isAdmin) {
     throw ApiError.badRequest("Please set your manager in your profile before applying for leave.");
   }
 
-  const recipient = await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } });
-  if (!recipient) {
+  const recipient = req.user.managerId
+    ? await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } })
+    : null;
+  if (!recipient && !isAdmin) {
     throw ApiError.badRequest("Your assigned manager's account isn't active. Please update your manager in your profile.");
   }
 
@@ -239,7 +247,7 @@ const applyLeave = asyncHandler(async (req, res) => {
       data: {
         userId: req.user.id,
         leavePolicyId: spec.leavePolicyId,
-        routedToId: recipient.id,
+        routedToId: recipient?.id ?? null,
         startDate: spec.startDate,
         endDate: spec.endDate,
         totalDays: spec.totalDays,
@@ -264,8 +272,10 @@ const applyLeave = asyncHandler(async (req, res) => {
 
   // Notify the manager - sent after the response so the employee doesn't wait
   // on the email round-trip; failures here shouldn't fail the leave request itself.
+  // An admin applying without a manager assigned has no routed recipient - the
+  // request just surfaces on the "All leave requests" view for another admin.
   const employeeName = `${req.user.firstName} ${req.user.lastName}`;
-  for (const leaveRequest of leaveRequests) {
+  for (const leaveRequest of recipient ? leaveRequests : []) {
     try {
       await sendLeaveSubmittedEmail({
         to: recipient.email,
@@ -299,6 +309,7 @@ const applyLeave = asyncHandler(async (req, res) => {
   // also notify their own manager as a backup, so the request doesn't sit
   // unseen while they're away.
   try {
+    if (!recipient) return;
     const recipientOnLeave = await prisma.leaveRequest.findFirst({
       where: {
         userId: recipient.id,

@@ -8,9 +8,10 @@ const { USER_TYPE } = require("../utils/constants");
 
 const router = express.Router();
 
-// Same population as "my own leave" - Admin sits at the top of the chain and
-// doesn't log a timesheet itself.
-router.use(authenticate, authorize(USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER));
+// Same population as "my own leave" - every account type, Admin included. An
+// admin's own weekly submission routes to their assigned manager (if any) and
+// is also actionable by another admin.
+router.use(authenticate, authorize(USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER, USER_TYPE.ADMIN));
 
 router.get("/projects", controller.listMyProjects);
 router.get("/status", controller.getMyTimesheetStatus);

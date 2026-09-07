@@ -1615,3 +1615,60 @@
 .stat-card-grid.stats-compact .stat-card-icon { width: 36px; height: 36px; }
 .stat-card-grid.stats-compact .stat-card-value { font-size: 1.25rem; }
 .stat-card-grid.stats-compact .stat-card-label { font-size: 0.8rem; }
+
+/* "My Workspace" self-service tiles on the admin dashboard. */
+.workspace-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.workspace-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--surface-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.workspace-tile:hover {
+  border-color: var(--color-primary-400);
+  background: var(--color-primary-50);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.workspace-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workspace-tile-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.workspace-tile-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}

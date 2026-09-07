@@ -51,7 +51,9 @@ const getTeamAttendance = asyncHandler(async (req, res) => {
 const getCompanyAttendance = asyncHandler(async (req, res) => {
   const { year, month } = parseYearMonth(req);
   const data = await attendanceService.getRosterAttendance({
-    userWhere: { userType: { not: "ADMIN" } },
+    // Everyone assigned to a project, admins included - they mark their own
+    // per-project attendance now too.
+    userWhere: {},
     year,
     month,
   });

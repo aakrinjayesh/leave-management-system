@@ -371,8 +371,9 @@ const reactivateHoliday = asyncHandler(async (req, res) => {
 });
 
 // ---------- All leave requests (admin-wide) ----------
-// One row per employee (every non-admin account, whether or not they've ever
-// applied for leave), with their request counts by status and this year's
+// One row per account (including other admins, who can also apply for their
+// own leave - but never the admin viewing the page, since nobody approves
+// their own request), with their request counts by status and this year's
 // leave balance totals. The admin acts on individual requests from the
 // per-employee leave detail page.
 
@@ -389,7 +390,7 @@ const listEmployeeLeaveSummary = asyncHandler(async (req, res) => {
   const fullEntitlement = activePolicies.reduce((sum, p) => sum + p.allocatedLeaves, 0);
 
   const employees = await prisma.user.findMany({
-    where: { userType: { not: "ADMIN" } },
+    where: { id: { not: req.user.id } },
     include: {
       leaveBalances: { where: { year: fiscalYear } },
       leaveRequests: { select: { status: true } },
@@ -441,6 +442,9 @@ const decideLeaveRequest = (decision) =>
     if (!leaveRequest) {
       throw ApiError.notFound("Leave request not found.");
     }
+    if (leaveRequest.userId === req.user.id) {
+      throw ApiError.badRequest("You can't action your own leave request - another admin or your manager needs to.");
+    }
 
     const updated = await leaveDecisionService.applyDecision({
       leaveRequest,
@@ -469,7 +473,7 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
   const { leavePolicyId, startDate, endDate, isHalfDay, reason } = req.body;
 
   const employee = await prisma.user.findUnique({ where: { id: employeeId } });
-  if (!employee || employee.userType === "ADMIN") {
+  if (!employee || employee.id === req.user.id) {
     throw ApiError.notFound("Employee not found.");
   }
 

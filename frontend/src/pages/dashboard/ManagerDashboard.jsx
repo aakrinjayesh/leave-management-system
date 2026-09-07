@@ -2,6 +2,7 @@ import DashboardLayout from "../../components/layout/DashboardLayout";
 import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
 import WelcomeBanner from "../../components/common/WelcomeBanner";
 import NeedsAttentionStrip from "../../components/common/NeedsAttentionStrip";
+import MyWorkspaceSection from "../../components/common/MyWorkspaceSection";
 import TodayAttendanceCard from "../../components/common/TodayAttendanceCard";
 import UpcomingHolidaysCard from "../../components/common/UpcomingHolidaysCard";
 import IntroduceYourselfCard from "../../components/common/IntroduceYourselfCard";
@@ -17,6 +18,7 @@ export default function ManagerDashboard() {
       <BirthdayCelebrationGate />
       <WelcomeBanner />
       <NeedsAttentionStrip />
+      <MyWorkspaceSection />
       <div className="dashboard-cols">
         <UpcomingHolidaysCard />
         <TodayAttendanceCard />

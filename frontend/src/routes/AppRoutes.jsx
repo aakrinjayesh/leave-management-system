@@ -80,10 +80,16 @@ export default function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      {/* "My own leave" pages - available to everyone except Admin (Admin
-          sits at the top of the chain and doesn't apply for leave itself). */}
+      {/* The employee landing dashboard is the one page here that's not for
+          Admin (Admin has its own dashboards). */}
       <Route element={<ProtectedRoute check={isNotAdmin} />}>
         <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
+      </Route>
+
+      {/* "My own" self-service pages - available to every account type. Admin
+          reaches these from the "My Workspace" card on their dashboard rather
+          than the sidebar. */}
+      <Route element={<ProtectedRoute />}>
         <Route path="/employee/leave-requests" element={<MyLeaveRequestsPage />} />
         <Route path="/employee/calendar" element={<LeaveCalendarPage />} />
         <Route path="/timesheet" element={<MyTimesheetPage />} />

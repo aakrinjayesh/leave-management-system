@@ -305,16 +305,18 @@ const getTimesheetSubmissionAttachment = asyncHandler(async (req, res) => {
 
 // ---------- Log timesheet on any employee's behalf (admin) ----------
 
-const getEmployeeOr404 = async (employeeId) => {
+// An admin can log a timesheet for any account except themselves (they have
+// their own self-service timesheet for that, and can't be their own logger).
+const getEmployeeOr404 = async (employeeId, actorId) => {
   const employee = await prisma.user.findUnique({ where: { id: employeeId } });
-  if (!employee || employee.userType === USER_TYPE.ADMIN) {
+  if (!employee || employee.id === actorId) {
     throw ApiError.notFound("Employee not found.");
   }
   return employee;
 };
 
 const getTimesheetLogPeriod = asyncHandler(async (req, res) => {
-  const employee = await getEmployeeOr404(Number(req.params.id));
+  const employee = await getEmployeeOr404(Number(req.params.id), req.user.id);
 
   const data = await timesheetLogService.getLogPeriod({
     employee,
@@ -337,7 +339,7 @@ const uploadTimesheetLogAttachment = asyncHandler(async (req, res) => {
 });
 
 const logTimesheetForEmployee = asyncHandler(async (req, res) => {
-  const employee = await getEmployeeOr404(Number(req.params.id));
+  const employee = await getEmployeeOr404(Number(req.params.id), req.user.id);
 
   const { submission } = await timesheetLogService.logTimesheetForEmployee({
     employee,
@@ -425,9 +427,10 @@ const getUserCalendar = asyncHandler(async (req, res) => {
   new ApiResponse(200, "OK", { ...calendar, leaves }).send(res);
 });
 
-// Company-wide month calendar - every non-admin employee's leave (pending +
-// approved) and approved WFH on one calendar. The admin equivalent of the
-// manager's team calendar, with no reporting-line filter.
+// Company-wide month calendar - every account's leave (pending + approved) and
+// approved WFH on one calendar, admins included now that they book their own
+// time off. The admin equivalent of the manager's team calendar, with no
+// reporting-line filter.
 const getCompanyCalendar = asyncHandler(async (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();
   const month = Number(req.query.month) || new Date().getMonth() + 1;
@@ -439,7 +442,6 @@ const getCompanyCalendar = asyncHandler(async (req, res) => {
     leaveCalendarService.getMonthCalendarData(year, month),
     prisma.leaveRequest.findMany({
       where: {
-        user: { userType: { not: "ADMIN" } },
         status: { in: ["PENDING", "APPROVED"] },
         startDate: { lte: rangeEnd },
         endDate: { gte: rangeStart },
@@ -448,7 +450,6 @@ const getCompanyCalendar = asyncHandler(async (req, res) => {
     }),
     prisma.wfhRequest.findMany({
       where: {
-        user: { userType: { not: "ADMIN" } },
         status: "APPROVED",
         startDate: { lte: rangeEnd },
         endDate: { gte: rangeStart },
@@ -627,15 +628,16 @@ const exportPayrollTimesheet = asyncHandler(async (req, res) => {
 });
 
 // ---------- All timesheets (admin-wide) ----------
-// One row per non-admin employee with their weekly-submission counts by status
-// and total submitted hours this month. The admin acts on individual weekly
-// submissions from the per-employee timesheet page.
+// One row per account (other admins included - they submit their own
+// timesheets now - but never the admin viewing the page) with their
+// weekly-submission counts by status and total submitted hours this month. The
+// admin acts on individual weekly submissions from the per-employee timesheet page.
 
 const listEmployeeTimesheetSummary = asyncHandler(async (req, res) => {
   const { start, end } = timesheetService.getViewRange("month", new Date());
 
   const employees = await prisma.user.findMany({
-    where: { userType: { not: "ADMIN" } },
+    where: { id: { not: req.user.id } },
     select: {
       id: true,
       firstName: true,
@@ -690,6 +692,9 @@ const decideTimesheetSubmission = (decision) =>
     });
     if (!submission) {
       throw ApiError.notFound("Timesheet submission not found.");
+    }
+    if (submission.userId === req.user.id) {
+      throw ApiError.badRequest("You can't action your own timesheet - another admin or your manager needs to.");
     }
 
     const updated = await timesheetDecisionService.applyDecision({

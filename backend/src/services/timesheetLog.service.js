@@ -108,6 +108,12 @@ const logTimesheetForEmployee = async ({
     throw ApiError.badRequest("This project is no longer active.");
   }
 
+  // The Excel sheet is only required for CLIENT projects (projectType
+  // ASSIGNED). Internal projects (NOT_ASSIGNED) are logged without one.
+  if (project.projectType === "ASSIGNED" && (!attachmentOriginalName || !attachmentStoredName)) {
+    throw ApiError.badRequest("Please upload this period's Excel sheet before submitting.");
+  }
+
   const weekStartDate = timesheetService.getPeriodStart(rawWeekStart, project.submissionFrequency);
   const weekEndDate = timesheetService.getPeriodEnd(weekStartDate, project.submissionFrequency);
 
@@ -197,8 +203,8 @@ const logTimesheetForEmployee = async ({
             approvedAt: new Date(),
             rejectedAt: null,
             submittedAt: new Date(),
-            attachmentOriginalName,
-            attachmentStoredName,
+            attachmentOriginalName: attachmentOriginalName ?? null,
+            attachmentStoredName: attachmentStoredName ?? null,
             projectAssigned,
             createdByManager: true,
             createdByAdmin: loggedByAdmin,
@@ -214,8 +220,8 @@ const logTimesheetForEmployee = async ({
             approvedById: actor.id,
             status: "APPROVED",
             approvedAt: new Date(),
-            attachmentOriginalName,
-            attachmentStoredName,
+            attachmentOriginalName: attachmentOriginalName ?? null,
+            attachmentStoredName: attachmentStoredName ?? null,
             projectAssigned,
             projectId,
             createdByManager: true,
