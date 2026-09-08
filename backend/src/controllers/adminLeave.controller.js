@@ -9,6 +9,7 @@ const companySettingsService = require("../services/companySettings.service");
 const leaveLogService = require("../services/leaveLog.service");
 const holidayImpactService = require("../services/holidayImpact.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { sendLeavePolicyChangedEmail } = require("../utils/email.util");
 
 // Trailing digits of an employee code are one running sequence across every
 // prefix (mirrors admin.controller's listUsers sort). No code sorts last.
@@ -28,6 +29,9 @@ const byEmployeeCode = (a, b) => {
 // Notifies every active account - a leave policy change affects the whole
 // company's leave rules, not just the admin who made it.
 const notifyAllOfPolicyChange = async (message) => {
+  // In-app: the whole company (leave rules affect everyone). Email: only
+  // admins + managers, so a routine policy/holiday tweak doesn't mail the
+  // entire company each time.
   try {
     const everyone = await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
     await notificationService.notifyMany(
@@ -36,6 +40,23 @@ const notifyAllOfPolicyChange = async (message) => {
     );
   } catch (err) {
     console.error("Failed to create leave policy changed notification:", err);
+  }
+
+  try {
+    const recipients = await notificationService.getAdminAndManagerRecipients();
+    for (const recipient of recipients) {
+      try {
+        await sendLeavePolicyChangedEmail({
+          to: recipient.email,
+          recipientFirstName: recipient.firstName,
+          message,
+        });
+      } catch (err) {
+        console.error("Failed to send leave policy changed email:", err);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load recipients for leave policy changed email:", err);
   }
 };
 

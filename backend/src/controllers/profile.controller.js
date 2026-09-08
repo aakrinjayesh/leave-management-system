@@ -13,7 +13,12 @@ const {
 const incomeTaxService = require("../services/incomeTax.service");
 const resignationService = require("../services/resignation.service");
 const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.service");
-const { sendResignationSubmittedEmail, sendResignationWithdrawnEmail } = require("../utils/email.util");
+const {
+  sendResignationSubmittedEmail,
+  sendResignationWithdrawnEmail,
+  sendProfileChangeEmployeeEmail,
+  sendProfileChangeAdminEmail,
+} = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 const { isS3Url, uploadToS3, deleteFromS3 } = require("../utils/s3.util");
@@ -110,19 +115,47 @@ const getMyPhoto = asyncHandler(async (req, res) => {
 // of their own profile sections - no approval needed anymore, this is just
 // for awareness / an audit trail.
 const notifyAdminsOfProfileChange = async (employee, sectionLabel) => {
+  const employeeName = `${employee.firstName} ${employee.lastName}`;
+
+  let admins = [];
   try {
-    const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" }, select: { id: true } });
+    admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
     await notificationService.notifyMany(
       admins.map((admin) => admin.id),
       {
         type: notificationService.NOTIFICATION_TYPES.PROFILE_CHANGE_REQUESTED,
         title: "Profile updated",
-        message: `${employee.firstName} ${employee.lastName} updated their ${sectionLabel}.`,
+        message: `${employeeName} updated their ${sectionLabel}.`,
         link: `/admin/users/${employee.id}/details`,
       }
     );
   } catch (err) {
     console.error("Failed to create profile change notification:", err);
+  }
+
+  // FYI email to every admin.
+  for (const admin of admins) {
+    try {
+      await sendProfileChangeAdminEmail({
+        to: admin.email,
+        recipientFirstName: admin.firstName,
+        employeeName,
+        sectionLabel,
+      });
+    } catch (err) {
+      console.error("Failed to send profile change FYI email:", err);
+    }
+  }
+
+  // Confirmation email to the employee - a security signal if it wasn't them.
+  try {
+    await sendProfileChangeEmployeeEmail({
+      to: employee.email,
+      firstName: employee.firstName,
+      sectionLabel,
+    });
+  } catch (err) {
+    console.error("Failed to send profile change confirmation email:", err);
   }
 };
 

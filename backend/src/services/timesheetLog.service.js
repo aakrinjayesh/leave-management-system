@@ -5,6 +5,7 @@ const timesheetConstraints = require("./timesheetConstraints.service");
 const projectService = require("./project.service");
 const notificationService = require("./notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { sendTimesheetLoggedEmail } = require("../utils/email.util");
 
 // "Log a timesheet on the employee's behalf" flow, shared by the manager
 // (direct reports only) and the admin (any employee) paths. Mirrors the
@@ -245,17 +246,30 @@ const logTimesheetForEmployee = async ({
   });
 
   // Best-effort: let the employee know it was logged for them.
+  const actorName = `${actor.firstName} ${actor.lastName}`;
   try {
     await notificationService.notify({
       userId: employee.id,
       type: notificationService.NOTIFICATION_TYPES.TIMESHEET_DECIDED,
       title: "Timesheet logged for you",
-      message: `${actor.firstName} ${actor.lastName} logged and approved your timesheet for ${formatDateShort(
+      message: `${actorName} logged and approved your timesheet for ${formatDateShort(
         weekStartDate
       )} - ${formatDateShort(weekEndDate)}.`,
     });
   } catch (err) {
     console.error("Failed to notify about logged timesheet:", err);
+  }
+
+  try {
+    await sendTimesheetLoggedEmail({
+      to: employee.email,
+      employeeFirstName: employee.firstName,
+      weekStartDate,
+      weekEndDate,
+      actorName,
+    });
+  } catch (err) {
+    console.error("Failed to send logged-timesheet email:", err);
   }
 
   return { submission };

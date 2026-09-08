@@ -4,6 +4,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const wfhService = require("../services/wfh.service");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { sendWfhDecisionEmail } = require("../utils/email.util");
 
 // A manager sees WFH requests from their direct reports and - now that any
 // account (admins included) can report to them - can approve or reject their
@@ -19,23 +20,49 @@ const DECISION_TITLE = {
   REJECTED: "WFH request rejected",
 };
 
-const notifyDecision = async (request, status, message) => {
+const notifyDecision = async (request, status, message, decidedByName) => {
+  // The employee, plus every active admin (company-wide WFH visibility).
+  const recipientsById = new Map([[request.user.id, request.user]]);
   try {
-    const recipientIds = new Set([request.user.id]);
-    // Loop in every active admin too, so company-wide WFH visibility is kept.
-    const admins = await prisma.user.findMany({
-      where: { userType: "ADMIN", status: "ACTIVE" },
-      select: { id: true },
-    });
-    admins.forEach((a) => recipientIds.add(a.id));
-
-    await notificationService.notifyMany([...recipientIds], {
-      type: notificationService.NOTIFICATION_TYPES.WFH_DECIDED,
-      title: DECISION_TITLE[status] || "WFH request updated",
-      message,
+    const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
+    admins.forEach((a) => {
+      if (!recipientsById.has(a.id)) recipientsById.set(a.id, a);
     });
   } catch (err) {
+    console.error("Failed to load admins for WFH decision notice:", err);
+  }
+  const recipients = [...recipientsById.values()];
+
+  try {
+    await notificationService.notifyMany(
+      recipients.map((r) => r.id),
+      {
+        type: notificationService.NOTIFICATION_TYPES.WFH_DECIDED,
+        title: DECISION_TITLE[status] || "WFH request updated",
+        message,
+      }
+    );
+  } catch (err) {
     console.error(`Failed to create WFH ${status.toLowerCase()} notification:`, err);
+  }
+
+  const employeeName = `${request.user.firstName} ${request.user.lastName}`;
+  for (const recipient of recipients) {
+    try {
+      await sendWfhDecisionEmail({
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
+        employeeName,
+        startDate: request.startDate,
+        endDate: request.endDate,
+        status,
+        decidedByName,
+        remarks: request.adminRemarks || null,
+        isEmployee: recipient.id === request.user.id,
+      });
+    } catch (err) {
+      console.error(`Failed to send WFH ${status.toLowerCase()} email:`, err);
+    }
   }
 };
 
@@ -59,7 +86,8 @@ const decide = (decision) =>
       decision,
       `${request.user.firstName} ${request.user.lastName}'s WFH request (${formatDateShort(
         request.startDate
-      )} - ${formatDateShort(request.endDate)}) was ${verb} by ${decidedByName}.`
+      )} - ${formatDateShort(request.endDate)}) was ${verb} by ${decidedByName}.`,
+      decidedByName
     );
   });
 

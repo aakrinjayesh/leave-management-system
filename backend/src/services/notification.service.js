@@ -41,6 +41,27 @@ const notifyMany = (userIds, { type, title, message, link = null }) => {
   });
 };
 
+// Every active admin, plus every active account that currently has at least
+// one direct report (i.e. is a "manager" - derived, not a userType). Full
+// rows, so callers can email them. Used for company-wide-but-not-everyone
+// email notices (leave policy / holiday / project changes) where mailing the
+// whole company would be too noisy but approvers still need to hear about it.
+const getAdminAndManagerRecipients = async () => {
+  const managerIdRows = await prisma.user.findMany({
+    where: { managerId: { not: null } },
+    select: { managerId: true },
+    distinct: ["managerId"],
+  });
+  const managerIds = managerIdRows.map((r) => r.managerId);
+
+  return prisma.user.findMany({
+    where: {
+      status: "ACTIVE",
+      OR: [{ userType: "ADMIN" }, { id: { in: managerIds } }],
+    },
+  });
+};
+
 const listForUser = (userId, limit = 30) =>
   prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: limit });
 
@@ -52,4 +73,13 @@ const markAsRead = (userId, id) =>
 const markAllAsRead = (userId) =>
   prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true, readAt: new Date() } });
 
-module.exports = { NOTIFICATION_TYPES, notify, notifyMany, listForUser, countUnread, markAsRead, markAllAsRead };
+module.exports = {
+  NOTIFICATION_TYPES,
+  notify,
+  notifyMany,
+  getAdminAndManagerRecipients,
+  listForUser,
+  countUnread,
+  markAsRead,
+  markAllAsRead,
+};

@@ -4,6 +4,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const wfhService = require("../services/wfh.service");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { sendWfhDecisionEmail } = require("../utils/email.util");
 
 const startOfUtcDay = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 
@@ -15,21 +16,49 @@ const DECISION_TITLE = {
   CANCELLED: "WFH approval revoked",
 };
 
-const notifyDecision = async (request, status, message) => {
-  try {
-    const recipientIds = new Set([request.user.id]);
-    if (request.user.managerId) {
+const notifyDecision = async (request, status, message, decidedByName) => {
+  // The employee always, plus their active manager (view-only on WFH, but
+  // kept in the loop the same way resignations do).
+  const recipients = [request.user];
+  if (request.user.managerId) {
+    try {
       const manager = await prisma.user.findFirst({ where: { id: request.user.managerId, status: "ACTIVE" } });
-      if (manager) recipientIds.add(manager.id);
+      if (manager) recipients.push(manager);
+    } catch (err) {
+      console.error("Failed to load manager for WFH decision notice:", err);
     }
+  }
 
-    await notificationService.notifyMany([...recipientIds], {
-      type: notificationService.NOTIFICATION_TYPES.WFH_DECIDED,
-      title: DECISION_TITLE[status] || "WFH request updated",
-      message,
-    });
+  try {
+    await notificationService.notifyMany(
+      recipients.map((r) => r.id),
+      {
+        type: notificationService.NOTIFICATION_TYPES.WFH_DECIDED,
+        title: DECISION_TITLE[status] || "WFH request updated",
+        message,
+      }
+    );
   } catch (err) {
     console.error(`Failed to create WFH ${status.toLowerCase()} notification:`, err);
+  }
+
+  const employeeName = `${request.user.firstName} ${request.user.lastName}`;
+  for (const recipient of recipients) {
+    try {
+      await sendWfhDecisionEmail({
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
+        employeeName,
+        startDate: request.startDate,
+        endDate: request.endDate,
+        status,
+        decidedByName,
+        remarks: request.adminRemarks || null,
+        isEmployee: recipient.id === request.user.id,
+      });
+    } catch (err) {
+      console.error(`Failed to send WFH ${status.toLowerCase()} email:`, err);
+    }
   }
 };
 
@@ -62,7 +91,8 @@ const approveWfhRequest = asyncHandler(async (req, res) => {
     "APPROVED",
     `${request.user.firstName} ${request.user.lastName}'s WFH request (${formatDateShort(
       request.startDate
-    )} - ${formatDateShort(request.endDate)}) was approved by ${decidedByName}.`
+    )} - ${formatDateShort(request.endDate)}) was approved by ${decidedByName}.`,
+    decidedByName
   );
 });
 
@@ -80,7 +110,8 @@ const rejectWfhRequest = asyncHandler(async (req, res) => {
     "REJECTED",
     `${request.user.firstName} ${request.user.lastName}'s WFH request (${formatDateShort(
       request.startDate
-    )} - ${formatDateShort(request.endDate)}) was rejected by ${decidedByName}.`
+    )} - ${formatDateShort(request.endDate)}) was rejected by ${decidedByName}.`,
+    decidedByName
   );
 });
 
@@ -98,7 +129,8 @@ const revokeWfhRequest = asyncHandler(async (req, res) => {
     "CANCELLED",
     `${request.user.firstName} ${request.user.lastName}'s approved WFH request (${formatDateShort(
       request.startDate
-    )} - ${formatDateShort(request.endDate)}) was revoked by ${decidedByName}.`
+    )} - ${formatDateShort(request.endDate)}) was revoked by ${decidedByName}.`,
+    decidedByName
   );
 });
 

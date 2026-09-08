@@ -8,7 +8,7 @@ const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
 const { uploadToS3, deleteFromS3 } = require("../utils/s3.util");
-const { sendPayslipEmail } = require("../utils/email.util");
+const { sendPayslipEmail, sendSalaryStructureUpdatedEmail } = require("../utils/email.util");
 
 const monthLabel = (year, month) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -128,6 +128,23 @@ const recordSalaryStructure = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to create salary structure notification:", err);
   }
+
+  try {
+    const employee = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, firstName: true },
+    });
+    if (employee) {
+      await sendSalaryStructureUpdatedEmail({
+        to: employee.email,
+        firstName: employee.firstName,
+        ctc,
+        effectiveFrom,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send salary structure updated email:", err);
+  }
 });
 
 // In-place correction of the most recent structure entry (no new revision) -
@@ -177,6 +194,23 @@ const updateLatestSalaryStructure = asyncHandler(async (req, res) => {
     });
   } catch (err) {
     console.error("Failed to create salary structure notification:", err);
+  }
+
+  try {
+    const employee = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, firstName: true },
+    });
+    if (employee) {
+      await sendSalaryStructureUpdatedEmail({
+        to: employee.email,
+        firstName: employee.firstName,
+        ctc,
+        effectiveFrom,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send salary structure updated email:", err);
   }
 });
 

@@ -544,6 +544,231 @@ const sendAdminAccessRemovedEmail = async ({
   });
 };
 
+const sendAdminAccessGrantedEmail = async ({ to, firstName, grantedByName }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "You're now an admin",
+    intro: `Hi ${firstName || "there"}, ${grantedByName} has made you an admin. You can now manage accounts, projects, leave policy, reports and payslips.`,
+    footerNote: "Log in to Employee Portal to see the new admin sections.",
+  });
+
+  return sendMail({
+    to,
+    subject: "You've been made an admin",
+    html,
+    logLabel: `Admin access granted to ${firstName} (${to})`,
+  });
+};
+
+// ---------- WFH notifications ----------
+
+const sendWfhSubmittedEmail = async ({
+  to,
+  recipientFirstName,
+  employeeName,
+  startDate,
+  endDate,
+  reason,
+}) => {
+  const html = buildLeaveEmailHtml({
+    heading: "New WFH request",
+    intro: `Hi ${recipientFirstName || "there"}, ${employeeName} has requested to work from home.`,
+    detailsRows: [
+      ["Dates", `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`],
+      ["Reason", reason],
+    ],
+    footerNote: "Log in to Employee Portal to approve or reject this request.",
+  });
+
+  return sendMail({
+    to,
+    subject: `WFH request from ${employeeName}`,
+    html,
+    logLabel: `WFH request submitted by ${employeeName} to ${to}`,
+  });
+};
+
+const WFH_DECISION_HEADING = {
+  APPROVED: "WFH request approved",
+  REJECTED: "WFH request rejected",
+  CANCELLED: "WFH approval revoked",
+};
+
+// One template for approve / reject / revoke, and for both the employee (it's
+// "your" request) and an admin/manager copy (it's "{name}'s" request).
+const sendWfhDecisionEmail = async ({
+  to,
+  recipientFirstName,
+  employeeName,
+  startDate,
+  endDate,
+  status,
+  decidedByName,
+  remarks,
+  isEmployee,
+}) => {
+  const verb = status === "APPROVED" ? "approved" : status === "REJECTED" ? "rejected" : "revoked";
+  const whose = isEmployee ? "Your" : `${employeeName}'s`;
+  const html = buildLeaveEmailHtml({
+    heading: WFH_DECISION_HEADING[status] || "WFH request updated",
+    intro: `Hi ${recipientFirstName || "there"}, ${isEmployee ? "your" : `${employeeName}'s`} WFH request has been ${verb} by ${decidedByName}.`,
+    detailsRows: [
+      ["Dates", `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`],
+      ...(remarks ? [["Remarks", remarks]] : []),
+    ],
+  });
+
+  return sendMail({
+    to,
+    subject: isEmployee ? `Your WFH request was ${verb}` : `${whose} WFH request was ${verb}`,
+    html,
+    logLabel: `WFH ${status} for ${employeeName} to ${to}`,
+  });
+};
+
+const sendWfhWithdrawnEmail = async ({
+  to,
+  recipientFirstName,
+  employeeName,
+  startDate,
+  endDate,
+}) => {
+  const html = buildSimpleEmailHtml({
+    heading: "WFH request withdrawn",
+    intro: `Hi ${recipientFirstName || "there"}, ${employeeName} has withdrawn their WFH request for ${formatDateShort(
+      startDate
+    )} – ${formatDateShort(endDate)} - no further action needed.`,
+  });
+
+  return sendMail({
+    to,
+    subject: `${employeeName} withdrew a WFH request`,
+    html,
+    logLabel: `WFH withdrawn by ${employeeName} to ${to}`,
+  });
+};
+
+// ---------- Timesheet: logged on behalf + month-end reminder ----------
+
+const sendTimesheetLoggedEmail = async ({
+  to,
+  employeeFirstName,
+  weekStartDate,
+  weekEndDate,
+  actorName,
+}) => {
+  const html = buildLeaveEmailHtml({
+    heading: "Timesheet logged for you",
+    intro: `Hi ${employeeFirstName || "there"}, ${actorName} has logged and approved a timesheet on your behalf.`,
+    detailsRows: [["Period", `${formatDateShort(weekStartDate)} – ${formatDateShort(weekEndDate)}`]],
+    footerNote: "Log in to Employee Portal to review it.",
+  });
+
+  return sendMail({
+    to,
+    subject: "A timesheet was logged for you",
+    html,
+    logLabel: `Timesheet logged for ${employeeFirstName} by ${actorName}`,
+  });
+};
+
+const sendTimesheetReminderEmail = async ({ to, firstName, monthLabel, projectName, missingCount }) => {
+  const weekWord = missingCount === 1 ? "week" : "weeks";
+  const html = buildSimpleEmailHtml({
+    heading: "Timesheet not submitted",
+    intro: `Hi ${firstName || "there"}, it's the last week of ${monthLabel} and your ${projectName} timesheet is still missing for ${missingCount} earlier ${weekWord} this month. Please submit it before the month ends.`,
+    footerNote: "Log in to Employee Portal to fill it in.",
+  });
+
+  return sendMail({
+    to,
+    subject: `Reminder: ${projectName} timesheet not submitted`,
+    html,
+    logLabel: `Timesheet reminder to ${firstName} (${to})`,
+  });
+};
+
+// ---------- Salary structure / leave policy / project changes ----------
+
+const sendSalaryStructureUpdatedEmail = async ({ to, firstName, ctc, effectiveFrom }) => {
+  const html = buildLeaveEmailHtml({
+    heading: "Salary structure updated",
+    intro: `Hi ${firstName || "there"}, your salary structure has been updated by the admin team.`,
+    detailsRows: [
+      ["New CTC (annual)", `₹${Number(ctc || 0).toLocaleString("en-IN")}`],
+      ["Effective from", formatDateShort(effectiveFrom)],
+    ],
+    footerNote: "Log in to Employee Portal to see the full breakdown on your profile.",
+  });
+
+  return sendMail({
+    to,
+    subject: "Your salary structure has been updated",
+    html,
+    logLabel: `Salary structure updated for ${firstName} (${to})`,
+  });
+};
+
+const sendLeavePolicyChangedEmail = async ({ to, recipientFirstName, message }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "Leave policy updated",
+    intro: `Hi ${recipientFirstName || "there"}, ${message}`,
+    footerNote: "Log in to Employee Portal to review the current leave rules and holidays.",
+  });
+
+  return sendMail({
+    to,
+    subject: "Leave policy updated",
+    html,
+    logLabel: `Leave policy change notice to ${to}`,
+  });
+};
+
+const sendProjectChangedEmail = async ({ to, recipientFirstName, message }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "Project list updated",
+    intro: `Hi ${recipientFirstName || "there"}, ${message}`,
+    footerNote: "Log in to Employee Portal to see the current projects and members.",
+  });
+
+  return sendMail({
+    to,
+    subject: "Project list updated",
+    html,
+    logLabel: `Project change notice to ${to}`,
+  });
+};
+
+// ---------- Profile change: employee confirmation + admin FYI ----------
+
+const sendProfileChangeEmployeeEmail = async ({ to, firstName, sectionLabel }) => {
+  const html = buildSimpleEmailHtml({
+    heading: `${sectionLabel} updated`,
+    intro: `Hi ${firstName || "there"}, your ${sectionLabel} on Employee Portal was just updated.`,
+    footerNote: "If this wasn't you, contact your admin straight away.",
+  });
+
+  return sendMail({
+    to,
+    subject: `Your ${sectionLabel} was updated`,
+    html,
+    logLabel: `Profile change confirmation to ${firstName} (${to})`,
+  });
+};
+
+const sendProfileChangeAdminEmail = async ({ to, recipientFirstName, employeeName, sectionLabel }) => {
+  const html = buildSimpleEmailHtml({
+    heading: "Profile updated",
+    intro: `Hi ${recipientFirstName || "there"}, ${employeeName} updated their ${sectionLabel}.`,
+  });
+
+  return sendMail({
+    to,
+    subject: `${employeeName} updated their ${sectionLabel}`,
+    html,
+    logLabel: `Profile change FYI (${employeeName}) to ${to}`,
+  });
+};
+
 // Sends the employee a link to their generated payslip PDF (the file itself
 // lives on public S3 with an unguessable key). Our mail pipeline can't carry
 // attachments, so the payslip travels as a download button.
@@ -599,4 +824,15 @@ module.exports = {
   sendResignationWithdrawnEmail,
   sendExitNotificationEmail,
   sendAdminAccessRemovedEmail,
+  sendAdminAccessGrantedEmail,
+  sendWfhSubmittedEmail,
+  sendWfhDecisionEmail,
+  sendWfhWithdrawnEmail,
+  sendTimesheetLoggedEmail,
+  sendTimesheetReminderEmail,
+  sendSalaryStructureUpdatedEmail,
+  sendLeavePolicyChangedEmail,
+  sendProjectChangedEmail,
+  sendProfileChangeEmployeeEmail,
+  sendProfileChangeAdminEmail,
 };

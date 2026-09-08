@@ -14,7 +14,7 @@ const timesheetDecisionService = require("../services/timesheetDecision.service"
 const timesheetLogService = require("../services/timesheetLog.service");
 const timesheetConstraints = require("../services/timesheetConstraints.service");
 const notificationService = require("../services/notification.service");
-const { sendAdminAccessRemovedEmail } = require("../utils/email.util");
+const { sendAdminAccessRemovedEmail, sendAdminAccessGrantedEmail } = require("../utils/email.util");
 const { isS3Url, uploadToS3 } = require("../utils/s3.util");
 const { UPLOAD_DIR } = require("../config/upload");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
@@ -209,6 +209,12 @@ const setAdminAccess = asyncHandler(async (req, res) => {
       });
     } catch (err) {
       console.error("Failed to create admin granted notification:", err);
+    }
+
+    try {
+      await sendAdminAccessGrantedEmail({ to: user.email, firstName: user.firstName, grantedByName: actingAdminName });
+    } catch (err) {
+      console.error("Failed to send admin access granted email:", err);
     }
   } else {
     // Sent after the response so the acting admin doesn't wait on the email round-trip.

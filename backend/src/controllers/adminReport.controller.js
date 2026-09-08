@@ -6,11 +6,15 @@ const projectService = require("../services/project.service");
 const payrollReportService = require("../services/payrollReport.service");
 const notificationService = require("../services/notification.service");
 const ApiError = require("../utils/ApiError");
+const { sendProjectChangedEmail } = require("../utils/email.util");
 
 // Notifies every active account - the project list feeds the timesheet
 // dropdown everyone uses, so a project add/rename/status change is
 // company-wide, not just visible to the admin who made it.
 const notifyAllOfProjectChange = async (message) => {
+  // In-app: everyone (the project list feeds the timesheet dropdown all use).
+  // Email: only admins + managers, so routine project edits don't mail the
+  // whole company.
   try {
     const everyone = await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
     await notificationService.notifyMany(
@@ -19,6 +23,23 @@ const notifyAllOfProjectChange = async (message) => {
     );
   } catch (err) {
     console.error("Failed to create project updated notification:", err);
+  }
+
+  try {
+    const recipients = await notificationService.getAdminAndManagerRecipients();
+    for (const recipient of recipients) {
+      try {
+        await sendProjectChangedEmail({
+          to: recipient.email,
+          recipientFirstName: recipient.firstName,
+          message,
+        });
+      } catch (err) {
+        console.error("Failed to send project changed email:", err);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load recipients for project changed email:", err);
   }
 };
 

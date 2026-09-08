@@ -4,6 +4,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const wfhService = require("../services/wfh.service");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { sendWfhSubmittedEmail, sendWfhWithdrawnEmail } = require("../utils/email.util");
 
 // Every active admin, plus this employee's own active manager if they have
 // one - same recipient set resignation submissions use. The manager is
@@ -29,20 +30,33 @@ const submitMyWfhRequest = asyncHandler(async (req, res) => {
   // Sent after the response so the employee doesn't wait on the
   // notification round-trip; failures here shouldn't fail the submission.
   const employeeName = `${req.user.firstName} ${req.user.lastName}`;
+  let noticeRecipients = [];
   try {
-    const recipients = await getWfhNoticeRecipients(req.user);
-    await notificationService.notifyMany(
-      recipients.filter((r) => r.id !== req.user.id).map((r) => r.id),
-      {
-        type: notificationService.NOTIFICATION_TYPES.WFH_SUBMITTED,
-        title: "New WFH request",
-        message: `${employeeName} requested to work from home from ${formatDateShort(
-          request.startDate
-        )} to ${formatDateShort(request.endDate)}.`,
-      }
-    );
+    noticeRecipients = (await getWfhNoticeRecipients(req.user)).filter((r) => r.id !== req.user.id);
+    await notificationService.notifyMany(noticeRecipients.map((r) => r.id), {
+      type: notificationService.NOTIFICATION_TYPES.WFH_SUBMITTED,
+      title: "New WFH request",
+      message: `${employeeName} requested to work from home from ${formatDateShort(
+        request.startDate
+      )} to ${formatDateShort(request.endDate)}.`,
+    });
   } catch (err) {
     console.error("Failed to create WFH submitted notification:", err);
+  }
+
+  for (const recipient of noticeRecipients) {
+    try {
+      await sendWfhSubmittedEmail({
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
+        employeeName,
+        startDate: request.startDate,
+        endDate: request.endDate,
+        reason: request.reason,
+      });
+    } catch (err) {
+      console.error("Failed to send WFH submitted email:", err);
+    }
   }
 });
 
@@ -58,6 +72,36 @@ const withdrawMyWfhRequest = asyncHandler(async (req, res) => {
   const request = await wfhService.withdrawWfhRequest(req.user.id, id);
 
   new ApiResponse(200, "WFH request withdrawn.", { request }).send(res);
+
+  // Same audience the submission notified - let them know it's off the table.
+  const employeeName = `${req.user.firstName} ${req.user.lastName}`;
+  let noticeRecipients = [];
+  try {
+    noticeRecipients = (await getWfhNoticeRecipients(req.user)).filter((r) => r.id !== req.user.id);
+    await notificationService.notifyMany(noticeRecipients.map((r) => r.id), {
+      type: notificationService.NOTIFICATION_TYPES.WFH_DECIDED,
+      title: "WFH request withdrawn",
+      message: `${employeeName} withdrew their WFH request for ${formatDateShort(
+        request.startDate
+      )} – ${formatDateShort(request.endDate)}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create WFH withdrawn notification:", err);
+  }
+
+  for (const recipient of noticeRecipients) {
+    try {
+      await sendWfhWithdrawnEmail({
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
+        employeeName,
+        startDate: request.startDate,
+        endDate: request.endDate,
+      });
+    } catch (err) {
+      console.error("Failed to send WFH withdrawn email:", err);
+    }
+  }
 });
 
 module.exports = { submitMyWfhRequest, getMyWfhRequests, withdrawMyWfhRequest };

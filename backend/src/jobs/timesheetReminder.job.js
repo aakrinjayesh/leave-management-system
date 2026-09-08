@@ -2,6 +2,7 @@ const cron = require("node-cron");
 const prisma = require("../config/prisma");
 const timesheetService = require("../services/timesheet.service");
 const notificationService = require("../services/notification.service");
+const { sendTimesheetReminderEmail } = require("../utils/email.util");
 
 const IST_TIMEZONE = "Asia/Kolkata";
 
@@ -66,7 +67,7 @@ const runTimesheetLastWeekCheck = async (today = getIstNow()) => {
   const memberships = await prisma.projectMembership.findMany({
     where: { project: { projectType: "ASSIGNED" } },
     include: {
-      user: { select: { id: true, status: true } },
+      user: { select: { id: true, status: true, email: true, firstName: true } },
       project: { select: { id: true, name: true, endDate: true } },
     },
   });
@@ -115,6 +116,18 @@ const runTimesheetLastWeekCheck = async (today = getIstNow()) => {
       remindedCount += 1;
     } catch (err) {
       console.error(`Failed to send timesheet last-week reminder to user ${membership.userId}:`, err);
+    }
+
+    try {
+      await sendTimesheetReminderEmail({
+        to: membership.user.email,
+        firstName: membership.user.firstName,
+        monthLabel,
+        projectName: membership.project.name,
+        missingCount: missingWeeks.length,
+      });
+    } catch (err) {
+      console.error(`Failed to send timesheet reminder email to user ${membership.userId}:`, err);
     }
   }
 
