@@ -58,6 +58,18 @@ const isFullyBlocked = (c) => c && c.type !== "HALF_LEAVE";
 
 const fmtDays = (n) => (Number.isInteger(n) ? String(n) : Number(n).toFixed(1));
 
+// A browser can't render .xls/.xlsx itself, so "View" routes the file's public
+// S3 URL through Microsoft's free Office web viewer. Only works for an actual
+// URL (S3-hosted); legacy local-disk attachments have only a filename.
+const canViewInBrowser = (fileRef) => typeof fileRef === "string" && /^https?:\/\//.test(fileRef);
+const openInOfficeViewer = (fileUrl) => {
+  window.open(
+    `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fileUrl)}`,
+    "_blank",
+    "noopener,noreferrer",
+  );
+};
+
 // Every calendar date from periodStart to periodEnd inclusive - 7 dates for
 // a WEEKLY project's Monday-Sunday grid, ~28-31 for a MONTHLY project's
 // full-month grid. Same table either way, just a longer or shorter list.
@@ -170,11 +182,7 @@ export default function MyTimesheetPage() {
   // the S3 object is served as a download), so route it through Microsoft's
   // free Office web viewer, which renders the sheet from its public S3 URL.
   const handleViewAttachment = () => {
-    if (!attachment?.attachmentStoredName) return;
-    const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(
-      attachment.attachmentStoredName
-    )}`;
-    window.open(viewerUrl, "_blank", "noopener,noreferrer");
+    if (attachment?.attachmentStoredName) openInOfficeViewer(attachment.attachmentStoredName);
   };
 
   const handleDownloadSubmissionAttachment = async (submission) => {
@@ -661,15 +669,27 @@ export default function MyTimesheetPage() {
                               <td className="table-cell-secondary">{sub.managerRemarks || "—"}</td>
                               <td>
                                 {sub.attachmentOriginalName && (
-                                  <button
-                                    type="button"
-                                    className="link-btn"
-                                    disabled={downloadingId === sub.id}
-                                    onClick={() => handleDownloadSubmissionAttachment(sub)}
-                                  >
-                                    <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                                    {downloadingId === sub.id ? "Downloading…" : "Download"}
-                                  </button>
+                                  <div className="row-actions">
+                                    {canViewInBrowser(sub.attachmentStoredName) && (
+                                      <button
+                                        type="button"
+                                        className="link-btn"
+                                        onClick={() => openInOfficeViewer(sub.attachmentStoredName)}
+                                      >
+                                        <Eye size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                                        View
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="link-btn"
+                                      disabled={downloadingId === sub.id}
+                                      onClick={() => handleDownloadSubmissionAttachment(sub)}
+                                    >
+                                      <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                                      {downloadingId === sub.id ? "Downloading…" : "Download"}
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
