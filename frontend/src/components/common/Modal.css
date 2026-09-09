@@ -25,6 +25,13 @@
   max-height: 94vh;
 }
 
+/* Between the default and `wide` - for content that reads better a bit wider
+   (a long description, say) but doesn't fill an 880px panel. */
+.modal-panel-mid {
+  max-width: 600px;
+  max-height: 92vh;
+}
+
 /* Large panel that covers the whole viewport - sidebar and top bar included.
    The panel is a flex column with a pinned header and its own scrolling body. */
 .modal-overlay-full {

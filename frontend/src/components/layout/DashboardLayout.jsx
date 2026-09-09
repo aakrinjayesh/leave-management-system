@@ -15,6 +15,7 @@ import {
   FileWarning,
   Home,
   CalendarCheck,
+  Receipt,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -81,6 +82,11 @@ const buildNavItems = (user) => {
       label: "All Resignations",
       icon: FileWarning,
     });
+    items.push({
+      to: "/admin/reimbursements",
+      label: "All Reimbursements",
+      icon: Receipt,
+    });
   }
 
   if (!isAdmin) {
@@ -97,6 +103,7 @@ const buildNavItems = (user) => {
     items.push({ to: "/timesheet", label: "Timesheet", icon: Clock });
     items.push({ to: "/wfh", label: "WFH", icon: Home });
     items.push({ to: "/attendance", label: "Attendance", icon: CalendarCheck });
+    items.push({ to: "/reimbursements", label: "Reimbursements", icon: Receipt });
   }
 
   if (user?.isManager && !isAdmin) {
@@ -135,6 +142,11 @@ const buildNavItems = (user) => {
       to: "/manager/wfh-requests",
       label: "Team WFH",
       icon: Home,
+    });
+    items.push({
+      to: "/manager/reimbursements",
+      label: "Team Reimbursements",
+      icon: Receipt,
     });
   }
 

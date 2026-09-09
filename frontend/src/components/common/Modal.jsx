@@ -12,10 +12,17 @@ export default function Modal({
   onClose,
   children,
   wide = false,
+  mid = false,
   full = false,
   headerActions = null,
 }) {
-  const sizeClass = full ? "modal-panel-full" : wide ? "modal-panel-wide" : "";
+  const sizeClass = full
+    ? "modal-panel-full"
+    : wide
+      ? "modal-panel-wide"
+      : mid
+        ? "modal-panel-mid"
+        : "";
 
   return (
     <div className={`modal-overlay ${full ? "modal-overlay-full" : ""}`.trim()}>

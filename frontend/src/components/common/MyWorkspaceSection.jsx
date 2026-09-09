@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { CalendarCheck, CalendarDays, Clock, Home } from "lucide-react";
+import { CalendarCheck, CalendarDays, Clock, Home, Receipt } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import "../../styles/dashboardShared.css";
 
@@ -41,6 +41,13 @@ export default function MyWorkspaceSection() {
       label: "My attendance",
       hint: "Mark yourself present",
       onClick: () => navigate("/attendance"),
+    },
+    {
+      key: "reimbursements",
+      icon: <Receipt size={18} />,
+      label: "My reimbursements",
+      hint: "Claim an expense",
+      onClick: () => navigate("/reimbursements"),
     },
   ];
 

@@ -271,6 +271,10 @@ model User {
 
     attendances         Attendance[]
     correctedAttendances Attendance[] @relation("AttendanceCorrectedBy")
+
+    reimbursements        Reimbursement[] @relation("EmployeeReimbursements")
+    routedReimbursements  Reimbursement[] @relation("RoutedReimbursements")
+    approvedReimbursements Reimbursement[] @relation("ReimbursementsApprovedBy")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
@@ -1247,4 +1251,64 @@ model Attendance {
     @@index([userId])
     @@index([projectId])
     @@index([date])
+}
+
+// An expense-reimbursement claim. Handled the same way as a leave request:
+// routed to the claimant's manager, actionable by that manager OR any admin
+// (never the claimant themselves), rejection needs a reason. `managerRemarks`
+// holds that reason (or an optional approval note). Unlike leave there's no
+// balance/policy - just a subject, description, amount and one or more
+// supporting files (at least one is mandatory).
+model Reimbursement {
+    id Int @id @default(autoincrement())
+
+    userId       Int
+    routedToId   Int?
+    approvedById Int?
+
+    subject     String
+    description String @db.Text
+    amount      Float
+
+    status         LeaveStatus @default(PENDING)
+    managerRemarks String?
+
+    approvedAt  DateTime?
+    rejectedAt  DateTime?
+    cancelledAt DateTime?
+
+    // True when a manager/admin logged this claim directly on the employee's
+    // behalf (auto-approved at creation). createdByAdmin narrows it to an
+    // admin who isn't the claimant's manager - same tag pattern as leave.
+    createdByManager Boolean @default(false)
+    createdByAdmin   Boolean @default(false)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user        User @relation("EmployeeReimbursements", fields: [userId], references: [id], onDelete: Cascade)
+    routedTo    User? @relation("RoutedReimbursements", fields: [routedToId], references: [id])
+    approvedBy  User? @relation("ReimbursementsApprovedBy", fields: [approvedById], references: [id])
+    attachments ReimbursementAttachment[]
+
+    @@index([userId])
+    @@index([routedToId])
+    @@index([approvedById])
+    @@index([status])
+}
+
+model ReimbursementAttachment {
+    id Int @id @default(autoincrement())
+
+    reimbursementId Int
+
+    // Permanent public S3 URL of the uploaded receipt/invoice.
+    fileUrl  String
+    fileName String
+
+    createdAt DateTime @default(now())
+
+    reimbursement Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+
+    @@index([reimbursementId])
 }

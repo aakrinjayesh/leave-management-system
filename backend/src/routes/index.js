@@ -12,6 +12,7 @@ const notificationRoutes = require("./notification.routes");
 const employeeWfhRoutes = require("./employeeWfh.routes");
 const attendanceRoutes = require("./attendance.routes");
 const holidaysRoutes = require("./holidays.routes");
+const reimbursementRoutes = require("./reimbursement.routes");
 
 const router = express.Router();
 
@@ -28,5 +29,6 @@ router.use("/notifications", notificationRoutes);
 router.use("/employee/wfh", employeeWfhRoutes);
 router.use("/attendance", attendanceRoutes);
 router.use("/holidays", holidaysRoutes);
+router.use("/reimbursements", reimbursementRoutes);
 
 module.exports = router;

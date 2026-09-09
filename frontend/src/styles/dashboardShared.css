@@ -1681,3 +1681,13 @@
 .attachment-uploaded-row .attachment-row-view + .link-btn {
   margin-left: 14px;
 }
+
+/* Reimbursement claims table: keep the description to one line - full text is
+   in the detail modal opened by clicking the row. */
+.claim-desc-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 42ch;
+}

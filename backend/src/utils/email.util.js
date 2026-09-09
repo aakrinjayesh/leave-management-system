@@ -769,6 +769,104 @@ const sendProfileChangeAdminEmail = async ({ to, recipientFirstName, employeeNam
   });
 };
 
+// ---------- Reimbursement notifications ----------
+
+const sendReimbursementSubmittedEmail = async ({
+  to,
+  recipientFirstName,
+  claimantName,
+  subject,
+  description,
+  amount,
+  fileCount,
+}) => {
+  const html = buildLeaveEmailHtml({
+    heading: "New reimbursement claim",
+    intro: `Hi ${recipientFirstName || "there"}, ${claimantName} has submitted a reimbursement claim for your review.`,
+    detailsRows: [
+      ["Subject", subject],
+      ["Amount", amount],
+      ["Description", description],
+      ["Attachments", `${fileCount} file${fileCount === 1 ? "" : "s"}`],
+    ],
+    footerNote: "Log in to Employee Portal to approve or reject this claim.",
+  });
+
+  return sendMail({
+    to,
+    subject: `Reimbursement claim from ${claimantName}`,
+    html,
+    logLabel: `Reimbursement submitted by ${claimantName} to ${to}`,
+  });
+};
+
+const sendReimbursementDecisionEmail = async ({
+  to,
+  employeeFirstName,
+  subject,
+  amount,
+  status,
+  decidedByName,
+  remarks,
+}) => {
+  const isApproved = status === "APPROVED";
+  const html = buildLeaveEmailHtml({
+    heading: isApproved ? "Reimbursement claim approved" : "Reimbursement claim rejected",
+    intro: `Hi ${employeeFirstName || "there"}, your reimbursement claim has been ${
+      isApproved ? "approved" : "rejected"
+    } by ${decidedByName}.`,
+    detailsRows: [
+      ["Subject", subject],
+      ["Amount", amount],
+      ...(remarks ? [[isApproved ? "Note" : "Reason", remarks]] : []),
+    ],
+  });
+
+  return sendMail({
+    to,
+    subject: `Your reimbursement claim was ${isApproved ? "approved" : "rejected"}`,
+    html,
+    logLabel: `Reimbursement ${status} for ${employeeFirstName}`,
+  });
+};
+
+const sendReimbursementCancelledEmail = async ({ to, recipientFirstName, claimantName, subject, amount }) => {
+  const html = buildLeaveEmailHtml({
+    heading: "Reimbursement claim cancelled",
+    intro: `Hi ${recipientFirstName || "there"}, ${claimantName} has cancelled their pending reimbursement claim - no action needed.`,
+    detailsRows: [
+      ["Subject", subject],
+      ["Amount", amount],
+    ],
+  });
+
+  return sendMail({
+    to,
+    subject: `${claimantName} cancelled a reimbursement claim`,
+    html,
+    logLabel: `Reimbursement cancelled by ${claimantName} to ${to}`,
+  });
+};
+
+const sendReimbursementLoggedEmail = async ({ to, employeeFirstName, actorName, subject, amount }) => {
+  const html = buildLeaveEmailHtml({
+    heading: "Reimbursement claim logged for you",
+    intro: `Hi ${employeeFirstName || "there"}, ${actorName} has logged and approved a reimbursement claim on your behalf.`,
+    detailsRows: [
+      ["Subject", subject],
+      ["Amount", amount],
+    ],
+    footerNote: "Log in to Employee Portal to see it in your history.",
+  });
+
+  return sendMail({
+    to,
+    subject: "A reimbursement claim was logged for you",
+    html,
+    logLabel: `Reimbursement logged for ${employeeFirstName} by ${actorName}`,
+  });
+};
+
 // Sends the employee a link to their generated payslip PDF (the file itself
 // lives on public S3 with an unguessable key). Our mail pipeline can't carry
 // attachments, so the payslip travels as a download button.
@@ -835,4 +933,8 @@ module.exports = {
   sendProjectChangedEmail,
   sendProfileChangeEmployeeEmail,
   sendProfileChangeAdminEmail,
+  sendReimbursementSubmittedEmail,
+  sendReimbursementDecisionEmail,
+  sendReimbursementCancelledEmail,
+  sendReimbursementLoggedEmail,
 };

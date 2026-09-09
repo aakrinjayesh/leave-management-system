@@ -48,6 +48,9 @@ import MyWfhPage from "../pages/wfh/MyWfhPage";
 import MyAttendancePage from "../pages/attendance/MyAttendancePage";
 import TeamAttendancePage from "../pages/manager/TeamAttendancePage";
 import AllAttendancePage from "../pages/admin/AllAttendancePage";
+import MyReimbursementsPage from "../pages/reimbursement/MyReimbursementsPage";
+import TeamReimbursementsPage from "../pages/manager/TeamReimbursementsPage";
+import AllReimbursementsPage from "../pages/admin/AllReimbursementsPage";
 
 const isNotAdmin = (user) => user.userType !== "ADMIN";
 const isManager = (user) => user.isManager;
@@ -95,6 +98,7 @@ export default function AppRoutes() {
         <Route path="/timesheet" element={<MyTimesheetPage />} />
         <Route path="/wfh" element={<MyWfhPage />} />
         <Route path="/attendance" element={<MyAttendancePage />} />
+        <Route path="/reimbursements" element={<MyReimbursementsPage />} />
       </Route>
 
       {/* Profile - available to every authenticated account, Admin included
@@ -117,6 +121,7 @@ export default function AppRoutes() {
         <Route path="/manager/timesheets/employees/:id" element={<ManagerEmployeeTimesheetPage />} />
         <Route path="/manager/resignations" element={<TeamResignationsPage />} />
         <Route path="/manager/wfh-requests" element={<TeamWfhPage />} />
+        <Route path="/manager/reimbursements" element={<TeamReimbursementsPage />} />
       </Route>
 
       <Route element={<ProtectedRoute check={isAdmin} />}>
@@ -136,6 +141,7 @@ export default function AppRoutes() {
         <Route path="/admin/users/:id/payslips" element={<EmployeePayslipsPage />} />
         <Route path="/admin/resignations" element={<ResignationsPage />} />
         <Route path="/admin/wfh-requests" element={<WfhRequestsPage />} />
+        <Route path="/admin/reimbursements" element={<AllReimbursementsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

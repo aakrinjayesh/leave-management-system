@@ -45,7 +45,14 @@ const offerLetterController = require("../controllers/adminOfferLetter.controlle
 const resignationController = require("../controllers/adminResignation.controller");
 const wfhController = require("../controllers/adminWfh.controller");
 const contractPaymentController = require("../controllers/adminContractPayment.controller");
+const reimbursementController = require("../controllers/adminReimbursement.controller");
 const { uploadSingleEmployeeDocument } = require("../config/employeeDocumentUpload");
+const { uploadReimbursementAttachments } = require("../config/reimbursementAttachmentUpload");
+const {
+  logReimbursementForEmployeeSchema,
+  approveReimbursementSchema,
+  rejectReimbursementSchema,
+} = require("../validators/reimbursement.validator");
 const { USER_TYPE } = require("../utils/constants");
 
 const router = express.Router();
@@ -214,5 +221,24 @@ router.get("/wfh-requests", wfhController.listWfhRequests);
 router.patch("/wfh-requests/:id/approve", wfhController.approveWfhRequest);
 router.patch("/wfh-requests/:id/reject", validate(rejectWfhRequestSchema), wfhController.rejectWfhRequest);
 router.patch("/wfh-requests/:id/revoke", validate(revokeWfhRequestSchema), wfhController.revokeWfhRequest);
+
+router.get("/reimbursements", reimbursementController.listAll);
+router.post(
+  "/users/:id/reimbursements",
+  uploadReimbursementAttachments,
+  validate(logReimbursementForEmployeeSchema),
+  reimbursementController.logForUser
+);
+router.patch(
+  "/reimbursements/:id/approve",
+  validate(approveReimbursementSchema),
+  reimbursementController.approve
+);
+router.patch(
+  "/reimbursements/:id/reject",
+  validate(rejectReimbursementSchema),
+  reimbursementController.reject
+);
+router.get("/reimbursements/:id/attachments/:attachmentId", reimbursementController.getAttachment);
 
 module.exports = router;

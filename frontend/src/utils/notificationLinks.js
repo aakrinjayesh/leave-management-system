@@ -51,6 +51,13 @@ export const getNotificationDestination = (type, user) => {
       return isManager ? "/manager/wfh-requests" : null;
     case "WFH_DECIDED":
       return isManager ? "/manager/wfh-requests" : "/wfh";
+    case "REIMBURSEMENT_SUBMITTED":
+    case "REIMBURSEMENT_CANCELLED":
+      if (isAdmin) return "/admin/reimbursements";
+      return isManager ? "/manager/reimbursements" : null;
+    // Always goes to the claimant - their own claims list, open to every role.
+    case "REIMBURSEMENT_DECIDED":
+      return "/reimbursements";
     default:
       return null;
   }
