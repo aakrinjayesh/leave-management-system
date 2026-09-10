@@ -34,11 +34,22 @@ export default function ClaimFormModal({ title, onClose, onSubmitted, submit, pe
     e.preventDefault();
     setError("");
 
-    if (people && !personId) return setError("Please choose whose claim this is.");
-    if (!form.subject.trim() || !form.description.trim()) return setError("Please fill in the subject and description.");
     const amount = Number(form.amount);
-    if (!amount || amount <= 0) return setError("Please enter an amount greater than 0.");
-    if (files.length === 0) return setError("Please attach at least one supporting file.");
+    const missing = [];
+    if (people && !personId) missing.push("who the claim is for");
+    if (!form.subject.trim()) missing.push("subject");
+    if (!(amount > 0)) missing.push("amount (greater than 0)");
+    if (!form.description.trim()) missing.push("description");
+    if (files.length === 0) missing.push("at least one supporting file");
+
+    if (missing.length > 0) {
+      setError(
+        missing.length === 1
+          ? `Please provide ${missing[0]}.`
+          : `Please provide: ${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}.`
+      );
+      return;
+    }
 
     setIsSubmitting(true);
     try {
