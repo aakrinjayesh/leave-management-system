@@ -1691,3 +1691,75 @@
   overflow: hidden;
   max-width: 42ch;
 }
+
+/* Small square icon button used next to a page-header title (e.g. opening the
+   company calendar from the Attendance page) - same visual language as the
+   dashboard's back-arrow button. */
+.page-header-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--color-gray-600);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.page-header-icon-btn:hover {
+  background-color: var(--color-gray-100);
+  color: var(--text-primary);
+}
+
+/* Body wrapper for the company-calendar "full" modal - takes the remaining
+   flex space below the pinned header/subtitle and scrolls on its own if the
+   grid doesn't fit, same pattern as .pm-modal-body. Content is capped so an
+   ultra-wide viewport doesn't stretch the 7-column grid into oversized cells.
+*/
+.calendar-modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.calendar-modal-body > * {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Bigger day cells only inside the company-calendar "full" modal (higher
+   specificity than the shared .calendar-cell rule) - the other pages that
+   reuse the Calendar component (My/Team Calendar, employee leave detail)
+   keep their normal, more compact size. */
+.calendar-modal-body .calendar-cell {
+  min-height: 120px;
+}
+
+/* Groups a text field (GST/PAN number) with its own optional document upload
+   so they read as one field instead of two unrelated grid cells - and gives
+   the upload-only doc trio ("Other documents") the same visual container. */
+.client-doc-group {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: var(--color-white);
+  padding: 14px 16px 4px;
+  margin-bottom: 18px;
+}
+
+.client-doc-group-title {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-primary-600);
+  margin-bottom: 4px;
+}

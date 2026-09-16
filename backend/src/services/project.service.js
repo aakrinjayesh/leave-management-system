@@ -1,5 +1,16 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
+const { deleteFromS3 } = require("../utils/s3.util");
+
+// Client/company document URL fields - when one of these changes on an edit,
+// the old S3 object is now orphaned and can be cleaned up.
+const CLIENT_DOCUMENT_FIELDS = [
+  "gstDocumentUrl",
+  "panDocumentUrl",
+  "msmeDocumentUrl",
+  "sowDocumentUrl",
+  "agreementDocumentUrl",
+];
 
 const MEMBER_SELECT = {
   userId: true,
@@ -117,9 +128,20 @@ const getProjectOr404 = async (id) => {
 // timezone, working hours, members) - same endpoint, since they're all just
 // fields on the same row and never need to change independently of each other.
 const renameProject = async (id, name, details, members) => {
-  await getProjectOr404(id);
+  const existing = await getProjectOr404(id);
   await assertNameAvailable(name, id);
   await prisma.project.update({ where: { id }, data: { name, ...details } });
+
+  // A client document that got replaced (or cleared) leaves its old S3
+  // object orphaned - best-effort cleanup, never blocks the save.
+  for (const field of CLIENT_DOCUMENT_FIELDS) {
+    if (existing[field] && existing[field] !== details[field]) {
+      deleteFromS3(existing[field]).catch((err) =>
+        console.error(`Failed to delete superseded project document (${field}):`, err)
+      );
+    }
+  }
+
   if (members !== undefined) {
     await setProjectMembers(id, members);
   }

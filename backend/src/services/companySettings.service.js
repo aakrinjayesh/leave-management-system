@@ -23,6 +23,10 @@ const updateSettings = async (data) => {
   return prisma.companySettings.create({ data: { ...DEFAULTS, ...data } });
 };
 
+// The authorized-signatory signature image used on generated Invoice PDFs -
+// a single company-wide asset, replaced (not versioned) on every re-upload.
+const updateSignature = (signatureUrl) => updateSettings({ signatureUrl });
+
 // The fiscal year `date` falls in, per the company's configured start month
 // - used everywhere a leave balance or payroll figure needs to know which
 // yearly bucket it belongs to, instead of a manually-tracked year number.
@@ -33,4 +37,4 @@ const getFiscalYearForDate = async (date) => {
 
 const getCurrentFiscalYear = () => getFiscalYearForDate(new Date());
 
-module.exports = { getSettings, updateSettings, getFiscalYearForDate, getCurrentFiscalYear };
+module.exports = { getSettings, updateSettings, updateSignature, getFiscalYearForDate, getCurrentFiscalYear };

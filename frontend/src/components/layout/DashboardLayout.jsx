@@ -16,6 +16,7 @@ import {
   Home,
   CalendarCheck,
   Receipt,
+  ReceiptIndianRupee,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -61,11 +62,6 @@ const buildNavItems = (user) => {
       to: "/admin/timesheets",
       label: "All Timesheets",
       icon: Clock,
-    });
-    items.push({
-      to: "/admin/calendar",
-      label: "All Calendar",
-      icon: CalendarDays,
     });
     items.push({
       to: "/admin/attendance",
@@ -162,9 +158,9 @@ const buildNavItems = (user) => {
       icon: BarChart3,
     });
     items.push({
-      to: "/admin/report",
-      label: "Report",
-      icon: Table2,
+      to: "/admin/invoices",
+      label: "Invoice",
+      icon: ReceiptIndianRupee,
     });
     items.push({
       to: "/admin/manage-leaves",
@@ -172,6 +168,11 @@ const buildNavItems = (user) => {
       icon: CalendarRange,
     });
     items.push({ to: "/admin/payslips", label: "Payslips", icon: FileText });
+    items.push({
+      to: "/admin/report",
+      label: "Report",
+      icon: Table2,
+    });
   }
   items.push({ to: "/profile", label: "Profile", icon: UserCog });
 

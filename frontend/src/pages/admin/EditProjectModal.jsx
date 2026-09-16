@@ -5,6 +5,7 @@ import FormSelect from "../../components/common/FormSelect";
 import TimeOfDayField from "../../components/common/TimeOfDayField";
 import Button from "../../components/common/Button";
 import Alert from "../../components/common/Alert";
+import ClientDetailsFields from "./ClientDetailsFields";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import {
@@ -18,6 +19,18 @@ const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
 const toForm = (project) => ({
   name: project.name,
   clientName: project.clientName || "",
+  clientFullName: project.clientFullName || "",
+  clientAddress: project.clientAddress || "",
+  clientState: project.clientState || "",
+  gstNumber: project.gstNumber || "",
+  gstDocumentUrl: project.gstDocumentUrl || "",
+  panNumber: project.panNumber || "",
+  panDocumentUrl: project.panDocumentUrl || "",
+  msmeDocumentUrl: project.msmeDocumentUrl || "",
+  paymentTerms: project.paymentTerms || "",
+  sowDocumentUrl: project.sowDocumentUrl || "",
+  rateCard: project.rateCard || "",
+  agreementDocumentUrl: project.agreementDocumentUrl || "",
   projectType: project.projectType,
   timezone: toEditableTimezoneValue(project.timezone),
   workStartTime: project.workStartTime,
@@ -34,6 +47,11 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
 
   const handleChange = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  // Same as above but takes the value directly - what ClientDetailsFields
+  // uses for both its text inputs and its document uploads (a URL, not an event).
+  const handleFieldChange = (field, value) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -112,6 +130,8 @@ export default function EditProjectModal({ project, onClose, onSuccess }) {
           value={form.timezone}
           onChange={handleChange("timezone")}
         />
+
+        <ClientDetailsFields form={form} onFieldChange={handleFieldChange} />
 
         <hr className="modal-section-divider" />
         <p className="modal-section-title">Schedule &amp; working hours</p>

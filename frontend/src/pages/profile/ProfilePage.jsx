@@ -97,7 +97,6 @@ export default function ProfilePage() {
   );
 
   const renderSectionEditControl = (key) => {
-    if (isAdmin) return null;
     return (
       <button type="button" className="link-btn" onClick={() => setEditingSection(key)}>
         <Pencil size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />
@@ -336,9 +335,8 @@ export default function ProfilePage() {
             {renderSectionEditControl("personal")}
           </div>
           <p className="card-section-subtitle">
-            {isAdmin
-              ? "These fields are managed by your admin - contact them to update any of these."
-              : "Name, employee code, and email are managed by your admin - contact them to change those. Everything else you can edit yourself, up to 3 times."}
+            Your employee code and email are managed by your admin - contact them to change those. Everything else,
+            including your name, you can edit yourself.
           </p>
 
           <div className="profile-detail-grid">
@@ -417,8 +415,8 @@ export default function ProfilePage() {
             {renderSectionEditControl("statutory")}
           </div>
           <p className="card-section-subtitle">
-            Sensitive numbers are shown masked.
-            {!isAdmin && " PF number can only be changed by your admin - everything else you can edit yourself, up to 3 times."}
+            Sensitive numbers are shown masked. PF number can only be changed by your admin - everything else you
+            can edit yourself.
           </p>
 
           <div className="profile-detail-grid">
@@ -461,11 +459,9 @@ export default function ProfilePage() {
             </span>
             {renderSectionEditControl("bank")}
           </div>
-          {!isAdmin && (
-            <p className="card-section-subtitle">
-              Salary / CTC can only be changed by your admin - everything else you can edit yourself, up to 3 times.
-            </p>
-          )}
+          <p className="card-section-subtitle">
+            Salary / CTC can only be changed by your admin - everything else you can edit yourself.
+          </p>
 
           <div className="profile-detail-grid">
             <div>

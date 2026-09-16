@@ -133,6 +133,8 @@ const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const PF_NUMBER_REGEX = /^[A-Za-z0-9/]+$/;
 
 const updateUserDetailsSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required.").max(100).optional(),
+  lastName: z.string().trim().min(1, "Last name is required.").max(100).optional(),
   employeeCode: nullablePattern(
     EMPLOYEE_CODE_REGEX,
     "Employee code can only contain letters, numbers, hyphens, and underscores.",
@@ -273,6 +275,23 @@ const projectDetailsSchema = {
   // Admin-only label for the client this project is for - optional, empty
   // string stored as null. Never shown to employees.
   clientName: nullableString(150),
+  // Client / company details - all optional, admin-only (see the Project
+  // model comment). Document fields hold a permanent S3 URL, uploaded
+  // separately via POST /admin/projects/documents/:type before this request
+  // is submitted (same pre-upload-then-reference pattern as leave/timesheet
+  // attachments) - never a raw file here.
+  clientFullName: nullableString(200),
+  clientAddress: nullableString(1000),
+  clientState: nullableString(100),
+  gstNumber: nullableString(30),
+  gstDocumentUrl: nullableString(500),
+  panNumber: nullableString(20),
+  panDocumentUrl: nullableString(500),
+  msmeDocumentUrl: nullableString(500),
+  paymentTerms: nullableString(500),
+  sowDocumentUrl: nullableString(500),
+  rateCard: nullableString(500),
+  agreementDocumentUrl: nullableString(500),
   submissionFrequency: z.enum(["WEEKLY", "MONTHLY"], {
     message: "Please select whether timesheets on this project are submitted weekly or monthly.",
   }),
@@ -339,6 +358,36 @@ const setProjectMembersSchema = z.object({
   members: membersSchema.unwrap(),
 });
 
+// Tax Invoice generation. projectId is optional - admin can pick a saved
+// client project to auto-fill the Bill To block, or leave it unset and type
+// everything by hand (clientFullName is the only client field that's always
+// required either way). totalTaxableValue drives every downstream tax
+// figure - IGST vs CGST+SGST is decided server-side from clientState against
+// the company's home state, never trusted from the client.
+const createInvoiceSchema = z.object({
+  invoiceNo: z.string().trim().min(1, "Please enter an invoice number.").max(60),
+  invoiceDate: z.coerce.date({ errorMap: () => ({ message: "Please choose a valid invoice date." }) }),
+  projectId: z.coerce.number().int().positive().nullable().optional(),
+  clientFullName: z.string().trim().min(1, "Please enter the client's company name.").max(200),
+  clientAddress: nullableString(1000),
+  clientState: nullableString(100),
+  clientGstNumber: nullableString(30),
+  hsnCode: nullableString(20),
+  description: z.string().trim().min(1, "Please describe the service provided.").max(2000),
+  paymentAdviceText: nullableString(300),
+  totalTaxableValue: z.coerce.number().positive("Total taxable value must be greater than 0."),
+  bankAccountName: nullableString(200),
+  bankName: nullableString(150),
+  bankAccountNumber: nullableString(30),
+  bankIfscCode: nullableString(15),
+  declarationText: nullableString(1000),
+  // Only meaningful for the actual Save - the Preview button always renders
+  // a PDF regardless of this (a browser tab can't show an inline .docx the
+  // way it shows a PDF), so this schema is shared by both endpoints and
+  // previewInvoicePdf simply never reads it.
+  format: z.enum(["PDF", "WORD"]).optional().default("PDF"),
+});
+
 module.exports = {
   createUserSchema,
   updateManagerSchema,
@@ -363,4 +412,5 @@ module.exports = {
   setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
+  createInvoiceSchema,
 };

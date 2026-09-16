@@ -36,9 +36,14 @@ const BANK_ACCOUNT_REGEX = /^\d{9,18}$/;
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 // Employee's own self-service edit of their Personal Information section -
-// name, employee code, and email are excluded on purpose (see
-// updateMyPersonalInfo in profile.controller.js).
+// employee code and login email are still admin-only (see updateUserDetails
+// in admin.controller.js); first/last name can be changed here.
 const updateMyPersonalInfoSchema = z.object({
+  // Unlike the rest of this schema, a blank value isn't "leave it alone" -
+  // a name can't be blanked, so this rejects an empty string outright rather
+  // than silently ignoring it.
+  firstName: z.string().trim().min(1, "First name is required.").max(100).optional(),
+  lastName: z.string().trim().min(1, "Last name is required.").max(100).optional(),
   personalEmail: z
     .string()
     .trim()

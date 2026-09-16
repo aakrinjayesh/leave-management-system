@@ -233,6 +233,16 @@ export const deleteUserDocument = (userId, type) =>
 export const downloadUserDocument = (userId, type) =>
   axiosClient.get(`/admin/users/${userId}/documents/${type}`, { responseType: "blob" }).then((res) => res.data);
 
+// ---------- Project client documents (GST/PAN/MSME/SOW/agreement) ----------
+// Generic - no project id needed, so the same call works while filling in a
+// brand-new project's form (not saved yet) or editing an existing one.
+// Returns the file's permanent S3 URL to store on the project record.
+export const uploadProjectDocument = (type, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return unwrap(axiosClient.post(`/admin/projects/documents/${type}`, formData));
+};
+
 // ---------- Custom fields ----------
 
 export const listCustomFields = (userId) => unwrap(axiosClient.get(`/admin/users/${userId}/custom-fields`));
@@ -265,6 +275,34 @@ export const listResignations = () => unwrap(axiosClient.get("/admin/resignation
 export const acceptResignation = (id) => unwrap(axiosClient.patch(`/admin/resignations/${id}/accept`));
 
 export const rejectResignation = (id) => unwrap(axiosClient.patch(`/admin/resignations/${id}/reject`));
+
+// ---------- Invoices ----------
+
+export const listInvoices = () => unwrap(axiosClient.get("/admin/invoices"));
+
+export const createInvoice = (payload) => unwrap(axiosClient.post("/admin/invoices", payload));
+
+// Renders the invoice PDF from whatever's currently in the form, without
+// saving anything - lets admin check the watermarked PDF before committing.
+export const previewInvoicePdf = (payload) =>
+  axiosClient.post("/admin/invoices/preview", payload, { responseType: "blob" });
+
+// Downloads the saved document - a .pdf or .docx depending on the format
+// admin picked when they saved it.
+export const downloadInvoiceDocument = (invoiceId) =>
+  axiosClient.get(`/admin/invoices/${invoiceId}/document`, { responseType: "blob" });
+
+export const deleteInvoice = (invoiceId) => unwrap(axiosClient.delete(`/admin/invoices/${invoiceId}`));
+
+// Authorized-signatory signature - a single company-wide image reused on
+// every generated invoice PDF, not per-invoice data.
+export const uploadInvoiceSignature = (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return unwrap(axiosClient.post("/admin/invoices/signature", formData));
+};
+
+export const removeInvoiceSignature = () => unwrap(axiosClient.delete("/admin/invoices/signature"));
 
 export const listWfhRequests = (status) =>
   unwrap(axiosClient.get("/admin/wfh-requests", { params: status ? { status } : {} }));

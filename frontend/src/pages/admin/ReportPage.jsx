@@ -26,6 +26,7 @@ import EditProjectModal from "./EditProjectModal";
 import ManageProjectMembersModal from "./ManageProjectMembersModal";
 import ProjectHistoryModal from "./ProjectHistoryModal";
 import ProjectMembersField from "./ProjectMembersField";
+import ClientDetailsFields from "./ClientDetailsFields";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
@@ -250,6 +251,18 @@ function EmployeeListCard({
 const DEFAULT_NEW_PROJECT = {
   name: "",
   clientName: "",
+  clientFullName: "",
+  clientAddress: "",
+  clientState: "",
+  gstNumber: "",
+  gstDocumentUrl: "",
+  panNumber: "",
+  panDocumentUrl: "",
+  msmeDocumentUrl: "",
+  paymentTerms: "",
+  sowDocumentUrl: "",
+  rateCard: "",
+  agreementDocumentUrl: "",
   projectType: "",
   timezone: "",
   workStartTime: "",
@@ -290,6 +303,12 @@ function ManageProjectsCard() {
 
   const handleNewProjectChange = (field) => (e) =>
     setNewProject((prev) => ({ ...prev, [field]: e.target.value }));
+
+  // Same as above but takes the value directly rather than an event - what
+  // ClientDetailsFields uses for both its text inputs and its document
+  // uploads (which hand back a URL, not an event).
+  const handleNewProjectFieldChange = (field, value) =>
+    setNewProject((prev) => ({ ...prev, [field]: value }));
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -449,6 +468,10 @@ function ManageProjectsCard() {
                 onChange={handleNewProjectChange("clientName")}
               />
             </div>
+
+            <ClientDetailsFields form={newProject} onFieldChange={handleNewProjectFieldChange} />
+
+            <hr className="modal-section-divider" />
             <div className="form-two-col">
               <TextInput
                 label="Project Start date"

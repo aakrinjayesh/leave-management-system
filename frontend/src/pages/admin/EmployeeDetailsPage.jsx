@@ -42,6 +42,12 @@ const isSaneYear = (dateStr) => {
 const validateForm = (form) => {
   const errors = {};
 
+  if (!form.firstName?.trim()) {
+    errors.firstName = "First name is required.";
+  }
+  if (!form.lastName?.trim()) {
+    errors.lastName = "Last name is required.";
+  }
   if (form.employeeCode && !EMPLOYEE_CODE_REGEX.test(form.employeeCode.trim())) {
     errors.employeeCode = "Only letters, numbers, hyphens, and underscores are allowed.";
   }
@@ -82,6 +88,8 @@ const validateForm = (form) => {
 };
 
 const toForm = (user) => ({
+  firstName: user.firstName ?? "",
+  lastName: user.lastName ?? "",
   employeeCode: user.employeeCode ?? "",
   personalEmail: user.personalEmail ?? "",
   phone: user.phone ?? "",
@@ -119,6 +127,8 @@ const SECTIONS = {
   personal: {
     label: "Personal information",
     fields: [
+      "firstName",
+      "lastName",
       "employeeCode",
       "personalEmail",
       "gender",
@@ -406,6 +416,21 @@ function EmployeeDetailsContent({ id }) {
             <p className="card-section-subtitle">
               Admin-managed only. The employee sees these read-only on their own Profile page.
             </p>
+
+            <div className="form-two-col">
+              <TextInput
+                label="First name"
+                value={form.firstName}
+                onChange={handleChange("firstName")}
+                error={fieldErrors.firstName}
+              />
+              <TextInput
+                label="Last name"
+                value={form.lastName}
+                onChange={handleChange("lastName")}
+                error={fieldErrors.lastName}
+              />
+            </div>
 
             <div className="form-two-col">
               <div>

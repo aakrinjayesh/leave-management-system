@@ -25,6 +25,7 @@ const {
   setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
+  createInvoiceSchema,
 } = require("../validators/admin.validator");
 const { rejectWfhRequestSchema, revokeWfhRequestSchema } = require("../validators/wfh.validator");
 const { approveLeaveSchema, rejectLeaveSchema, createLeaveForEmployeeSchema } = require("../validators/leave.validator");
@@ -41,6 +42,7 @@ const employeeDocsController = require("../controllers/adminEmployeeDocs.control
 const exitController = require("../controllers/adminExit.controller");
 const taxController = require("../controllers/adminTax.controller");
 const reportController = require("../controllers/adminReport.controller");
+const invoiceController = require("../controllers/adminInvoice.controller");
 const offerLetterController = require("../controllers/adminOfferLetter.controller");
 const resignationController = require("../controllers/adminResignation.controller");
 const wfhController = require("../controllers/adminWfh.controller");
@@ -48,6 +50,8 @@ const contractPaymentController = require("../controllers/adminContractPayment.c
 const reimbursementController = require("../controllers/adminReimbursement.controller");
 const { uploadSingleEmployeeDocument } = require("../config/employeeDocumentUpload");
 const { uploadReimbursementAttachments } = require("../config/reimbursementAttachmentUpload");
+const { uploadSingleProjectDocument } = require("../config/projectDocumentUpload");
+const { uploadSingleCompanySignature } = require("../config/companySignatureUpload");
 const {
   logReimbursementForEmployeeSchema,
   approveReimbursementSchema,
@@ -101,11 +105,25 @@ router.get("/users/:id/project-history", reportController.getProjectHistory);
 router.get("/reports/timesheet-submissions", reportController.getWeekTimesheetSubmissions);
 router.get("/projects", reportController.listProjects);
 router.post("/projects", validate(createProjectSchema), reportController.createProject);
+router.post(
+  "/projects/documents/:type",
+  uploadSingleProjectDocument,
+  reportController.uploadProjectDocument
+);
 router.patch("/projects/:id", validate(renameProjectSchema), reportController.renameProject);
 router.patch("/projects/:id/members", validate(setProjectMembersSchema), reportController.setProjectMembers);
 router.get("/projects/:id/recent-members", reportController.getProjectRecentMembers);
 router.patch("/projects/:id/deactivate", reportController.deactivateProject);
 router.patch("/projects/:id/reactivate", reportController.reactivateProject);
+router.get("/invoices", invoiceController.listInvoices);
+router.post("/invoices", validate(createInvoiceSchema), invoiceController.createInvoice);
+router.post("/invoices/preview", validate(createInvoiceSchema), invoiceController.previewInvoicePdf);
+// Registered before the "/invoices/:id" routes below - otherwise Express
+// would match DELETE /invoices/signature as :id = "signature" instead.
+router.post("/invoices/signature", uploadSingleCompanySignature, invoiceController.uploadSignature);
+router.delete("/invoices/signature", invoiceController.removeSignature);
+router.get("/invoices/:id/document", invoiceController.downloadInvoiceDocument);
+router.delete("/invoices/:id", invoiceController.deleteInvoice);
 router.get("/users/:id/leaves", controller.getUserLeaveDetail);
 router.post(
   "/users/:id/leaves",

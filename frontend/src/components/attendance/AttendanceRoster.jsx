@@ -83,7 +83,14 @@ function CorrectModal({ target, onClose, onDone, correctFn }) {
 // Shared today-board + monthly grid for the manager ("Team") and admin
 // ("All") attendance pages. Rows are one per (employee, project). Admin passes
 // `canCorrect` + `correctFn` to enable click-to-edit cells.
-export default function AttendanceRoster({ title, subtitle, fetchData, canCorrect = false, correctFn }) {
+export default function AttendanceRoster({
+  title,
+  subtitle,
+  fetchData,
+  canCorrect = false,
+  correctFn,
+  headerAction = null,
+}) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -154,6 +161,7 @@ export default function AttendanceRoster({ title, subtitle, fetchData, canCorrec
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>
+        {headerAction}
       </div>
 
       <Alert type="error">{error}</Alert>

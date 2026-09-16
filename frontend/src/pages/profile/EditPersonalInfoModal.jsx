@@ -12,6 +12,8 @@ const toDateInputValue = (date) => (date ? new Date(date).toISOString().slice(0,
 
 export default function EditPersonalInfoModal({ user, onClose, onSaved }) {
   const [form, setForm] = useState({
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
     personalEmail: user?.personalEmail || "",
     phone: user?.phone || "",
     birthDate: toDateInputValue(user?.birthDate),
@@ -55,9 +57,22 @@ export default function EditPersonalInfoModal({ user, onClose, onSaved }) {
       <Alert type="error">{error}</Alert>
       <form onSubmit={handleSubmit} noValidate>
         <p className="helper-text" style={{ marginTop: 0 }}>
-          Name, employee code, and your work email can only be changed by your admin. Other changes take effect
-          immediately.
+          Your employee code and work email can only be changed by your admin. Other changes, including your name,
+          take effect immediately.
         </p>
+
+        <div className="form-two-col">
+          <TextInput
+            label="First name"
+            value={form.firstName}
+            onChange={(e) => update("firstName", e.target.value)}
+          />
+          <TextInput
+            label="Last name"
+            value={form.lastName}
+            onChange={(e) => update("lastName", e.target.value)}
+          />
+        </div>
 
         <div className="form-two-col">
           <TextInput

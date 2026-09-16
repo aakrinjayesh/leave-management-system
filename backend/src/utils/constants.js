@@ -63,6 +63,8 @@ const PROFILE_CHANGE_SECTIONS = {
     label: "Personal Information",
     countField: "personalInfoEditCount",
     fields: [
+      "firstName",
+      "lastName",
       "personalEmail",
       "phone",
       "birthDate",

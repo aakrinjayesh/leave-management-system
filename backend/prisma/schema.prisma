@@ -275,6 +275,8 @@ model User {
     reimbursements        Reimbursement[] @relation("EmployeeReimbursements")
     routedReimbursements  Reimbursement[] @relation("RoutedReimbursements")
     approvedReimbursements Reimbursement[] @relation("ReimbursementsApprovedBy")
+
+    generatedInvoices Invoice[] @relation("InvoicesGenerated")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
@@ -866,6 +868,12 @@ model CompanySettings {
     supportContactEmail String?
     supportContactPhone String?
 
+    // Authorized-signatory signature image, reused on every generated Invoice
+    // PDF - a single company-wide asset (like the logo), not per-invoice.
+    // Replacing it (re-upload) affects every invoice generated from then on;
+    // past invoices already rendered/saved to S3 are unaffected.
+    signatureUrl String?
+
     createdAt DateTime @default(now())
 
     updatedAt DateTime @updatedAt
@@ -1136,6 +1144,28 @@ model Project {
     // their own timesheet (see listProjectsForEmployee).
     clientName String?
 
+    // Client / company details - all optional, filled in whenever admin gets
+    // to it (a project created before this feature just shows these empty in
+    // Edit). Same rule as clientName: admin-only, never in
+    // EMPLOYEE_PROJECT_SELECT, so an employee's own timesheet never sees any
+    // of this. Document fields are permanent public S3 URLs (see s3.util.js).
+    clientFullName String?
+    clientAddress  String? @db.Text
+    // State the client is registered/billed in - drives GST place-of-supply on
+    // generated invoices (same state as the company = CGST+SGST, otherwise
+    // IGST). Free text (not an enum) so an unlisted state/UT never blocks
+    // saving, but the frontend offers a fixed dropdown of Indian states/UTs.
+    clientState    String?
+    gstNumber      String?
+    gstDocumentUrl String?
+    panNumber      String?
+    panDocumentUrl String?
+    msmeDocumentUrl String?
+    paymentTerms   String?
+    sowDocumentUrl String?
+    rateCard       String?
+    agreementDocumentUrl String?
+
     isActive Boolean @default(true)
 
     // Client vs internal, and the working-hours window employees on this
@@ -1177,6 +1207,7 @@ model Project {
     timesheetEntries     TimesheetEntry[]
     memberships          ProjectMembership[]
     attendances          Attendance[]
+    invoices             Invoice[]
 }
 
 // One row per (employee, project) they're currently assigned to - an
@@ -1311,4 +1342,74 @@ model ReimbursementAttachment {
     reimbursement Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
 
     @@index([reimbursementId])
+}
+
+enum InvoiceTaxType {
+    IGST
+    CGST_SGST
+}
+
+enum InvoiceFormat {
+    PDF
+    WORD
+}
+
+// One row per generated Tax Invoice PDF - a permanent, immutable record (like
+// Payslip/OfferLetter), never overwritten by a later edit. Client identity
+// fields (name/address/state/GST) are copied from the selected Project at
+// generation time rather than joined live, so an invoice keeps showing
+// exactly what it said when issued even if the project's client details
+// change afterward. Tax type/amounts are derived once from clientState vs
+// the company's home state (Karnataka) and frozen here the same way.
+model Invoice {
+    id Int @id @default(autoincrement())
+
+    invoiceNo   String
+    invoiceDate DateTime
+
+    projectId Int?
+
+    clientFullName String
+    clientAddress  String? @db.Text
+    clientState    String?
+    clientGstNumber String?
+
+    hsnCode     String?
+    description String  @db.Text
+    paymentAdviceText String? @db.Text
+
+    totalTaxableValue Float
+
+    taxType    InvoiceTaxType
+    igstAmount Float @default(0)
+    cgstAmount Float @default(0)
+    sgstAmount Float @default(0)
+    totalInvoiceValue Float
+
+    amountInWords String?
+
+    bankAccountName String?
+    bankName      String?
+    bankAccountNumber String?
+    bankIfscCode  String?
+
+    declarationText String? @db.Text
+
+    // Admin's chosen output format at Save time - decides whether documentUrl
+    // points at a rendered .pdf (PDFKit, watermarked) or a .docx (the `docx`
+    // package - no watermark, see invoiceDocx.service.js). Preview always
+    // renders a PDF regardless of this choice; only Save respects it.
+    format InvoiceFormat @default(PDF)
+    documentUrl String?
+
+    generatedById Int
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    project     Project? @relation(fields: [projectId], references: [id])
+    generatedBy User     @relation("InvoicesGenerated", fields: [generatedById], references: [id])
+
+    @@index([projectId])
+    @@index([invoiceNo])
 }

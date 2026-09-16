@@ -7,6 +7,7 @@ const payrollReportService = require("../services/payrollReport.service");
 const notificationService = require("../services/notification.service");
 const ApiError = require("../utils/ApiError");
 const { sendProjectChangedEmail } = require("../utils/email.util");
+const { uploadToS3 } = require("../utils/s3.util");
 
 // Notifies every active account - the project list feeds the timesheet
 // dropdown everyone uses, so a project add/rename/status change is
@@ -93,6 +94,18 @@ const listProjects = asyncHandler(async (req, res) => {
 const toProjectDetails = ({
   projectType,
   clientName,
+  clientFullName,
+  clientAddress,
+  clientState,
+  gstNumber,
+  gstDocumentUrl,
+  panNumber,
+  panDocumentUrl,
+  msmeDocumentUrl,
+  paymentTerms,
+  sowDocumentUrl,
+  rateCard,
+  agreementDocumentUrl,
   timezone,
   workStartTime,
   workEndTime,
@@ -102,12 +115,51 @@ const toProjectDetails = ({
 }) => ({
   projectType,
   clientName,
+  clientFullName,
+  clientAddress,
+  clientState,
+  gstNumber,
+  gstDocumentUrl,
+  panNumber,
+  panDocumentUrl,
+  msmeDocumentUrl,
+  paymentTerms,
+  sowDocumentUrl,
+  rateCard,
+  agreementDocumentUrl,
   timezone,
   workStartTime,
   workEndTime,
   startDate,
   endDate,
   submissionFrequency,
+});
+
+// Client/company document types a project can carry, and the S3 subfolder
+// each goes in - kept separate from clientName's own bucket so it's
+// browsable. Generic (no project id needed yet) so this same endpoint works
+// while filling in a brand-new project's form, before it's ever saved - see
+// projectDetailsSchema for the *DocumentUrl fields this feeds.
+const PROJECT_DOCUMENT_FOLDER_BY_TYPE = {
+  gst: "project-documents/gst",
+  pan: "project-documents/pan",
+  msme: "project-documents/msme",
+  sow: "project-documents/sow",
+  agreement: "project-documents/agreement",
+};
+
+const uploadProjectDocument = asyncHandler(async (req, res) => {
+  const folder = PROJECT_DOCUMENT_FOLDER_BY_TYPE[req.params.type];
+  if (!folder) {
+    throw ApiError.badRequest("Unknown document type.");
+  }
+  if (!req.file) {
+    throw ApiError.badRequest("Please choose a file to upload.");
+  }
+
+  const { url } = await uploadToS3(req.file, folder);
+
+  new ApiResponse(201, "File uploaded.", { url, fileName: req.file.originalname }).send(res);
 });
 
 const createProject = asyncHandler(async (req, res) => {
@@ -202,6 +254,7 @@ module.exports = {
   listProjects,
   createProject,
   renameProject,
+  uploadProjectDocument,
   setProjectMembers,
   deactivateProject,
   reactivateProject,
