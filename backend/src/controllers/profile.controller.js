@@ -141,6 +141,7 @@ const notifyAdminsOfProfileChange = async (employee, sectionLabel) => {
         recipientFirstName: admin.firstName,
         employeeName,
         sectionLabel,
+        employeeId: employee.id,
       });
     } catch (err) {
       console.error("Failed to send profile change FYI email:", err);
@@ -320,19 +321,24 @@ const submitMyResignation = asyncHandler(async (req, res) => {
 
   new ApiResponse(201, "Resignation submitted.", { resignation }).send(res);
 
-  // Notify every active admin - sent after the response so the employee
-  // doesn't wait on the email round-trips; failures here shouldn't fail the
-  // submission itself.
+  // Notify every active admin, plus the employee's manager (view-only on
+  // resignations, but still notified for visibility - matches the withdrawn
+  // email and the in-app notification below, both of which already include
+  // the manager; this email previously left the manager out, which was a bug).
+  // Sent after the response so the employee doesn't wait on the email
+  // round-trips; failures here shouldn't fail the submission itself.
   const employeeName = `${req.user.firstName} ${req.user.lastName}`;
   try {
-    const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
-    for (const admin of admins) {
+    const recipients = await getResignationNoticeRecipients(req.user);
+    for (const recipient of recipients) {
       await sendResignationSubmittedEmail({
-        to: admin.email,
-        recipientFirstName: admin.firstName,
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
         employeeName,
         proposedLastWorkingDate,
         reason,
+        resignationId: resignation.id,
+        viewerRole: recipient.id === req.user.managerId ? "MANAGER" : "ADMIN",
       });
     }
   } catch (err) {
@@ -393,6 +399,8 @@ const withdrawMyResignation = asyncHandler(async (req, res) => {
           to: recipient.email,
           recipientFirstName: recipient.firstName,
           employeeName,
+          resignationId: resignation.id,
+          viewerRole: recipient.id === req.user.managerId ? "MANAGER" : "ADMIN",
         });
       } catch (err) {
         console.error("Failed to send resignation withdrawn email:", err);

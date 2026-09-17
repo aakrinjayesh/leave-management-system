@@ -316,6 +316,9 @@ const submitWeek = asyncHandler(async (req, res) => {
           weekStartDate,
           weekEndDate,
           totalHours,
+          submissionId: submission.id,
+          employeeId: req.user.id,
+          viewerRole: recipient && person.id === recipient.id ? "MANAGER" : "ADMIN",
         });
       } catch (err) {
         console.error("Failed to send timesheet submitted email:", err);

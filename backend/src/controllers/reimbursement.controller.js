@@ -95,6 +95,8 @@ const cancel = asyncHandler(async (req, res) => {
         claimantName,
         subject: claim.subject,
         amount: reimbursementService.formatMoney(claim.amount),
+        claimId: claim.id,
+        viewerRole: recipient.id === req.user.managerId ? "MANAGER" : "ADMIN",
       });
     } catch (err) {
       console.error("Failed to send reimbursement cancelled email:", err);

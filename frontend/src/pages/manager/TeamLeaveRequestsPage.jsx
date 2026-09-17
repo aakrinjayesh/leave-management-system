@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Check, ListChecks, Paperclip, X } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -66,7 +67,15 @@ function RejectModal({ request, onClose, onRejected }) {
 }
 
 export default function TeamLeaveRequestsPage() {
-  const [filter, setFilter] = useState("PENDING");
+  // A leave-submitted email's "Review this request" button lands here as
+  // /manager/leave-requests?requestId=123 (after login) - start on "All"
+  // rather than the default "Pending" filter so the target request shows up
+  // even if someone else has already decided it by the time this opens.
+  const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("requestId") ? Number(searchParams.get("requestId")) : null;
+  const highlightRowRef = useRef(null);
+
+  const [filter, setFilter] = useState(highlightId ? "" : "PENDING");
   const [requests, setRequests] = useState(null);
   const [error, setError] = useState("");
   const [actioningId, setActioningId] = useState(null);
@@ -82,6 +91,14 @@ export default function TeamLeaveRequestsPage() {
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  useEffect(() => {
+    if (highlightId && highlightRowRef.current) {
+      highlightRowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightId, requests]);
+
+  const highlightNotFound = highlightId && requests && !requests.some((r) => r.id === highlightId);
 
   const handleApprove = async (request) => {
     setError("");
@@ -115,6 +132,11 @@ export default function TeamLeaveRequestsPage() {
       </div>
 
       <Alert type="error">{error}</Alert>
+      {highlightNotFound && (
+        <Alert type="error">
+          Couldn't find that request - it may have been withdrawn, or you may not have access to it.
+        </Alert>
+      )}
 
       <div className="filter-tabs">
         {FILTERS.map((f) => (
@@ -159,7 +181,11 @@ export default function TeamLeaveRequestsPage() {
                 </thead>
                 <tbody>
                   {requests.map((request) => (
-                    <tr key={request.id}>
+                    <tr
+                      key={request.id}
+                      ref={request.id === highlightId ? highlightRowRef : null}
+                      className={request.id === highlightId ? "row-highlighted" : ""}
+                    >
                       <td className="table-cell-primary">
                         {request.user.firstName} {request.user.lastName}
                       </td>

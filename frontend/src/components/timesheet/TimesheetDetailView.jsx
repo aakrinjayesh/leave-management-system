@@ -11,6 +11,7 @@ import { formatDateRange } from "../../utils/formatDate";
 import { formatHoursMinutes } from "../../utils/formatDuration";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 import { formatProjectAssigned } from "../../utils/formatProjectAssigned";
 import LogTimesheetModal from "./LogTimesheetModal";
 import "../../styles/dashboardShared.css";
@@ -110,6 +111,11 @@ export default function TimesheetDetailView({
   const [reloadKey, setReloadKey] = useState(0);
   const [isLogOpen, setIsLogOpen] = useState(false);
 
+  // ?submissionId=... (paired with ?date= above) - an email button lands on
+  // the right week via ?date= already; this highlights the exact submission
+  // row within it.
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("submissionId", data?.submissions);
+
   useEffect(() => {
     fetchTimesheet(view, anchorDate, projectId).then((res) => {
       setData(res);
@@ -188,6 +194,11 @@ export default function TimesheetDetailView({
   return (
     <>
       <Alert type="error">{error}</Alert>
+      {notFound && (
+        <Alert type="error">
+          Couldn't find that submission in this week - try Previous/Next to browse nearby weeks.
+        </Alert>
+      )}
 
       {logApi && data.employee && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
@@ -316,7 +327,11 @@ export default function TimesheetDetailView({
                 </thead>
                 <tbody>
                   {data.submissions.map((submission) => (
-                    <tr key={submission.id}>
+                    <tr
+                      key={submission.id}
+                      ref={rowRef(submission)}
+                      className={isHighlighted(submission) ? "row-highlighted" : ""}
+                    >
                       <td className="table-cell-primary">
                         {formatDateRange(submission.weekStartDate, submission.weekEndDate)}
                         {submission.createdByManager && (

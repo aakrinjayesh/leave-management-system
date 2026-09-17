@@ -34,7 +34,7 @@ export default function VerifyOtpPage() {
   const navigate = useNavigate();
   const { loginSession } = useAuth();
 
-  const { flowToken, purpose, email } = location.state || {};
+  const { flowToken, purpose, email, redirectPath } = location.state || {};
 
   const [currentFlowToken, setCurrentFlowToken] = useState(flowToken);
   const [otp, setOtp] = useState("");
@@ -74,7 +74,7 @@ export default function VerifyOtpPage() {
 
       if (purpose === "LOGIN") {
         loginSession(data.accessToken, data.user);
-        navigate(getDashboardPath(data.user), { replace: true });
+        navigate(redirectPath || getDashboardPath(data.user), { replace: true });
         return;
       }
 

@@ -287,6 +287,23 @@
   border-bottom: none;
 }
 
+/* Deep-linked row - e.g. arriving from an email's "Review this request"
+   button via ?requestId=. A brief pulse draws the eye, then settles into a
+   quiet persistent tint so the row stays easy to re-spot while scrolling. */
+.row-highlighted td {
+  background-color: var(--color-warning-bg);
+  animation: row-highlight-pulse 1.6s ease-out 2;
+}
+
+@keyframes row-highlight-pulse {
+  0% {
+    background-color: var(--color-warning-border);
+  }
+  100% {
+    background-color: var(--color-warning-bg);
+  }
+}
+
 .data-table td .field {
   margin-bottom: 0;
 }

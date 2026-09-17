@@ -13,6 +13,7 @@ import * as employeeLeaveApi from "../../api/employeeLeave.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
 import { openBlobInNewTab } from "../../utils/openBlob";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 import "../../styles/dashboardShared.css";
 
 const FILTERS = [
@@ -44,6 +45,8 @@ export default function MyLeaveRequestsPage() {
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("requestId", requests);
 
   // Balances + monthly accrual history used to live on the employee
   // dashboard - moved here since this is where leave actually gets managed,
@@ -102,6 +105,11 @@ export default function MyLeaveRequestsPage() {
       </div>
 
       <Alert type="error">{error}</Alert>
+      {notFound && (
+        <Alert type="error">
+          Couldn't find that leave request - it may not be visible under the current filter.
+        </Alert>
+      )}
 
       {summary && <LeaveBalanceCards balances={summary.balances} />}
       {summary && <LeaveLedgerCard ledgers={summary.ledgers} />}
@@ -151,7 +159,11 @@ export default function MyLeaveRequestsPage() {
                 </thead>
                 <tbody>
                   {requests.map((request) => (
-                    <tr key={request.id}>
+                    <tr
+                      key={request.id}
+                      ref={rowRef(request)}
+                      className={isHighlighted(request) ? "row-highlighted" : ""}
+                    >
                       <td className="table-cell-primary">{request.leavePolicy.leaveName}</td>
                       <td className="table-cell-secondary">
                         {request.routedTo ? `${request.routedTo.firstName} ${request.routedTo.lastName}` : "—"}

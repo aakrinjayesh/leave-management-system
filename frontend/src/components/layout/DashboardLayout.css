@@ -172,6 +172,13 @@
   color: var(--color-white);
   font-weight: 700;
   font-size: 0.85rem;
+  /* Now a real <button> (opens the profile modal) rather than a plain span -
+     these reset the browser's default button chrome back to how it looked
+     as a span. */
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .dashboard-logout-btn {

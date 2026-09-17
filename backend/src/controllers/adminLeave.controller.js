@@ -26,14 +26,14 @@ const byEmployeeCode = (a, b) => {
   return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
 };
 
-// Notifies every active account - a leave policy change affects the whole
-// company's leave rules, not just the admin who made it.
+// Notifies every active account - a leave policy or holiday change affects
+// the whole company's leave rules, not just the admin who made it. Both the
+// in-app notification and the email go to everyone (not just admins +
+// managers) since every employee needs to know their leave rules changed.
 const notifyAllOfPolicyChange = async (message) => {
-  // In-app: the whole company (leave rules affect everyone). Email: only
-  // admins + managers, so a routine policy/holiday tweak doesn't mail the
-  // entire company each time.
+  let everyone = [];
   try {
-    const everyone = await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+    everyone = await prisma.user.findMany({ where: { status: "ACTIVE" } });
     await notificationService.notifyMany(
       everyone.map((u) => u.id),
       { type: notificationService.NOTIFICATION_TYPES.LEAVE_POLICY_CHANGED, title: "Leave policy updated", message }
@@ -42,21 +42,16 @@ const notifyAllOfPolicyChange = async (message) => {
     console.error("Failed to create leave policy changed notification:", err);
   }
 
-  try {
-    const recipients = await notificationService.getAdminAndManagerRecipients();
-    for (const recipient of recipients) {
-      try {
-        await sendLeavePolicyChangedEmail({
-          to: recipient.email,
-          recipientFirstName: recipient.firstName,
-          message,
-        });
-      } catch (err) {
-        console.error("Failed to send leave policy changed email:", err);
-      }
+  for (const recipient of everyone) {
+    try {
+      await sendLeavePolicyChangedEmail({
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
+        message,
+      });
+    } catch (err) {
+      console.error("Failed to send leave policy changed email:", err);
     }
-  } catch (err) {
-    console.error("Failed to load recipients for leave policy changed email:", err);
   }
 };
 

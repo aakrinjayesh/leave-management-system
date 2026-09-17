@@ -31,7 +31,10 @@ export const getNotificationDestination = (type, user) => {
       return "/profile";
     case "LEAVE_POLICY_CHANGED":
       if (isAdmin) return "/admin/manage-leaves";
-      return isManager ? "/manager/calendar" : "/employee/calendar";
+      // Neither employees nor managers have a standalone calendar tab
+      // anymore - it now opens from a button on their Attendance page (see
+      // MyCalendarModal / TeamCalendarModal).
+      return isManager ? "/manager/attendance" : "/attendance";
     case "PROJECT_UPDATED":
       return isAdmin ? "/admin/reports" : "/timesheet";
     case "ACCOUNT_APPROVAL_REQUESTED":

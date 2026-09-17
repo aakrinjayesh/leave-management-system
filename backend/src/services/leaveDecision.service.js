@@ -93,6 +93,7 @@ const sendDecisionSideEffects = async ({ leaveRequest, actor, decision, remarks 
       status: decision,
       managerName: actorName,
       remarks: remarks || null,
+      leaveRequestId: leaveRequest.id,
     });
   } catch (err) {
     console.error(`Failed to send leave ${decision.toLowerCase()} email:`, err);

@@ -59,6 +59,10 @@ const notifyDecision = async (request, status, message, decidedByName) => {
         decidedByName,
         remarks: request.adminRemarks || null,
         isEmployee: recipient.id === request.user.id,
+        wfhRequestId: request.id,
+        // Only used for the FYI copy (isEmployee: false) - here that's
+        // always an admin, since the manager is the one deciding.
+        viewerRole: "ADMIN",
       });
     } catch (err) {
       console.error(`Failed to send WFH ${status.toLowerCase()} email:`, err);

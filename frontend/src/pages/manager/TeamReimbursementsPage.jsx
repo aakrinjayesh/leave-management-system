@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Receipt } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Button from "../../components/common/Button";
@@ -22,7 +23,13 @@ const FILTERS = [
 
 export default function TeamReimbursementsPage() {
   const { user } = useAuth();
-  const [filter, setFilter] = useState("PENDING");
+  // A reimbursement-submitted email's button lands here as ?claimId=123
+  // (after login) - start on "All" rather than the default "Pending" filter
+  // so the target claim still shows even if it's since been decided, and
+  // auto-open its detail modal once loaded.
+  const [searchParams] = useSearchParams();
+  const highlightClaimId = searchParams.get("claimId") ? Number(searchParams.get("claimId")) : null;
+  const [filter, setFilter] = useState(highlightClaimId ? "" : "PENDING");
   const [claims, setClaims] = useState(null);
   const [reports, setReports] = useState([]);
   const [error, setError] = useState("");
@@ -30,11 +37,24 @@ export default function TeamReimbursementsPage() {
   const [selected, setSelected] = useState(null); // { claim, mode }
   const [actioningId, setActioningId] = useState(null);
   const [isLogOpen, setIsLogOpen] = useState(false);
+  const hasAutoOpenedRef = useRef(false);
 
   const load = () =>
     reimbursementApi
       .getTeamClaims(filter)
-      .then((data) => setClaims(data.claims))
+      .then((data) => {
+        setClaims(data.claims);
+        // Auto-open the deep-linked claim's detail modal once, right after
+        // the first successful load - done here (inside the promise
+        // callback) rather than in a useEffect keyed on `claims`, since
+        // setState directly in an effect body triggers cascading renders.
+        if (highlightClaimId && !hasAutoOpenedRef.current) {
+          hasAutoOpenedRef.current = true;
+          const match = data.claims.find((c) => c.id === highlightClaimId);
+          if (match) setSelected({ claim: match, mode: "view" });
+          else setError("Couldn't find that reimbursement claim.");
+        }
+      })
       .catch((err) => setError(getErrorMessage(err)));
 
   useEffect(() => {

@@ -1,12 +1,11 @@
+import { useState } from "react";
 import {
   ArrowLeft,
   LayoutDashboard,
   ListChecks,
   LogOut,
   Users,
-  CalendarDays,
   ShieldCheck,
-  UserCog,
   Clock,
   CalendarRange,
   FileText,
@@ -22,6 +21,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useBackNavigation } from "../../hooks/useBackNavigation";
 import NotificationBell from "./NotificationBell";
+import ProfileContent from "../../pages/profile/ProfileContent";
 import aakrinLogo from "../../assets/aakrin-logo.png";
 import { COPYRIGHT_TEXT } from "../../utils/copyright";
 import "./DashboardLayout.css";
@@ -91,11 +91,6 @@ const buildNavItems = (user) => {
       label: "My Leave Requests",
       icon: ListChecks,
     });
-    items.push({
-      to: "/employee/calendar",
-      label: "My Calendar",
-      icon: CalendarDays,
-    });
     items.push({ to: "/timesheet", label: "Timesheet", icon: Clock });
     items.push({ to: "/wfh", label: "WFH", icon: Home });
     items.push({ to: "/attendance", label: "Attendance", icon: CalendarCheck });
@@ -118,11 +113,6 @@ const buildNavItems = (user) => {
       to: "/manager/leave-requests",
       label: "Leave Requests",
       icon: ListChecks,
-    });
-    items.push({
-      to: "/manager/calendar",
-      label: "Team Calendar",
-      icon: CalendarDays,
     });
     items.push({
       to: "/manager/timesheets",
@@ -174,7 +164,6 @@ const buildNavItems = (user) => {
       icon: Table2,
     });
   }
-  items.push({ to: "/profile", label: "Profile", icon: UserCog });
 
   return items;
 };
@@ -183,6 +172,7 @@ export default function DashboardLayout({ title, children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { canGoBack, goBack } = useBackNavigation();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const initials =
     `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
@@ -241,7 +231,7 @@ export default function DashboardLayout({ title, children }) {
             >
               <ArrowLeft size={18} />
             </button>
-            <span className="dashboard-topbar-title">{title}</span>
+            <span className="dashboard-topbar-title">{isProfileOpen ? "Profile" : title}</span>
           </div>
           <div className="dashboard-user">
             <NotificationBell />
@@ -251,7 +241,15 @@ export default function DashboardLayout({ title, children }) {
               </div>
               <div className="dashboard-user-role">{roleLabel}</div>
             </div>
-            <span className="dashboard-avatar">{initials || "?"}</span>
+            <button
+              type="button"
+              className="dashboard-avatar"
+              onClick={() => setIsProfileOpen(true)}
+              aria-label="Open profile"
+              title="Profile"
+            >
+              {initials || "?"}
+            </button>
             <button
               className="dashboard-logout-btn"
               onClick={handleLogout}
@@ -261,7 +259,9 @@ export default function DashboardLayout({ title, children }) {
             </button>
           </div>
         </header>
-        <main className="dashboard-content">{children}</main>
+        <main className="dashboard-content">
+          {isProfileOpen ? <ProfileContent onClose={() => setIsProfileOpen(false)} /> : children}
+        </main>
         <footer className="dashboard-footer">{COPYRIGHT_TEXT}</footer>
       </div>
     </div>

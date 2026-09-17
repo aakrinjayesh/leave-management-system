@@ -158,6 +158,7 @@ const sendLoggedLeaveEmails = async ({ leaveRequests, employee, actor }) => {
         status: "APPROVED",
         managerName: `${actor.firstName} ${actor.lastName}`,
         remarks: `Logged directly by ${actor.firstName} ${actor.lastName} on your behalf.`,
+        leaveRequestId: leaveRequest.id,
       });
     } catch (err) {
       console.error("Failed to send logged-leave email:", err);

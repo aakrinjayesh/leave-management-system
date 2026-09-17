@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Check, Clock, Home, Undo2, X } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
@@ -12,6 +12,7 @@ import Button from "../../components/common/Button";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
 
@@ -69,7 +70,12 @@ function RejectModal({ request, onClose, onRejected }) {
 
 export default function WfhRequestsPage() {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState("PENDING");
+  // A WFH-submitted email's button lands here as ?requestId=123 (after
+  // login) - start on "All" rather than the default "Pending" filter so the
+  // target request still shows even if it's since been decided.
+  const [searchParams] = useSearchParams();
+  const hasHighlightParam = Boolean(searchParams.get("requestId"));
+  const [filter, setFilter] = useState(hasHighlightParam ? "" : "PENDING");
   const [requests, setRequests] = useState(null);
   const [todayCount, setTodayCount] = useState(null);
   const [error, setError] = useState("");
@@ -89,6 +95,8 @@ export default function WfhRequestsPage() {
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("requestId", requests);
 
   const handleApprove = async (request) => {
     setError("");
@@ -135,6 +143,7 @@ export default function WfhRequestsPage() {
       )}
 
       <Alert type="error">{error}</Alert>
+      {notFound && <Alert type="error">Couldn't find that WFH request.</Alert>}
 
       <div className="filter-tabs">
         {FILTERS.map((f) => (
@@ -180,7 +189,7 @@ export default function WfhRequestsPage() {
                 </thead>
                 <tbody>
                   {requests.map((request) => (
-                    <tr key={request.id}>
+                    <tr key={request.id} ref={rowRef(request)} className={isHighlighted(request) ? "row-highlighted" : ""}>
                       <td className="table-cell-primary">
                         {request.user.firstName} {request.user.lastName}
                       </td>

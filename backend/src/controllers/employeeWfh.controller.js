@@ -7,9 +7,9 @@ const { formatDateShort } = require("../utils/formatDate.util");
 const { sendWfhSubmittedEmail, sendWfhWithdrawnEmail } = require("../utils/email.util");
 
 // Every active admin, plus this employee's own active manager if they have
-// one - same recipient set resignation submissions use. The manager is
-// notified for visibility only - they can't act on a WFH request, only
-// admin can.
+// one - same recipient set resignation submissions use. The manager CAN act
+// on this (see managerWfh.controller.js's decide()), same as any admin -
+// this notice just makes sure both audiences hear about it, not only one.
 const getWfhNoticeRecipients = async (employee) => {
   const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
   const recipientsById = new Map(admins.map((admin) => [admin.id, admin]));
@@ -53,6 +53,8 @@ const submitMyWfhRequest = asyncHandler(async (req, res) => {
         startDate: request.startDate,
         endDate: request.endDate,
         reason: request.reason,
+        wfhRequestId: request.id,
+        viewerRole: recipient.id === req.user.managerId ? "MANAGER" : "ADMIN",
       });
     } catch (err) {
       console.error("Failed to send WFH submitted email:", err);
@@ -97,6 +99,8 @@ const withdrawMyWfhRequest = asyncHandler(async (req, res) => {
         employeeName,
         startDate: request.startDate,
         endDate: request.endDate,
+        wfhRequestId: request.id,
+        viewerRole: recipient.id === req.user.managerId ? "MANAGER" : "ADMIN",
       });
     } catch (err) {
       console.error("Failed to send WFH withdrawn email:", err);

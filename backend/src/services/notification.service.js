@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const notificationStream = require("./notificationStream.service");
 
 // Plain strings, not a Prisma enum (matches how the Notification model
 // itself stores `type` as a String) - keeps this the single source of truth
@@ -32,23 +33,36 @@ const NOTIFICATION_TYPES = {
   REIMBURSEMENT_CANCELLED: "REIMBURSEMENT_CANCELLED",
 };
 
-const notify = ({ userId, type, title, message, link = null }) =>
-  prisma.notification.create({ data: { userId, type, title, message, link } });
+// Wakes up any open SSE connection(s) that recipient has (see
+// notificationStream.service.js) right after the row(s) are safely written -
+// fire-and-forget, never throws, never blocks/affects the notification
+// itself even if every connection write fails.
+const notify = async ({ userId, type, title, message, link = null }) => {
+  const notification = await prisma.notification.create({ data: { userId, type, title, message, link } });
+  notificationStream.pushToUser(userId);
+  return notification;
+};
 
 // Fans the same notification out to many recipients at once (e.g. a
 // company-wide broadcast) - skips the query entirely for an empty list.
-const notifyMany = (userIds, { type, title, message, link = null }) => {
+const notifyMany = async (userIds, { type, title, message, link = null }) => {
   if (!userIds.length) return Promise.resolve();
-  return prisma.notification.createMany({
+  const result = await prisma.notification.createMany({
     data: userIds.map((userId) => ({ userId, type, title, message, link })),
   });
+  for (const userId of userIds) {
+    notificationStream.pushToUser(userId);
+  }
+  return result;
 };
 
 // Every active admin, plus every active account that currently has at least
 // one direct report (i.e. is a "manager" - derived, not a userType). Full
 // rows, so callers can email them. Used for company-wide-but-not-everyone
-// email notices (leave policy / holiday / project changes) where mailing the
-// whole company would be too noisy but approvers still need to hear about it.
+// email notices (currently: project changes) where mailing the whole company
+// would be too noisy but approvers still need to hear about it. Leave
+// policy/holiday changes used to be scoped this way too, but now mail
+// everyone (see adminLeave.controller.js's notifyAllOfPolicyChange).
 const getAdminAndManagerRecipients = async () => {
   const managerIdRows = await prisma.user.findMany({
     where: { managerId: { not: null } },

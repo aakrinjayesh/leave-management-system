@@ -16,12 +16,10 @@ import ManagerDashboard from "../pages/dashboard/ManagerDashboard";
 import AdminDashboard from "../pages/dashboard/AdminDashboard";
 
 import MyLeaveRequestsPage from "../pages/employee/MyLeaveRequestsPage";
-import LeaveCalendarPage from "../pages/employee/LeaveCalendarPage";
 
 import EmployeesListPage from "../pages/manager/EmployeesListPage";
 import EmployeeDetailPage from "../pages/manager/EmployeeDetailPage";
 import TeamLeaveRequestsPage from "../pages/manager/TeamLeaveRequestsPage";
-import TeamCalendarPage from "../pages/manager/TeamCalendarPage";
 import TeamTimesheetsPage from "../pages/manager/TeamTimesheetsPage";
 import ManagerEmployeeTimesheetPage from "../pages/manager/EmployeeTimesheetPage";
 import TeamResignationsPage from "../pages/manager/TeamResignationsPage";
@@ -94,7 +92,6 @@ export default function AppRoutes() {
           than the sidebar. */}
       <Route element={<ProtectedRoute />}>
         <Route path="/employee/leave-requests" element={<MyLeaveRequestsPage />} />
-        <Route path="/employee/calendar" element={<LeaveCalendarPage />} />
         <Route path="/timesheet" element={<MyTimesheetPage />} />
         <Route path="/wfh" element={<MyWfhPage />} />
         <Route path="/attendance" element={<MyAttendancePage />} />
@@ -116,7 +113,6 @@ export default function AppRoutes() {
         <Route path="/manager/employees" element={<EmployeesListPage />} />
         <Route path="/manager/employees/:id" element={<EmployeeDetailPage />} />
         <Route path="/manager/leave-requests" element={<TeamLeaveRequestsPage />} />
-        <Route path="/manager/calendar" element={<TeamCalendarPage />} />
         <Route path="/manager/timesheets" element={<TeamTimesheetsPage />} />
         <Route path="/manager/timesheets/employees/:id" element={<ManagerEmployeeTimesheetPage />} />
         <Route path="/manager/resignations" element={<TeamResignationsPage />} />

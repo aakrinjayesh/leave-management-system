@@ -65,6 +65,7 @@ const sendDecisionSideEffects = async ({ submission, actor, decision, remarks })
       status: decision,
       managerName: actorName,
       remarks: remarks || null,
+      submissionId: submission.id,
     });
   } catch (err) {
     console.error(`Failed to send timesheet ${verb} email:`, err);

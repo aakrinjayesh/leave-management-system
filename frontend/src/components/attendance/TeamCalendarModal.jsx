@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
-import DashboardLayout from "../../components/layout/DashboardLayout";
-import Calendar from "../../components/common/Calendar";
-import Spinner from "../../components/common/Spinner";
+import Modal from "../common/Modal";
+import Calendar from "../common/Calendar";
+import Spinner from "../common/Spinner";
 import { useMonthNavigation } from "../../hooks/useMonthNavigation";
 import * as managerLeaveApi from "../../api/managerLeave.api";
-import "../../styles/dashboardShared.css";
 
-export default function TeamCalendarPage() {
+// Same calendar that used to live on its own "Team Calendar" tab (company
+// holidays/weekends, plus every direct report's leave and WFH) - now reached
+// from a button on the Team Attendance page instead of a separate sidebar
+// item. Same pattern as CompanyCalendarModal (admin) and MyCalendarModal
+// (personal).
+export default function TeamCalendarModal({ onClose }) {
   const { year, month, goToPrevMonth, goToNextMonth } = useMonthNavigation();
   const [calendarData, setCalendarData] = useState(null);
 
@@ -28,13 +32,10 @@ export default function TeamCalendarPage() {
   }));
 
   return (
-    <DashboardLayout title="Team calendar">
-      <div className="page-header">
-        <div>
-          <h1>Team calendar</h1>
-          <p>Company holidays, weekends, and who on your team is on leave. Read-only.</p>
-        </div>
-      </div>
+    <Modal title="Team calendar" onClose={onClose} wide>
+      <p className="card-section-subtitle" style={{ marginTop: 0 }}>
+        Company holidays, weekends, and who on your team is on leave. Read-only.
+      </p>
 
       {!calendarData ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
@@ -52,6 +53,6 @@ export default function TeamCalendarPage() {
           onNextMonth={goToNextMonth}
         />
       )}
-    </DashboardLayout>
+    </Modal>
   );
 }

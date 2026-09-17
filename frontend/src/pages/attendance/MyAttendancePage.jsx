@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
 import MarkAttendanceModal from "../../components/attendance/MarkAttendanceModal";
+import MyCalendarModal from "../../components/attendance/MyCalendarModal";
 import { useMonthNavigation } from "../../hooks/useMonthNavigation";
 import * as attendanceApi from "../../api/attendance.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -23,6 +24,7 @@ export default function MyAttendancePage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [markDay, setMarkDay] = useState(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   useEffect(() => {
     attendanceApi
@@ -137,6 +139,15 @@ export default function MyAttendancePage() {
           <h1>Attendance</h1>
           <p>Click a day in the calendar to mark yourself present, half day, or absent.</p>
         </div>
+        <button
+          type="button"
+          className="page-header-icon-btn"
+          onClick={() => setIsCalendarOpen(true)}
+          aria-label="Open my calendar"
+          title="My calendar"
+        >
+          <CalendarDays size={18} />
+        </button>
       </div>
 
       <Alert type="error">{error}</Alert>
@@ -190,6 +201,7 @@ export default function MyAttendancePage() {
       )}
 
       {markDay && <MarkAttendanceModal day={markDay} onClose={() => setMarkDay(null)} onSaved={reload} />}
+      {isCalendarOpen && <MyCalendarModal onClose={() => setIsCalendarOpen(false)} />}
     </DashboardLayout>
   );
 }

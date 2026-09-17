@@ -14,6 +14,7 @@ import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatProjectAssigned } from "../../utils/formatProjectAssigned";
 import { formatProjectType, formatWorkingHours } from "../../utils/projectOptions";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 import "../../styles/dashboardShared.css";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
@@ -98,6 +99,8 @@ export default function MyTimesheetPage() {
   const [attachmentError, setAttachmentError] = useState("");
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
+
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("submissionId", submissions);
 
   // Every project the employee is assigned to gets its own independent
   // week grid, attachment, and submission - switching tabs just re-scopes
@@ -332,6 +335,9 @@ export default function MyTimesheetPage() {
 
       <Alert type="error">{error}</Alert>
       <Alert type="success">{successMessage}</Alert>
+      {notFound && (
+        <Alert type="error">Couldn't find that timesheet submission in your history.</Alert>
+      )}
 
       {!projects ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
@@ -648,7 +654,7 @@ export default function MyTimesheetPage() {
                         </thead>
                         <tbody>
                           {submissions.map((sub) => (
-                            <tr key={sub.id}>
+                            <tr key={sub.id} ref={rowRef(sub)} className={isHighlighted(sub) ? "row-highlighted" : ""}>
                               <td className="table-cell-primary">
                                 {formatDateRange(sub.weekStartDate, sub.weekEndDate)}
                                 {sub.createdByManager && (

@@ -11,6 +11,7 @@ import Button from "../../components/common/Button";
 import * as managerLeaveApi from "../../api/managerLeave.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
 
@@ -76,6 +77,8 @@ export default function TeamWfhPage() {
     loadRequests();
   }, []);
 
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("requestId", requests);
+
   const handleApprove = async (request) => {
     setError("");
     setActioningId(request.id);
@@ -99,6 +102,7 @@ export default function TeamWfhPage() {
       </div>
 
       <Alert type="error">{error}</Alert>
+      {notFound && <Alert type="error">Couldn't find that WFH request.</Alert>}
 
       <div className="card">
         <div className="card-section">
@@ -131,7 +135,7 @@ export default function TeamWfhPage() {
                 </thead>
                 <tbody>
                   {requests.map((request) => (
-                    <tr key={request.id}>
+                    <tr key={request.id} ref={rowRef(request)} className={isHighlighted(request) ? "row-highlighted" : ""}>
                       <td className="table-cell-primary">
                         {request.user.firstName} {request.user.lastName}
                       </td>

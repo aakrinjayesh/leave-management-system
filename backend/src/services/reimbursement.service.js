@@ -100,6 +100,8 @@ const sendSubmitSideEffects = async ({ claim, claimant }) => {
         description: claim.description,
         amount: formatMoney(claim.amount),
         fileCount: claim.attachments.length,
+        claimId: claim.id,
+        viewerRole: recipient.id === claimant.managerId ? "MANAGER" : "ADMIN",
       });
     } catch (err) {
       console.error("Failed to send reimbursement submitted email:", err);
@@ -155,6 +157,7 @@ const sendLoggedSideEffects = async ({ claim, employee, actor }) => {
       actorName,
       subject: claim.subject,
       amount: formatMoney(claim.amount),
+      claimId: claim.id,
     });
   } catch (err) {
     console.error("Failed to send logged-reimbursement email:", err);
@@ -208,6 +211,7 @@ const sendDecisionSideEffects = async ({ claim, actor, decision, remarks }) => {
       status: decision,
       decidedByName: actorName,
       remarks: remarks?.trim() || null,
+      claimId: claim.id,
     });
   } catch (err) {
     console.error(`Failed to send reimbursement ${verb} email:`, err);

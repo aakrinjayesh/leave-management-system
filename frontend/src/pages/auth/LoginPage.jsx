@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Mail, Lock } from "lucide-react";
 import AuthLayout from "../../components/layout/AuthLayout";
@@ -9,12 +9,28 @@ import * as authApi from "../../api/auth.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { useAuth } from "../../context/AuthContext";
 import { getDashboardPath } from "../../utils/roleRoutes";
+import { getSafeRedirectPath } from "../../utils/safeRedirect";
 import "./Auth.css";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loginSession } = useAuth();
+  const { loginSession, isAuthenticated } = useAuth();
+  // Carried by an email button (e.g. "review this leave request") via
+  // /login?redirect=... - lands here instead of the generic dashboard once
+  // signed in. Ignored (falls back to the dashboard) unless it's a safe
+  // same-origin path.
+  const redirectPath = getSafeRedirectPath(new URLSearchParams(location.search).get("redirect"));
+
+  // Clicking the email button while already logged in elsewhere shouldn't
+  // force a re-login - skip straight to the target page.
+  useEffect(() => {
+    if (isAuthenticated && redirectPath) {
+      navigate(redirectPath, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, redirectPath]);
+
   const [method, setMethod] = useState("PASSWORD");
   const [form, setForm] = useState({ email: "", password: "" });
   const [fieldErrors, setFieldErrors] = useState({});
@@ -61,10 +77,10 @@ export default function LoginPage() {
       if (method === "PASSWORD") {
         const data = await authApi.login({ email, password: form.password });
         loginSession(data.accessToken, data.user);
-        navigate(getDashboardPath(data.user), { replace: true });
+        navigate(redirectPath || getDashboardPath(data.user), { replace: true });
       } else {
         const data = await authApi.loginOtpSend({ email });
-        navigate("/verify-otp", { state: { flowToken: data.flowToken, purpose: "LOGIN", email } });
+        navigate("/verify-otp", { state: { flowToken: data.flowToken, purpose: "LOGIN", email, redirectPath } });
       }
     } catch (err) {
       setError(getErrorMessage(err, "Unable to log in. Please try again."));

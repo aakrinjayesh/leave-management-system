@@ -267,6 +267,7 @@ const logTimesheetForEmployee = async ({
       weekStartDate,
       weekEndDate,
       actorName,
+      submissionId: submission.id,
     });
   } catch (err) {
     console.error("Failed to send logged-timesheet email:", err);

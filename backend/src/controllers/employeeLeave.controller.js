@@ -286,6 +286,7 @@ const applyLeave = asyncHandler(async (req, res) => {
         endDate: leaveRequest.endDate,
         totalDays: leaveRequest.totalDays,
         reason,
+        leaveRequestId: leaveRequest.id,
       });
     } catch (err) {
       console.error("Failed to send leave request submitted email:", err);
@@ -414,6 +415,7 @@ const cancelLeaveRequest = asyncHandler(async (req, res) => {
         leaveName: leaveRequest.leavePolicy.leaveName,
         startDate: leaveRequest.startDate,
         endDate: leaveRequest.endDate,
+        leaveRequestId: leaveRequest.id,
       });
     } catch (err) {
       console.error("Failed to send leave cancelled email:", err);

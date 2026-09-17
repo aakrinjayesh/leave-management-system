@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Check, ListChecks, X } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -12,6 +12,7 @@ import * as managerTimesheetApi from "../../api/managerTimesheet.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
 import { formatHoursMinutes } from "../../utils/formatDuration";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 import "../../styles/dashboardShared.css";
 
 const FILTERS = [
@@ -68,7 +69,13 @@ function RejectModal({ submission, onClose, onRejected }) {
 
 export default function TeamTimesheetsPage() {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState("PENDING");
+  // A timesheet-submitted email's button lands here as
+  // ?submissionId=123 (after login) - start on "All" rather than the
+  // default "Pending" filter so the target submission still shows even if
+  // it's since been decided.
+  const [searchParams] = useSearchParams();
+  const hasHighlightParam = Boolean(searchParams.get("submissionId"));
+  const [filter, setFilter] = useState(hasHighlightParam ? "" : "PENDING");
   const [submissions, setSubmissions] = useState(null);
   const [error, setError] = useState("");
   const [actioningId, setActioningId] = useState(null);
@@ -84,6 +91,8 @@ export default function TeamTimesheetsPage() {
     loadSubmissions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("submissionId", submissions);
 
   const handleApprove = async (submission) => {
     setError("");
@@ -108,6 +117,11 @@ export default function TeamTimesheetsPage() {
       </div>
 
       <Alert type="error">{error}</Alert>
+      {notFound && (
+        <Alert type="error">
+          Couldn't find that timesheet - it may not be visible under the current filter.
+        </Alert>
+      )}
 
       <div className="filter-tabs">
         {FILTERS.map((f) => (
@@ -153,7 +167,8 @@ export default function TeamTimesheetsPage() {
                   {submissions.map((submission) => (
                     <tr
                       key={submission.id}
-                      className="is-clickable"
+                      ref={rowRef(submission)}
+                      className={`is-clickable ${isHighlighted(submission) ? "row-highlighted" : ""}`.trim()}
                       onClick={() => navigate(`/manager/timesheets/employees/${submission.user.id}`)}
                     >
                       <td className="table-cell-primary">

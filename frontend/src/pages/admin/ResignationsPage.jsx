@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Check, FileWarning, X } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -7,6 +8,7 @@ import Alert from "../../components/common/Alert";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate } from "../../utils/formatDate";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 
 const FILTERS = [
   { label: "Pending", value: "PENDING" },
@@ -17,7 +19,12 @@ const FILTERS = [
 ];
 
 export default function ResignationsPage() {
-  const [filter, setFilter] = useState("PENDING");
+  // A resignation-submitted email's button lands here as ?requestId=123
+  // (after login) - start on "All" rather than the default "Pending" filter
+  // so the target resignation still shows even if it's since been decided.
+  const [searchParams] = useSearchParams();
+  const hasHighlightParam = Boolean(searchParams.get("requestId"));
+  const [filter, setFilter] = useState(hasHighlightParam ? "" : "PENDING");
   const [resignations, setResignations] = useState(null);
   const [error, setError] = useState("");
   const [actioningId, setActioningId] = useState(null);
@@ -31,6 +38,8 @@ export default function ResignationsPage() {
   useEffect(() => {
     loadResignations();
   }, []);
+
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("requestId", resignations);
 
   const handleAccept = async (resignation) => {
     setError("");
@@ -70,6 +79,7 @@ export default function ResignationsPage() {
       </div>
 
       <Alert type="error">{error}</Alert>
+      {notFound && <Alert type="error">Couldn't find that resignation.</Alert>}
 
       <div className="filter-tabs">
         {FILTERS.map((f) => (
@@ -113,7 +123,11 @@ export default function ResignationsPage() {
                 </thead>
                 <tbody>
                   {visible.map((resignation) => (
-                    <tr key={resignation.id}>
+                    <tr
+                      key={resignation.id}
+                      ref={rowRef(resignation)}
+                      className={isHighlighted(resignation) ? "row-highlighted" : ""}
+                    >
                       <td className="table-cell-primary">
                         {resignation.user.firstName} {resignation.user.lastName}
                       </td>
