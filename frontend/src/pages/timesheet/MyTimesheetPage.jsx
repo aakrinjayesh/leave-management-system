@@ -104,6 +104,13 @@ export default function MyTimesheetPage() {
     e.target.value = "";
     if (!file) return;
 
+    // The picker isn't filtered (mobile pickers grey out Excel files that
+    // came with a generic type), so the extension is checked here instead.
+    if (!/\.xlsx?$/i.test(file.name)) {
+      setAttachmentError("Please choose an Excel file (.xls or .xlsx).");
+      return;
+    }
+
     setAttachmentError("");
     setIsUploadingAttachment(true);
     try {
@@ -390,7 +397,6 @@ export default function MyTimesheetPage() {
                             <input
                               type="file"
                               className="file-upload-input"
-                              accept=".xls,.xlsx"
                               onChange={handleAttachmentChange}
                               disabled={isUploadingAttachment}
                             />

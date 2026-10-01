@@ -21,7 +21,11 @@ const PUBLIC_URL_PREFIX = `https://${env.AWS_BUCKET_NAME}.s3.${env.AWS_REGION}.a
 // and returns its permanent public URL - the bucket is public-read, so this
 // URL works forever without needing to be presigned.
 const uploadToS3 = async (file, folder = "misc") => {
-  const key = `aakrin-lms/${ENV_PREFIX}/${folder}/${crypto.randomUUID()}-${file.originalname}`;
+  // Phone filenames often carry characters (non-ASCII, quotes, brackets)
+  // that break the S3 key or the Content-Disposition header - the real name
+  // is still kept in the DB by callers that need to show it.
+  const safeName = file.originalname.replace(/[^\w.\- ]/g, "_");
+  const key = `aakrin-lms/${ENV_PREFIX}/${folder}/${crypto.randomUUID()}-${safeName}`;
 
   await s3.send(
     new PutObjectCommand({
@@ -32,7 +36,7 @@ const uploadToS3 = async (file, folder = "misc") => {
       // Preserves the employee's original filename (rather than the
       // uuid-prefixed S3 key) as the suggested filename when a download
       // endpoint redirects the browser straight to this object.
-      ContentDisposition: `attachment; filename="${file.originalname}"`,
+      ContentDisposition: `attachment; filename="${safeName}"`,
     })
   );
 

@@ -13,12 +13,16 @@ const ALLOWED_MIME_TYPES = [
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
+// Mobile browsers often send Excel files as application/octet-stream or with
+// no type at all, so a matching extension is accepted too.
+const ALLOWED_EXTENSIONS = [".xls", ".xlsx"];
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  if (!ALLOWED_MIME_TYPES.includes(file.mimetype) && !ALLOWED_EXTENSIONS.includes(ext)) {
     return cb(new Error("Only Excel files (.xls, .xlsx) are allowed."));
   }
   cb(null, true);
