@@ -13,6 +13,17 @@ enum UserType {
     ADMIN
 }
 
+// How the person is engaged - purely a label (shown in the top-right corner
+// of their dashboard and on the Accounts list). It has NO effect on
+// permissions or any other logic: interns and contractors are still ordinary
+// EMPLOYEE userType accounts. Defaults to EMPLOYEE so every existing row is
+// unaffected.
+enum EmploymentType {
+    EMPLOYEE
+    INTERN
+    CONTRACT
+}
+
 enum UserStatus {
     PENDING
     ACTIVE
@@ -107,6 +118,11 @@ model User {
     email    String  @unique
     password String?
 
+    // Personal (non-work) email - contact info only, never a login identity,
+    // so it isn't unique. Admin can edit it; employee can self-edit it as part
+    // of their Personal Information section.
+    personalEmail String?
+
     phone       String?
     joiningDate DateTime?
     birthDate   DateTime?
@@ -164,8 +180,7 @@ model User {
     // Extra identity fields only needed for the annual Income Tax Computation
     // Statement - admin-managed only, same as the other HR/payroll fields.
     residentialAddress String?
-    wardNo             String?
-    micrCode           String?
+    pinCode            String?
     residentialStatus  ResidentialStatus?
 
     // Uploaded document filenames (stored on disk, same pattern as leave
@@ -176,8 +191,9 @@ model User {
     photoUrl          String?
     documentUrl       String?
 
-    userType UserType
-    status   UserStatus @default(ACTIVE)
+    userType       UserType
+    employmentType EmploymentType @default(EMPLOYEE)
+    status         UserStatus     @default(ACTIVE)
 
     // Latest exit date, shown on the Accounts table - cleared on reactivate.
     // Full history of every exit/rehire cycle lives in ExitRecord below.
@@ -188,6 +204,11 @@ model User {
     isPasswordSet Boolean @default(false)
 
     isRegistrationAllowed Boolean @default(true)
+
+    // Free-text answers to the fixed "Introduce yourself" prompts on the
+    // employee dashboard - a private self-description keyed by prompt id
+    // (see INTRO_PROMPT_KEYS). Only the employee themselves ever sees this.
+    intro Json?
 
     manager   User?  @relation("ManagerEmployees", fields: [managerId], references: [id])
     employees User[] @relation("ManagerEmployees")
@@ -219,6 +240,14 @@ model User {
     salaryStructureHistory         SalaryStructureHistory[]
     recordedSalaryStructureEntries SalaryStructureHistory[] @relation("SalaryStructureHistoryRecordedBy")
 
+    // Contract-hire (employmentType = CONTRACT) only - a completely separate
+    // payment model (Gross - TDS = Net), never mixed with the employee
+    // salary structure / payslip above.
+    contractPaymentStructures         ContractPaymentStructure[]
+    recordedContractPaymentStructures ContractPaymentStructure[] @relation("ContractPaymentStructureRecordedBy")
+    contractPayments                  ContractPayment[]
+    generatedContractPayments         ContractPayment[]         @relation("ContractPaymentsGenerated")
+
     exitRecords         ExitRecord[]
     recordedExitRecords ExitRecord[] @relation("ExitRecordsRecordedBy")
 
@@ -236,6 +265,18 @@ model User {
 
     wfhRequests        WfhRequest[]
     decidedWfhRequests WfhRequest[] @relation("WfhRequestsDecidedBy")
+
+    profileChangeRequests        ProfileChangeRequest[]
+    decidedProfileChangeRequests ProfileChangeRequest[] @relation("ProfileChangeRequestsDecidedBy")
+
+    attendances         Attendance[]
+    correctedAttendances Attendance[] @relation("AttendanceCorrectedBy")
+
+    reimbursements        Reimbursement[] @relation("EmployeeReimbursements")
+    routedReimbursements  Reimbursement[] @relation("RoutedReimbursements")
+    approvedReimbursements Reimbursement[] @relation("ReimbursementsApprovedBy")
+
+    generatedInvoices Invoice[] @relation("InvoicesGenerated")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
@@ -265,7 +306,7 @@ model ExitRecord {
 // managerId, not stored on the row) - only admin can Accept/Reject.
 // proposedLastWorkingDate is whatever date the employee chose at submission
 // - not yet official. lastWorkingDate is the CONFIRMED date, only set once
-// admin accepts: proposedLastWorkingDate + noticePeriodDays (30 by default),
+// admin accepts: proposedLastWorkingDate + noticePeriodDays (90 by default),
 // per the actual notice-period policy - the employee's chosen date is a
 // resignation/notice date, not their literal final day, so a full notice
 // period is added on top of it once accepted.
@@ -277,7 +318,7 @@ model Resignation {
     reason String @db.Text
 
     status                  ResignationStatus @default(PENDING)
-    noticePeriodDays        Int               @default(30)
+    noticePeriodDays        Int               @default(90)
     proposedLastWorkingDate DateTime
     lastWorkingDate         DateTime?
 
@@ -327,6 +368,48 @@ model WfhRequest {
 
     user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
     decidedBy User? @relation("WfhRequestsDecidedBy", fields: [decidedById], references: [id])
+
+    @@index([userId])
+    @@index([status])
+}
+
+enum ProfileChangeSection {
+    PERSONAL
+    STATUTORY
+    BANK
+}
+
+enum ProfileChangeStatus {
+    PENDING
+    ACCEPTED
+    REJECTED
+}
+
+// An employee's self-service edit to one of the three approval-gated profile
+// sections (Personal / Statutory / Bank). Instead of writing to User straight
+// away, the submitted field values are parked here as `changes` (a JSON map
+// of column -> new value) until an admin accepts (values copied onto User) or
+// rejects. One PENDING request per section at a time; the section's
+// {section}InfoEditCount on User still caps total submissions at 3.
+model ProfileChangeRequest {
+    id Int @id @default(autoincrement())
+
+    userId  Int
+    section ProfileChangeSection
+
+    changes Json
+
+    status       ProfileChangeStatus @default(PENDING)
+    adminRemarks String?
+
+    decidedById Int?
+    decidedAt   DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+    decidedBy User? @relation("ProfileChangeRequestsDecidedBy", fields: [decidedById], references: [id])
 
     @@index([userId])
     @@index([status])
@@ -390,6 +473,61 @@ model SalaryStructureHistory {
     recordedBy User? @relation("SalaryStructureHistoryRecordedBy", fields: [recordedById], references: [id])
 
     @@index([userId, effectiveFrom])
+}
+
+// ── Contract-hire payment model (employmentType = CONTRACT only) ──────────
+// Deliberately separate from SalaryStructureHistory / Payslip above. A
+// contract hire is paid a flat Gross Payment, minus TDS at either 2% or 10%,
+// giving the Net Payment. No Basic/HRA/PF, no proration, no income-tax
+// computation.
+
+// One row per Gross/TDS change, effective from a given month - mirrors how
+// SalaryStructureHistory works so the admin UI ("Update" adds a dated row,
+// "Edit" fixes the latest) behaves identically.
+model ContractPaymentStructure {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    grossPayment   Float
+    tdsRatePercent Float // 2 or 10
+    effectiveFrom  DateTime
+
+    createdAt    DateTime @default(now())
+    recordedById Int?
+
+    user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+    recordedBy User? @relation("ContractPaymentStructureRecordedBy", fields: [recordedById], references: [id])
+
+    @@index([userId, effectiveFrom])
+}
+
+// One immutable slip per contract hire per month - the contract-hire
+// equivalent of Payslip.
+model ContractPayment {
+    id Int @id @default(autoincrement())
+
+    userId Int
+
+    month Int
+    year  Int
+
+    grossPayment   Float
+    tdsRatePercent Float
+    tdsAmount      Float
+    netPayment     Float
+
+    pdfUrl String?
+
+    generatedById Int
+    generatedAt   DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    generatedBy User @relation("ContractPaymentsGenerated", fields: [generatedById], references: [id])
+
+    @@unique([userId, month, year])
+    @@index([userId])
 }
 
 // One row per employee per financial year - only meaningful for employees on
@@ -681,6 +819,11 @@ model LeaveRequest {
     // themselves for approval.
     createdByManager Boolean @default(false)
 
+    // Set alongside createdByManager when it was an admin (not the employee's
+    // manager) who logged it - drives the "Logged by admin" vs "Logged by
+    // manager" tag in the UI.
+    createdByAdmin Boolean @default(false)
+
     createdAt DateTime @default(now())
 
     updatedAt DateTime @updatedAt
@@ -717,6 +860,19 @@ model CompanySettings {
     allowFutureLeave Boolean @default(true)
 
     maxFutureDays Int @default(90)
+
+    // "We're here to assist you" contact shown on every dashboard's welcome
+    // banner. Admin-editable (Manage Accounts). Any field may be blank - the
+    // banner just drops that row.
+    supportContactName String?
+    supportContactEmail String?
+    supportContactPhone String?
+
+    // Authorized-signatory signature image, reused on every generated Invoice
+    // PDF - a single company-wide asset (like the logo), not per-invoice.
+    // Replacing it (re-upload) affects every invoice generated from then on;
+    // past invoices already rendered/saved to S3 are unaffected.
+    signatureUrl String?
 
     createdAt DateTime @default(now())
 
@@ -828,6 +984,11 @@ model Notification {
 
     type String
 
+    // Optional in-app route to open when the notification is clicked (e.g.
+    // "/admin/users/3/details"). Falls back to a type+role lookup on the
+    // frontend when not set - see notificationLinks.js.
+    link String?
+
     isRead Boolean @default(false)
 
     readAt DateTime?
@@ -935,6 +1096,15 @@ model TimesheetSubmission {
 
     rejectedAt DateTime?
 
+    // Set when a manager or admin logged this timesheet directly on the
+    // employee's behalf (auto-approved at creation) rather than the employee
+    // submitting it themselves. createdByAdmin narrows it to an admin who
+    // isn't the employee's manager - drives the "Logged by admin" vs "Logged
+    // by manager" tag, same pattern as LeaveRequest.
+    createdByManager Boolean @default(false)
+
+    createdByAdmin Boolean @default(false)
+
     createdAt DateTime @default(now())
 
     updatedAt DateTime @updatedAt
@@ -968,6 +1138,33 @@ model Project {
     id Int @id @default(autoincrement())
 
     name String @unique
+
+    // Admin-only. The client this project is for - shown in the admin Projects
+    // table and editable there, but deliberately NOT sent to employees on
+    // their own timesheet (see listProjectsForEmployee).
+    clientName String?
+
+    // Client / company details - all optional, filled in whenever admin gets
+    // to it (a project created before this feature just shows these empty in
+    // Edit). Same rule as clientName: admin-only, never in
+    // EMPLOYEE_PROJECT_SELECT, so an employee's own timesheet never sees any
+    // of this. Document fields are permanent public S3 URLs (see s3.util.js).
+    clientFullName String?
+    clientAddress  String? @db.Text
+    // State the client is registered/billed in - drives GST place-of-supply on
+    // generated invoices (same state as the company = CGST+SGST, otherwise
+    // IGST). Free text (not an enum) so an unlisted state/UT never blocks
+    // saving, but the frontend offers a fixed dropdown of Indian states/UTs.
+    clientState    String?
+    gstNumber      String?
+    gstDocumentUrl String?
+    panNumber      String?
+    panDocumentUrl String?
+    msmeDocumentUrl String?
+    paymentTerms   String?
+    sowDocumentUrl String?
+    rateCard       String?
+    agreementDocumentUrl String?
 
     isActive Boolean @default(true)
 
@@ -1009,6 +1206,8 @@ model Project {
     timesheetSubmissions TimesheetSubmission[]
     timesheetEntries     TimesheetEntry[]
     memberships          ProjectMembership[]
+    attendances          Attendance[]
+    invoices             Invoice[]
 }
 
 // One row per (employee, project) they're currently assigned to - an
@@ -1036,4 +1235,181 @@ model ProjectMembership {
     @@unique([userId, projectId])
     @@index([userId])
     @@index([projectId])
+}
+
+enum AttendanceSource {
+    SELF // the employee tapped "Mark me present"
+    ADMIN // an admin created or edited the record on their behalf
+}
+
+// One row per (employee, project, day) - created when the employee marks
+// present / half-day for that project. Attendance is a self-reported log, not
+// a request: there's no approval step. The employee can mark or change any day
+// within the backfill window (today + a few days back); only an admin can
+// touch older days (source ADMIN). Weekend / holiday / on-leave / WFH states
+// are derived at read time from WeekendPolicy + Holiday + approved
+// LeaveRequest / WfhRequest, never stored, so a row always means "present"
+// (full or half day).
+model Attendance {
+    id Int @id @default(autoincrement())
+
+    userId    Int
+    projectId Int
+
+    // Calendar day this attendance is for, at UTC midnight.
+    date DateTime @db.Date
+
+    // When the employee actually marked (or when admin recorded it).
+    markedAt DateTime @default(now())
+
+    // A half day counts as 0.5 present in the summary tallies.
+    isHalfDay Boolean @default(false)
+
+    source AttendanceSource @default(SELF)
+    note   String?
+
+    correctedById Int?
+    correctedAt   DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    correctedBy User?   @relation("AttendanceCorrectedBy", fields: [correctedById], references: [id])
+
+    @@unique([userId, projectId, date])
+    @@index([userId])
+    @@index([projectId])
+    @@index([date])
+}
+
+// An expense-reimbursement claim. Handled the same way as a leave request:
+// routed to the claimant's manager, actionable by that manager OR any admin
+// (never the claimant themselves), rejection needs a reason. `managerRemarks`
+// holds that reason (or an optional approval note). Unlike leave there's no
+// balance/policy - just a subject, description, amount and one or more
+// supporting files (at least one is mandatory).
+model Reimbursement {
+    id Int @id @default(autoincrement())
+
+    userId       Int
+    routedToId   Int?
+    approvedById Int?
+
+    subject     String
+    description String @db.Text
+    amount      Float
+
+    status         LeaveStatus @default(PENDING)
+    managerRemarks String?
+
+    approvedAt  DateTime?
+    rejectedAt  DateTime?
+    cancelledAt DateTime?
+
+    // True when a manager/admin logged this claim directly on the employee's
+    // behalf (auto-approved at creation). createdByAdmin narrows it to an
+    // admin who isn't the claimant's manager - same tag pattern as leave.
+    createdByManager Boolean @default(false)
+    createdByAdmin   Boolean @default(false)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user        User @relation("EmployeeReimbursements", fields: [userId], references: [id], onDelete: Cascade)
+    routedTo    User? @relation("RoutedReimbursements", fields: [routedToId], references: [id])
+    approvedBy  User? @relation("ReimbursementsApprovedBy", fields: [approvedById], references: [id])
+    attachments ReimbursementAttachment[]
+
+    @@index([userId])
+    @@index([routedToId])
+    @@index([approvedById])
+    @@index([status])
+}
+
+model ReimbursementAttachment {
+    id Int @id @default(autoincrement())
+
+    reimbursementId Int
+
+    // Permanent public S3 URL of the uploaded receipt/invoice.
+    fileUrl  String
+    fileName String
+
+    createdAt DateTime @default(now())
+
+    reimbursement Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+
+    @@index([reimbursementId])
+}
+
+enum InvoiceTaxType {
+    IGST
+    CGST_SGST
+}
+
+enum InvoiceFormat {
+    PDF
+    WORD
+}
+
+// One row per generated Tax Invoice PDF - a permanent, immutable record (like
+// Payslip/OfferLetter), never overwritten by a later edit. Client identity
+// fields (name/address/state/GST) are copied from the selected Project at
+// generation time rather than joined live, so an invoice keeps showing
+// exactly what it said when issued even if the project's client details
+// change afterward. Tax type/amounts are derived once from clientState vs
+// the company's home state (Karnataka) and frozen here the same way.
+model Invoice {
+    id Int @id @default(autoincrement())
+
+    invoiceNo   String
+    invoiceDate DateTime
+
+    projectId Int?
+
+    clientFullName String
+    clientAddress  String? @db.Text
+    clientState    String?
+    clientGstNumber String?
+
+    hsnCode     String?
+    description String  @db.Text
+    paymentAdviceText String? @db.Text
+
+    totalTaxableValue Float
+
+    taxType    InvoiceTaxType
+    igstAmount Float @default(0)
+    cgstAmount Float @default(0)
+    sgstAmount Float @default(0)
+    totalInvoiceValue Float
+
+    amountInWords String?
+
+    bankAccountName String?
+    bankName      String?
+    bankAccountNumber String?
+    bankIfscCode  String?
+
+    declarationText String? @db.Text
+
+    // Admin's chosen output format at Save time - decides whether documentUrl
+    // points at a rendered .pdf (PDFKit, watermarked) or a .docx (the `docx`
+    // package - no watermark, see invoiceDocx.service.js). Preview always
+    // renders a PDF regardless of this choice; only Save respects it.
+    format InvoiceFormat @default(PDF)
+    documentUrl String?
+
+    generatedById Int
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    project     Project? @relation(fields: [projectId], references: [id])
+    generatedBy User     @relation("InvoicesGenerated", fields: [generatedById], references: [id])
+
+    @@index([projectId])
+    @@index([invoiceNo])
 }

@@ -1,7 +1,15 @@
 import { useRef } from "react";
 import { Eye, Trash2, Upload } from "lucide-react";
 
-export default function DocumentUploadField({ label, hasDocument, isBusy, onUpload, onView, onRemove }) {
+export default function DocumentUploadField({
+  label,
+  hasDocument,
+  isBusy,
+  onUpload,
+  onView,
+  onRemove,
+  accept = ".pdf,.jpg,.jpeg,.png",
+}) {
   const inputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -17,7 +25,7 @@ export default function DocumentUploadField({ label, hasDocument, isBusy, onUplo
         <span className={`status-badge status-badge-${hasDocument ? "active" : "inactive"}`}>
           {hasDocument ? "Uploaded" : "Not uploaded"}
         </span>
-        <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} onChange={handleFileChange} />
+        <input ref={inputRef} type="file" accept={accept} style={{ display: "none" }} onChange={handleFileChange} />
         <button type="button" className="row-action-btn" disabled={isBusy} onClick={() => inputRef.current.click()}>
           <Upload size={14} />
           {hasDocument ? "Replace" : "Upload"}

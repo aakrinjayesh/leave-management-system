@@ -1,23 +1,33 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, IdCard, Mail, Phone, User } from "lucide-react";
+import { CalendarDays, IdCard, Mail, PartyPopper, Phone, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import * as profileApi from "../../api/profile.api";
 import { formatDate } from "../../utils/formatDate";
+import { formatTenureShort } from "../../utils/tenure";
+import aakrinLogo from "../../assets/aakrin-logo.png";
 import "./WelcomeBanner.css";
-
-// Placeholder until there's a real "who do I contact for help" setting -
-// hardcoded for now, swap for real data once that exists.
-const SUPPORT_CONTACT = {
-  name: "Krishna Dadi",
-  email: "krishna.dadi@aakrin.com",
-  phone: "+91 90000 00000",
-};
 
 const ROLE_LABELS = { MANAGER: "Manager", ADMIN: "Admin", EMPLOYEE: "Employee" };
 
+const greetingForNow = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+};
+
+const longToday = () =>
+  new Date().toLocaleDateString("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
 const initialsOf = (name) =>
-  name
+  (name || "")
     .split(" ")
+    .filter(Boolean)
     .map((part) => part[0])
     .join("")
     .toUpperCase();
@@ -30,6 +40,12 @@ export default function WelcomeBanner() {
   const { user } = useAuth();
   const roleLabel = ROLE_LABELS[user?.userType] || "Employee";
   const [photoUrl, setPhotoUrl] = useState(null);
+
+  // "We're here to assist you" contact = this user's own manager, or the
+  // primary admin if they have no manager (resolved server-side in the auth
+  // payload). Null when it would resolve to the viewer themselves.
+  const assist = user?.assistContact || null;
+  const assistName = assist ? `${assist.firstName} ${assist.lastName}`.trim() : "";
 
   // Admin-uploaded (see Employee Details "Photo" field) - fetched through
   // the authenticated /profile/photo endpoint since there's no public URL
@@ -58,6 +74,25 @@ export default function WelcomeBanner() {
     <div className="card welcome-banner-card" style={{ marginBottom: 20 }}>
       <div className="welcome-banner-cover">
         <div className="welcome-banner-cover-glow" aria-hidden="true" />
+        <img className="welcome-banner-cover-mark" src={aakrinLogo} alt="" aria-hidden="true" />
+
+        <div className="welcome-banner-greeting">
+          <span className="welcome-banner-greeting-main">
+            {greetingForNow()}, {user?.firstName} <span aria-hidden="true">👋</span>
+          </span>
+          <span className="welcome-banner-greeting-date">{longToday()}</span>
+        </div>
+
+        {user?.joiningDate && (
+          <div className="welcome-banner-tenure">
+            <PartyPopper size={18} className="welcome-banner-tenure-icon" />
+            <div className="welcome-banner-tenure-text">
+              <span className="welcome-banner-tenure-eyebrow">With Aakrin for</span>
+              <span className="welcome-banner-tenure-value">{formatTenureShort(user.joiningDate)}</span>
+            </div>
+          </div>
+        )}
+
         <div className="welcome-banner-photo" aria-hidden="true">
           {photoUrl ? (
             <img src={photoUrl} alt="" className="welcome-banner-photo-img" onError={() => setPhotoUrl(null)} />
@@ -97,22 +132,32 @@ export default function WelcomeBanner() {
         </div>
       </div>
 
-      <div className="welcome-banner-assist">
-        <span className="welcome-banner-assist-title">We're here to assist you</span>
-        <div className="welcome-banner-assist-row">
-          <span className="welcome-banner-assist-avatar" aria-hidden="true">
-            {initialsOf(SUPPORT_CONTACT.name)}
-          </span>
-          <span className="welcome-banner-assist-name">{SUPPORT_CONTACT.name}</span>
-        </div>
-        <a className="welcome-banner-assist-link" href={`tel:${SUPPORT_CONTACT.phone}`}>
-          <Phone size={13} />
-          {SUPPORT_CONTACT.phone}
-        </a>
-        <a className="welcome-banner-assist-link" href={`mailto:${SUPPORT_CONTACT.email}`}>
-          <Mail size={13} />
-          {SUPPORT_CONTACT.email}
-        </a>
+      <div className="welcome-banner-footer">
+        {assist && (assistName || assist.email || assist.phone) && (
+          <div className="welcome-banner-assist">
+            <span className="welcome-banner-assist-title">We're here to assist you</span>
+            {assistName && (
+              <div className="welcome-banner-assist-row">
+                <span className="welcome-banner-assist-avatar" aria-hidden="true">
+                  {initialsOf(assistName)}
+                </span>
+                <span className="welcome-banner-assist-name">{assistName}</span>
+              </div>
+            )}
+            {assist.phone && (
+              <a className="welcome-banner-assist-link" href={`tel:${assist.phone}`}>
+                <Phone size={13} />
+                {assist.phone}
+              </a>
+            )}
+            {assist.email && (
+              <a className="welcome-banner-assist-link" href={`mailto:${assist.email}`}>
+                <Mail size={13} />
+                {assist.email}
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

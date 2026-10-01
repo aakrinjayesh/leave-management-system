@@ -1,7 +1,11 @@
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import BirthdayCelebrationGate from "../../components/common/BirthdayCelebrationGate";
 import WelcomeBanner from "../../components/common/WelcomeBanner";
-import { useAuth } from "../../context/AuthContext";
+import NeedsAttentionStrip from "../../components/common/NeedsAttentionStrip";
+import MyWorkspaceSection from "../../components/common/MyWorkspaceSection";
+import TodayAttendanceCard from "../../components/common/TodayAttendanceCard";
+import UpcomingHolidaysCard from "../../components/common/UpcomingHolidaysCard";
+import IntroduceYourselfCard from "../../components/common/IntroduceYourselfCard";
 import "../../styles/dashboardShared.css";
 import "./Dashboard.css";
 
@@ -9,18 +13,17 @@ import "./Dashboard.css";
 // "Apply for leave" lives on My Leave Requests - this page is just the
 // landing header, ready for whatever dashboard-level widgets come next.
 export default function ManagerDashboard() {
-  const { user } = useAuth();
-
   return (
     <DashboardLayout title="Dashboard">
       <BirthdayCelebrationGate />
-      <div className="page-header">
-        <div>
-          <h1>Welcome back, {user?.firstName}.</h1>
-          <p>Here's your workspace at a glance.</p>
-        </div>
-      </div>
       <WelcomeBanner />
+      <NeedsAttentionStrip />
+      <MyWorkspaceSection />
+      <div className="dashboard-cols">
+        <UpcomingHolidaysCard />
+        <TodayAttendanceCard />
+      </div>
+      <IntroduceYourselfCard />
     </DashboardLayout>
   );
 }

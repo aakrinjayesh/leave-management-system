@@ -3,25 +3,30 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
-const { USER_STATUS, USER_TYPE } = require("../utils/constants");
+const { USER_STATUS, USER_TYPE, EMPLOYMENT_TYPE } = require("../utils/constants");
 const userManagerService = require("../services/userManager.service");
 const timesheetService = require("../services/timesheet.service");
 const projectService = require("../services/project.service");
 const companySettingsService = require("../services/companySettings.service");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
+const timesheetDecisionService = require("../services/timesheetDecision.service");
+const timesheetLogService = require("../services/timesheetLog.service");
+const timesheetConstraints = require("../services/timesheetConstraints.service");
 const notificationService = require("../services/notification.service");
-const { sendAdminAccessRemovedEmail } = require("../utils/email.util");
-const { isS3Url } = require("../utils/s3.util");
+const { sendAdminAccessRemovedEmail, sendAdminAccessGrantedEmail } = require("../utils/email.util");
+const { isS3Url, uploadToS3 } = require("../utils/s3.util");
 const { UPLOAD_DIR } = require("../config/upload");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const toSafeUser = (user) => ({
   id: user.id,
+  employeeCode: user.employeeCode,
   firstName: user.firstName,
   lastName: user.lastName,
   email: user.email,
   userType: user.userType,
+  employmentType: user.employmentType,
   status: user.status,
   exitDate: user.exitDate,
   isPasswordSet: user.isPasswordSet,
@@ -31,19 +36,34 @@ const toSafeUser = (user) => ({
   hasDocument: Boolean(user.documentUrl),
 });
 
+// Trailing digits of an employee code are one running sequence across every
+// (varying) prefix - TECH-2026-001, SALE-2015-002, etc. Accounts with no code
+// (or no number in it) sort after the numbered ones.
+const employeeCodeSeq = (code) => {
+  if (!code) return Number.POSITIVE_INFINITY;
+  const match = code.match(/(\d+)$/);
+  return match ? parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+};
+
 const listUsers = asyncHandler(async (req, res) => {
   const { userType } = req.query;
 
   const users = await prisma.user.findMany({
     where: userType ? { userType } : undefined,
-    orderBy: [{ userType: "asc" }, { firstName: "asc" }],
+  });
+
+  users.sort((a, b) => {
+    const sa = employeeCodeSeq(a.employeeCode);
+    const sb = employeeCodeSeq(b.employeeCode);
+    if (sa !== sb) return sa - sb;
+    return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
   });
 
   new ApiResponse(200, "OK", { users: users.map(toSafeUser) }).send(res);
 });
 
 const createUser = asyncHandler(async (req, res) => {
-  const { firstName, lastName, email, userType } = req.body;
+  const { firstName, lastName, email, userType, employmentType } = req.body;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -56,6 +76,7 @@ const createUser = asyncHandler(async (req, res) => {
       lastName,
       email,
       userType,
+      employmentType,
       status: USER_STATUS.PENDING,
       isPasswordSet: false,
     },
@@ -69,15 +90,50 @@ const createUser = asyncHandler(async (req, res) => {
 // Reactivating clears exitDate (the "current" convenience field) since
 // they're active again - the ExitRecord history from adminExit.controller.js
 // is untouched, so past relieving letters stay downloadable even after rehire.
+//
+// Status goes back to ACTIVE only if a password was ever set; an account that
+// was exited while still PENDING (never onboarded) returns to PENDING so it
+// still has to be activated rather than landing in an "active but can't log
+// in" state.
 const reactivateUser = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    throw ApiError.notFound("Account not found.");
+  }
+
   const user = await prisma.user.update({
     where: { id },
-    data: { status: USER_STATUS.ACTIVE, exitDate: null },
+    data: {
+      status: existing.isPasswordSet ? USER_STATUS.ACTIVE : USER_STATUS.PENDING,
+      exitDate: null,
+    },
   });
 
   new ApiResponse(200, "Account reactivated.", { user: toSafeUser(user) }).send(res);
+});
+
+// Employee <-> Intern label swap (e.g. an intern converted to full-time).
+// Contract is deliberately out of scope here - switching to/from it isn't a
+// pure label change (it drives a separate payment model), so a CONTRACT
+// account can't be changed through this action.
+const updateEmploymentType = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const { employmentType } = req.body;
+
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    throw ApiError.notFound("Account not found.");
+  }
+  if (existing.employmentType === EMPLOYMENT_TYPE.CONTRACT) {
+    throw ApiError.badRequest(
+      "This is a Hire-to-Contract account - converting to or from contract isn't supported here (it uses a separate payment model)."
+    );
+  }
+
+  const user = await prisma.user.update({ where: { id }, data: { employmentType } });
+  new ApiResponse(200, "Employment type updated.", { user: toSafeUser(user) }).send(res);
 });
 
 // Lets an admin set or correct anyone's manager, same effect as the
@@ -120,11 +176,14 @@ const setAdminAccess = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Account not found.");
   }
 
+  // Only block if removing this person would leave zero admins who can
+  // actually log in - i.e. no OTHER active admin remains. Demoting a
+  // pending/inactive admin is always fine as long as one active admin is left.
   if (!grant && target.userType === USER_TYPE.ADMIN) {
-    const adminCount = await prisma.user.count({
-      where: { userType: USER_TYPE.ADMIN, status: USER_STATUS.ACTIVE },
+    const otherActiveAdmins = await prisma.user.count({
+      where: { userType: USER_TYPE.ADMIN, status: USER_STATUS.ACTIVE, id: { not: id } },
     });
-    if (adminCount <= 1) {
+    if (otherActiveAdmins === 0) {
       throw ApiError.badRequest("Can't remove the last admin account.");
     }
   }
@@ -150,6 +209,12 @@ const setAdminAccess = asyncHandler(async (req, res) => {
       });
     } catch (err) {
       console.error("Failed to create admin granted notification:", err);
+    }
+
+    try {
+      await sendAdminAccessGrantedEmail({ to: user.email, firstName: user.firstName, grantedByName: actingAdminName });
+    } catch (err) {
+      console.error("Failed to send admin access granted email:", err);
     }
   } else {
     // Sent after the response so the acting admin doesn't wait on the email round-trip.
@@ -194,9 +259,16 @@ const getUserTimesheet = asyncHandler(async (req, res) => {
     requestedProjectId && projects.some((p) => p.id === requestedProjectId) ? requestedProjectId : projects[0]?.id ?? null;
 
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
-  const [entries, submissions] = await Promise.all([
+  const activeProject = projects.find((p) => p.id === projectId) || null;
+  const [entries, submissions, blocked] = await Promise.all([
     timesheetService.getSubmittedEntriesInRange(employeeId, start, end, projectId),
     timesheetService.getSubmissionsOverlappingRange(employeeId, start, end, projectId),
+    timesheetConstraints.getBlockedDays({
+      userId: employeeId,
+      start,
+      end,
+      hoursPerDay: timesheetService.getHoursPerDay(activeProject),
+    }),
   ]);
 
   new ApiResponse(200, "OK", {
@@ -208,6 +280,7 @@ const getUserTimesheet = asyncHandler(async (req, res) => {
     rangeEnd: end,
     entries,
     submissions,
+    dayCounts: timesheetConstraints.summarisePeriod(blocked, entries, start, end),
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
 });
@@ -234,6 +307,54 @@ const getTimesheetSubmissionAttachment = asyncHandler(async (req, res) => {
       res.status(404).json({ success: false, message: "Attachment file not found." });
     }
   });
+});
+
+// ---------- Log timesheet on any employee's behalf (admin) ----------
+
+// An admin can log a timesheet for any account except themselves (they have
+// their own self-service timesheet for that, and can't be their own logger).
+const getEmployeeOr404 = async (employeeId, actorId) => {
+  const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+  if (!employee || employee.id === actorId) {
+    throw ApiError.notFound("Employee not found.");
+  }
+  return employee;
+};
+
+const getTimesheetLogPeriod = asyncHandler(async (req, res) => {
+  const employee = await getEmployeeOr404(Number(req.params.id), req.user.id);
+
+  const data = await timesheetLogService.getLogPeriod({
+    employee,
+    projectId: req.query.projectId,
+    anchorDate: req.query.date,
+  });
+
+  new ApiResponse(200, "OK", data).send(res);
+});
+
+const uploadTimesheetLogAttachment = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw ApiError.badRequest("Please choose a file to upload.");
+  }
+  const { url } = await uploadToS3(req.file, "timesheet-attachments");
+  new ApiResponse(201, "File uploaded.", {
+    attachmentStoredName: url,
+    attachmentOriginalName: req.file.originalname,
+  }).send(res);
+});
+
+const logTimesheetForEmployee = asyncHandler(async (req, res) => {
+  const employee = await getEmployeeOr404(Number(req.params.id), req.user.id);
+
+  const { submission } = await timesheetLogService.logTimesheetForEmployee({
+    employee,
+    actor: req.user,
+    loggedByAdmin: true,
+    ...req.body,
+  });
+
+  new ApiResponse(201, "Timesheet logged and approved.", { submission }).send(res);
 });
 
 // Unrestricted version of the manager's employee-detail view (balances +
@@ -312,6 +433,40 @@ const getUserCalendar = asyncHandler(async (req, res) => {
   new ApiResponse(200, "OK", { ...calendar, leaves }).send(res);
 });
 
+// Company-wide month calendar - every account's leave (pending + approved) and
+// approved WFH on one calendar, admins included now that they book their own
+// time off. The admin equivalent of the manager's team calendar, with no
+// reporting-line filter.
+const getCompanyCalendar = asyncHandler(async (req, res) => {
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const month = Number(req.query.month) || new Date().getMonth() + 1;
+
+  const rangeEnd = new Date(Date.UTC(year, month, 0));
+  const rangeStart = new Date(Date.UTC(year, month - 1, 1));
+
+  const [calendar, teamLeaves, teamWfh] = await Promise.all([
+    leaveCalendarService.getMonthCalendarData(year, month),
+    prisma.leaveRequest.findMany({
+      where: {
+        status: { in: ["PENDING", "APPROVED"] },
+        startDate: { lte: rangeEnd },
+        endDate: { gte: rangeStart },
+      },
+      include: { leavePolicy: true, user: { select: { firstName: true, lastName: true } } },
+    }),
+    prisma.wfhRequest.findMany({
+      where: {
+        status: "APPROVED",
+        startDate: { lte: rangeEnd },
+        endDate: { gte: rangeStart },
+      },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    }),
+  ]);
+
+  new ApiResponse(200, "OK", { ...calendar, teamLeaves, teamWfh }).send(res);
+});
+
 const getUserLeaveAttachment = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
 
@@ -340,7 +495,9 @@ const toFullUserDetails = (user) => ({
   firstName: user.firstName,
   lastName: user.lastName,
   email: user.email,
+  personalEmail: user.personalEmail,
   employeeCode: user.employeeCode,
+  employmentType: user.employmentType,
   phone: user.phone,
   birthDate: user.birthDate,
   joiningDate: user.joiningDate,
@@ -356,8 +513,7 @@ const toFullUserDetails = (user) => ({
   location: user.location,
   taxRegime: user.taxRegime,
   residentialAddress: user.residentialAddress,
-  wardNo: user.wardNo,
-  micrCode: user.micrCode,
+  pinCode: user.pinCode,
   residentialStatus: user.residentialStatus,
   pan: user.pan,
   panHolderName: user.panHolderName,
@@ -388,8 +544,29 @@ const getUserDetails = asyncHandler(async (req, res) => {
     orderBy: { createdAt: "asc" },
   });
 
-  new ApiResponse(200, "OK", { user: toFullUserDetails(user), customFields }).send(res);
+  new ApiResponse(200, "OK", {
+    user: toFullUserDetails(user),
+    customFields,
+    nextEmployeeCodeNumber: await nextEmployeeCodeNumber(),
+  }).send(res);
 });
+
+// The next running number for an employee code, derived from the trailing
+// digits of every existing code (prefixes vary - TECH-2023-001, SALE-2015-002,
+// etc - but the tail number is a single sequence). Zero-padded to 3 digits,
+// grows past that (012, 013, ... 100). Just a hint shown next to the field -
+// the admin still types the full code.
+const nextEmployeeCodeNumber = async () => {
+  const rows = await prisma.user.findMany({
+    where: { employeeCode: { not: null } },
+    select: { employeeCode: true },
+  });
+  const maxSeq = rows.reduce((max, { employeeCode }) => {
+    const match = employeeCode.match(/(\d+)$/);
+    return match ? Math.max(max, parseInt(match[1], 10)) : max;
+  }, 0);
+  return String(maxSeq + 1).padStart(3, "0");
+};
 
 const updateUserDetails = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -456,6 +633,95 @@ const exportPayrollTimesheet = asyncHandler(async (req, res) => {
   sendCsv(res, filename, csv);
 });
 
+// ---------- All timesheets (admin-wide) ----------
+// One row per account (other admins included - they submit their own
+// timesheets now - but never the admin viewing the page) with their
+// weekly-submission counts by status and total submitted hours this month. The
+// admin acts on individual weekly submissions from the per-employee timesheet page.
+
+const listEmployeeTimesheetSummary = asyncHandler(async (req, res) => {
+  const { start, end } = timesheetService.getViewRange("month", new Date());
+
+  const employees = await prisma.user.findMany({
+    where: { id: { not: req.user.id } },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      employeeCode: true,
+      status: true,
+      timesheetSubmissions: { select: { status: true } },
+    },
+  });
+
+  employees.sort((a, b) => {
+    const sa = employeeCodeSeq(a.employeeCode);
+    const sb = employeeCodeSeq(b.employeeCode);
+    if (sa !== sb) return sa - sb;
+    return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+  });
+
+  const result = await Promise.all(
+    employees.map(async (employee) => {
+      const counts = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
+      for (const submission of employee.timesheetSubmissions) {
+        counts[submission.status] = (counts[submission.status] || 0) + 1;
+      }
+      const entries = await timesheetService.getSubmittedEntriesInRange(employee.id, start, end);
+
+      return {
+        id: employee.id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        employeeCode: employee.employeeCode,
+        status: employee.status,
+        pendingCount: counts.PENDING,
+        approvedCount: counts.APPROVED,
+        rejectedCount: counts.REJECTED,
+        totalSubmissions: employee.timesheetSubmissions.length,
+        hoursThisMonth: timesheetService.sumHours(entries),
+      };
+    })
+  );
+
+  new ApiResponse(200, "OK", { employees: result }).send(res);
+});
+
+const decideTimesheetSubmission = (decision) =>
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { remarks } = req.body;
+
+    const submission = await prisma.timesheetSubmission.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+    if (!submission) {
+      throw ApiError.notFound("Timesheet submission not found.");
+    }
+    if (submission.userId === req.user.id) {
+      throw ApiError.badRequest("You can't action your own timesheet - another admin or your manager needs to.");
+    }
+
+    const updated = await timesheetDecisionService.applyDecision({
+      submission,
+      actor: req.user,
+      decision,
+      remarks,
+    });
+
+    new ApiResponse(
+      200,
+      decision === "APPROVED" ? "Timesheet approved." : "Timesheet rejected.",
+      { submission: updated }
+    ).send(res);
+
+    await timesheetDecisionService.sendDecisionSideEffects({ submission, actor: req.user, decision, remarks });
+  });
+
+const approveTimesheetSubmission = decideTimesheetSubmission("APPROVED");
+const rejectTimesheetSubmission = decideTimesheetSubmission("REJECTED");
+
 const getCompanySettings = asyncHandler(async (req, res) => {
   const settings = await companySettingsService.getSettings();
   new ApiResponse(200, "OK", { settings }).send(res);
@@ -470,14 +736,22 @@ module.exports = {
   listUsers,
   createUser,
   reactivateUser,
+  updateEmploymentType,
   updateUserManager,
   setAdminAccess,
   getUserTimesheet,
   getTimesheetSubmissionAttachment,
   exportUserTimesheet,
   exportPayrollTimesheet,
+  listEmployeeTimesheetSummary,
+  approveTimesheetSubmission,
+  rejectTimesheetSubmission,
+  getTimesheetLogPeriod,
+  uploadTimesheetLogAttachment,
+  logTimesheetForEmployee,
   getUserLeaveDetail,
   getUserCalendar,
+  getCompanyCalendar,
   getUserLeaveAttachment,
   getUserDetails,
   updateUserDetails,

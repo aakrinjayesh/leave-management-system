@@ -8,6 +8,10 @@ const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
 const { uploadToS3, deleteFromS3 } = require("../utils/s3.util");
+const { sendPayslipEmail, sendSalaryStructureUpdatedEmail } = require("../utils/email.util");
+
+const monthLabel = (year, month) =>
+  new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
 
 // Computes what a payslip would look like without saving it, so admin can
 // see the numbers before confirming.
@@ -124,6 +128,90 @@ const recordSalaryStructure = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to create salary structure notification:", err);
   }
+
+  try {
+    const employee = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, firstName: true },
+    });
+    if (employee) {
+      await sendSalaryStructureUpdatedEmail({
+        to: employee.email,
+        firstName: employee.firstName,
+        ctc,
+        effectiveFrom,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send salary structure updated email:", err);
+  }
+});
+
+// In-place correction of the most recent structure entry (no new revision) -
+// see payrollService.updateLatestSalaryStructure.
+const updateLatestSalaryStructure = asyncHandler(async (req, res) => {
+  const userId = Number(req.params.id);
+  const {
+    ctc,
+    effectiveFrom,
+    basicPercentOfCtc,
+    hraPercentOfBasic,
+    ltaPercentOfBasic,
+    guaranteedAllowancePercentOfBasic,
+    conveyanceMonthly,
+    pfMonthlyAmount,
+    professionalTax,
+    professionalTaxThreshold,
+  } = req.body;
+
+  const history = await payrollService.updateLatestSalaryStructure(
+    userId,
+    {
+      ctc,
+      effectiveFrom,
+      basicPercentOfCtc,
+      hraPercentOfBasic,
+      ltaPercentOfBasic,
+      guaranteedAllowancePercentOfBasic,
+      conveyanceMonthly,
+      pfMonthlyAmount,
+      professionalTax,
+      professionalTaxThreshold,
+    },
+    req.user.id
+  );
+
+  new ApiResponse(200, "Salary structure updated.", { history }).send(res);
+
+  try {
+    await notificationService.notify({
+      userId,
+      type: notificationService.NOTIFICATION_TYPES.SALARY_STRUCTURE_UPDATED,
+      title: "Salary structure updated",
+      message: `Your CTC has been updated to ₹${Number(ctc).toLocaleString("en-IN")}, effective ${formatDateShort(
+        effectiveFrom
+      )}.`,
+    });
+  } catch (err) {
+    console.error("Failed to create salary structure notification:", err);
+  }
+
+  try {
+    const employee = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, firstName: true },
+    });
+    if (employee) {
+      await sendSalaryStructureUpdatedEmail({
+        to: employee.email,
+        firstName: employee.firstName,
+        ctc,
+        effectiveFrom,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send salary structure updated email:", err);
+  }
 });
 
 const downloadPayslipPdf = asyncHandler(async (req, res) => {
@@ -150,11 +238,68 @@ const downloadPayslipPdf = asyncHandler(async (req, res) => {
   streamPayslipPdf({ payslip, employee, ytd }, res);
 });
 
+// Emails the employee a link to this payslip's PDF. Generates + stores the
+// PDF first if this (older) payslip never had one.
+const emailPayslip = asyncHandler(async (req, res) => {
+  const userId = Number(req.params.id);
+  const payslipId = Number(req.params.payslipId);
+
+  const payslip = await prisma.payslip.findUnique({ where: { id: payslipId } });
+  if (!payslip || payslip.userId !== userId) {
+    throw ApiError.notFound("Payslip not found.");
+  }
+
+  const employee = await prisma.user.findUnique({ where: { id: userId } });
+  if (!employee) {
+    throw ApiError.notFound("Account not found.");
+  }
+  if (!employee.email) {
+    throw ApiError.badRequest("This account has no email address to send to.");
+  }
+
+  let pdfUrl = payslip.pdfUrl;
+  if (!pdfUrl) {
+    const ytd = await payrollService.getYtdTotals(userId, payslip.year, payslip.month);
+    const buffer = await renderPdfToBuffer(streamPayslipPdf, { payslip, employee, ytd });
+    const uploaded = await uploadToS3(
+      {
+        buffer,
+        originalname: `payslip-${employee.firstName}-${payslip.year}-${String(payslip.month).padStart(2, "0")}.pdf`,
+        mimetype: "application/pdf",
+      },
+      "payslips"
+    );
+    pdfUrl = uploaded.url;
+    await prisma.payslip.update({ where: { id: payslip.id }, data: { pdfUrl } });
+  }
+
+  const periodLabel = monthLabel(payslip.year, payslip.month);
+
+  try {
+    await sendPayslipEmail({
+      to: employee.email,
+      firstName: employee.firstName,
+      periodLabel,
+      grossPay: payslip.grossPay,
+      grossDeductions: payslip.grossDeductions,
+      netPay: payslip.netPay,
+      downloadUrl: pdfUrl,
+    });
+  } catch (err) {
+    console.error("Failed to send payslip email:", err);
+    throw ApiError.badRequest("Couldn't send the email. Please try again.");
+  }
+
+  new ApiResponse(200, "Payslip emailed.", { sentTo: employee.email }).send(res);
+});
+
 module.exports = {
   previewPayslip,
   generatePayslip,
   listPayslips,
   downloadPayslipPdf,
+  emailPayslip,
   getSalaryStructureHistory,
   recordSalaryStructure,
+  updateLatestSalaryStructure,
 };

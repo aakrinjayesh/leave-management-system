@@ -10,7 +10,6 @@ const {
   USER_TYPE,
   USER_STATUS,
   RESIGNATION_STATUS,
-  SELF_PROFILE_EDIT_LIMIT,
 } = require("../utils/constants");
 const { isEmployeeDomainEmail } = require("../utils/emailDomain.util");
 const otpService = require("../services/otp.service");
@@ -42,7 +41,7 @@ const toSafeUser = async (user) => {
       user.managerId
         ? prisma.user.findUnique({
             where: { id: user.managerId },
-            select: { id: true, firstName: true, lastName: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true, phone: true },
           })
         : null,
       prisma.user.count({ where: { managerId: user.id } }),
@@ -62,12 +61,29 @@ const toSafeUser = async (user) => {
       prisma.resignation.findFirst({ where: { userId: user.id, status: RESIGNATION_STATUS.ACCEPTED } }),
     ]);
 
+  // "We're here to assist you" contact shown on the dashboard welcome banner:
+  // the employee's own manager, or - if they have no manager - the primary
+  // (lowest-id) active admin. Null when that resolves to the viewer
+  // themselves, so nobody is shown as their own help contact.
+  let assistContact = manager;
+  if (!assistContact) {
+    assistContact = await prisma.user.findFirst({
+      where: { userType: USER_TYPE.ADMIN, status: USER_STATUS.ACTIVE },
+      orderBy: { id: "asc" },
+      select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+    });
+  }
+  if (assistContact && assistContact.id === user.id) {
+    assistContact = null;
+  }
+
   return {
     id: user.id,
     employeeCode: user.employeeCode,
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
+    personalEmail: user.personalEmail,
     phone: user.phone,
     birthDate: user.birthDate,
     joiningDate: user.joiningDate,
@@ -86,6 +102,11 @@ const toSafeUser = async (user) => {
     // /profile/photo endpoint (no public URL exists) - this just tells the
     // frontend whether it's worth fetching at all.
     hasPhoto: Boolean(user.photoUrl),
+    // Same idea for the ID/bank scans - a boolean so the profile page can show
+    // "Uploaded / Not uploaded"; the file streams through /profile/me/documents/:type.
+    hasPanDocument: Boolean(user.panDocumentUrl),
+    hasAadharDocument: Boolean(user.aadharDocumentUrl),
+    hasBankDocument: Boolean(user.bankDocumentUrl),
     taxRegime: user.taxRegime,
     pan: maskTail(user.pan),
     panHolderName: user.panHolderName,
@@ -97,13 +118,6 @@ const toSafeUser = async (user) => {
     ifscCode: user.ifscCode,
     pfNumber: user.pfNumber,
     salaryCtc: user.salaryCtc,
-    // How many more times this employee can use their own self-service edit
-    // form for each profile section (see profile.controller.js's
-    // updateMy{PersonalInfo,StatutoryInfo,BankInfo}) - 0 means only admin can
-    // change that section's fields from here on.
-    personalInfoEditsRemaining: Math.max(0, SELF_PROFILE_EDIT_LIMIT - user.personalInfoEditCount),
-    statutoryInfoEditsRemaining: Math.max(0, SELF_PROFILE_EDIT_LIMIT - user.statutoryInfoEditCount),
-    bankInfoEditsRemaining: Math.max(0, SELF_PROFILE_EDIT_LIMIT - user.bankInfoEditCount),
     salaryStructure: salaryStructure
       ? {
           id: salaryStructure.id,
@@ -138,9 +152,11 @@ const toSafeUser = async (user) => {
       })),
     customFields,
     userType: user.userType,
+    employmentType: user.employmentType,
     status: user.status,
     managerId: user.managerId,
     manager,
+    assistContact,
     isManager: directReportsCount > 0,
     hasAcceptedResignation: Boolean(acceptedResignation),
   };

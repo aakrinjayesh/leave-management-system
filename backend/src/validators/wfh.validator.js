@@ -15,4 +15,8 @@ const rejectWfhRequestSchema = z.object({
   remarks: z.string().trim().min(3, "Please explain why this WFH request is being rejected.").max(500),
 });
 
-module.exports = { submitWfhRequestSchema, rejectWfhRequestSchema };
+const revokeWfhRequestSchema = z.object({
+  remarks: z.string().trim().max(500).optional(),
+});
+
+module.exports = { submitWfhRequestSchema, rejectWfhRequestSchema, revokeWfhRequestSchema };

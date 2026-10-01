@@ -4,6 +4,7 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
+const timesheetConstraints = require("../services/timesheetConstraints.service");
 const projectService = require("../services/project.service");
 const { sendTimesheetSubmittedEmail } = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
@@ -55,14 +56,21 @@ const getMyEntries = asyncHandler(async (req, res) => {
   const weekStartDate = timesheetService.getPeriodStart(anchor, project.submissionFrequency);
   const weekEndDate = timesheetService.getPeriodEnd(weekStartDate, project.submissionFrequency);
 
-  const [entries, submission] = await Promise.all([
+  const [entries, submission, blocked] = await Promise.all([
     prisma.timesheetEntry.findMany({
       where: { userId: req.user.id, projectId: project.id, date: { gte: weekStartDate, lte: weekEndDate } },
       orderBy: [{ date: "asc" }, { id: "asc" }],
     }),
     prisma.timesheetSubmission.findUnique({
       where: { userId_weekStartDate_projectId: { userId: req.user.id, weekStartDate, projectId: project.id } },
-      include: { project: true },
+      // Narrowed select (no clientName) - this is the employee's own view.
+      include: { project: { select: projectService.EMPLOYEE_PROJECT_SELECT } },
+    }),
+    timesheetConstraints.getBlockedDays({
+      userId: req.user.id,
+      start: weekStartDate,
+      end: weekEndDate,
+      hoursPerDay: timesheetService.getHoursPerDay(project),
     }),
   ]);
 
@@ -73,6 +81,8 @@ const getMyEntries = asyncHandler(async (req, res) => {
     submission,
     project,
     projects,
+    dayConstraints: timesheetConstraints.toConstraintMap(blocked),
+    dayCounts: timesheetConstraints.summarisePeriod(blocked, entries, weekStartDate, weekEndDate),
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
 });
@@ -87,11 +97,21 @@ const saveEntry = asyncHandler(async (req, res) => {
 
   const membership = await prisma.projectMembership.findUnique({
     where: { userId_projectId: { userId: req.user.id, projectId } },
-    include: { project: { select: { submissionFrequency: true } } },
+    include: { project: { select: { submissionFrequency: true, workStartTime: true, workEndTime: true } } },
   });
   if (!membership) {
     throw ApiError.badRequest("You aren't assigned to this project.");
   }
+
+  // Can't log hours on a weekend, company holiday, or an approved full-day
+  // leave; a half-day leave caps the hours at half the working day.
+  const blocked = await timesheetConstraints.getBlockedDays({
+    userId: req.user.id,
+    start: entryDate,
+    end: entryDate,
+    hoursPerDay: timesheetService.getHoursPerDay(membership.project),
+  });
+  timesheetConstraints.assertHoursAllowed(blocked, entryDate.toISOString().slice(0, 10), hoursWorked);
 
   const weekStartDate = timesheetService.getPeriodStart(entryDate, membership.project.submissionFrequency);
 
@@ -161,7 +181,11 @@ const uploadAttachment = asyncHandler(async (req, res) => {
 const submitWeek = asyncHandler(async (req, res) => {
   const { weekStartDate: rawWeekStart, attachmentOriginalName, attachmentStoredName, projectId } = req.body;
 
-  if (!req.user.managerId) {
+  // Admins may not have a manager assigned - their submission still stands and
+  // gets picked up by another admin from "All timesheets". Everyone else must
+  // have a manager to route to.
+  const isAdmin = req.user.userType === "ADMIN";
+  if (!req.user.managerId && !isAdmin) {
     throw ApiError.badRequest("Please set your manager in your profile before submitting a timesheet.");
   }
 
@@ -185,13 +209,21 @@ const submitWeek = asyncHandler(async (req, res) => {
   }
   const projectAssigned = project.projectType;
 
+  // The Excel sheet is only required for CLIENT projects (projectType
+  // ASSIGNED). Internal projects (NOT_ASSIGNED) submit without one.
+  if (projectAssigned === "ASSIGNED" && (!attachmentOriginalName || !attachmentStoredName)) {
+    throw ApiError.badRequest("Please upload this period's Excel sheet before submitting.");
+  }
+
   // The submission period this covers - a Monday-Sunday week or a full
   // calendar month, depending on this project's own setting.
   const weekStartDate = timesheetService.getPeriodStart(rawWeekStart, project.submissionFrequency);
   const weekEndDate = timesheetService.getPeriodEnd(weekStartDate, project.submissionFrequency);
 
-  const recipient = await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } });
-  if (!recipient) {
+  const recipient = req.user.managerId
+    ? await prisma.user.findFirst({ where: { id: req.user.managerId, status: "ACTIVE" } })
+    : null;
+  if (!recipient && !isAdmin) {
     throw ApiError.badRequest("Your assigned manager's account isn't active. Please update your manager in your profile.");
   }
 
@@ -209,6 +241,16 @@ const submitWeek = asyncHandler(async (req, res) => {
     throw ApiError.badRequest("There are no entries to submit for this period.");
   }
 
+  // Re-check every day being submitted - a leave/holiday may have been added
+  // after these entries were saved.
+  const blocked = await timesheetConstraints.getBlockedDays({
+    userId: req.user.id,
+    start: weekStartDate,
+    end: weekEndDate,
+    hoursPerDay: timesheetService.getHoursPerDay(project),
+  });
+  timesheetConstraints.assertEntriesAllowed(blocked, draftEntries);
+
   const totalHours = timesheetService.sumHours(draftEntries);
 
   // A week+project can only ever have one submission row (userId +
@@ -220,15 +262,15 @@ const submitWeek = asyncHandler(async (req, res) => {
         where: { id: existingSubmission.id },
         data: {
           totalHours,
-          routedToId: recipient.id,
+          routedToId: recipient?.id ?? null,
           status: "PENDING",
           managerRemarks: null,
           approvedById: null,
           approvedAt: null,
           rejectedAt: null,
           submittedAt: new Date(),
-          attachmentOriginalName,
-          attachmentStoredName,
+          attachmentOriginalName: attachmentOriginalName ?? null,
+          attachmentStoredName: attachmentStoredName ?? null,
           projectAssigned,
         },
       })
@@ -238,10 +280,10 @@ const submitWeek = asyncHandler(async (req, res) => {
           weekStartDate,
           weekEndDate,
           totalHours,
-          routedToId: recipient.id,
+          routedToId: recipient?.id ?? null,
           status: "PENDING",
-          attachmentOriginalName,
-          attachmentStoredName,
+          attachmentOriginalName: attachmentOriginalName ?? null,
+          attachmentStoredName: attachmentStoredName ?? null,
           projectAssigned,
           projectId,
         },
@@ -259,7 +301,10 @@ const submitWeek = asyncHandler(async (req, res) => {
   // shouldn't fail the submission itself.
   try {
     const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
-    const recipients = [recipient, ...admins.filter((a) => a.id !== recipient.id)];
+    const recipients = [recipient, ...admins]
+      .filter(Boolean)
+      // dedupe (recipient may also be an admin) and never notify the submitter
+      .filter((person, i, list) => list.findIndex((p) => p.id === person.id) === i && person.id !== req.user.id);
     const employeeName = `${req.user.firstName} ${req.user.lastName}`;
 
     for (const person of recipients) {
@@ -271,6 +316,9 @@ const submitWeek = asyncHandler(async (req, res) => {
           weekStartDate,
           weekEndDate,
           totalHours,
+          submissionId: submission.id,
+          employeeId: req.user.id,
+          viewerRole: recipient && person.id === recipient.id ? "MANAGER" : "ADMIN",
         });
       } catch (err) {
         console.error("Failed to send timesheet submitted email:", err);
@@ -343,6 +391,62 @@ const getSubmissionAttachment = asyncHandler(async (req, res) => {
   });
 });
 
+// "Do I owe a timesheet?" - drives the dashboard reminder strip. For each of
+// the employee's projects, looks at the most recently COMPLETED submission
+// period (the current one is skipped until it's over) and reports it as
+// pending when there's no submission yet, or it was rejected. Periods where
+// the employee had no working days at all (fully on leave / holiday) are not
+// nagged about.
+const getMyTimesheetStatus = asyncHandler(async (req, res) => {
+  const projects = await projectService.listProjectsForEmployee(req.user.id);
+  const now = new Date();
+  const todayKey = timesheetService.startOfUtcDay(now).toISOString().slice(0, 10);
+
+  const pending = [];
+  for (const project of projects) {
+    const freq = project.submissionFrequency;
+    let periodStart = timesheetService.getPeriodStart(now, freq);
+    let periodEnd = timesheetService.getPeriodEnd(periodStart, freq);
+
+    // Current period not finished yet -> look at the previous one instead.
+    if (periodEnd.toISOString().slice(0, 10) >= todayKey) {
+      const back = new Date(periodStart);
+      if (freq === "MONTHLY") back.setUTCMonth(back.getUTCMonth() - 1);
+      else back.setUTCDate(back.getUTCDate() - 7);
+      periodStart = timesheetService.getPeriodStart(back, freq);
+      periodEnd = timesheetService.getPeriodEnd(periodStart, freq);
+    }
+
+    const submission = await prisma.timesheetSubmission.findUnique({
+      where: {
+        userId_weekStartDate_projectId: { userId: req.user.id, weekStartDate: periodStart, projectId: project.id },
+      },
+    });
+    if (submission && submission.status !== "REJECTED") continue;
+
+    // Skip if they had nothing to log that period (all leave / holiday / weekend).
+    const blocked = await timesheetConstraints.getBlockedDays({
+      userId: req.user.id,
+      start: periodStart,
+      end: periodEnd,
+      hoursPerDay: timesheetService.getHoursPerDay(project),
+    });
+    const { workingDays } = timesheetConstraints.summarisePeriod(blocked, [], periodStart, periodEnd);
+    if (workingDays <= 0) continue;
+
+    pending.push({
+      projectId: project.id,
+      projectName: project.name,
+      periodStart,
+      periodEnd,
+      isMonthly: freq === "MONTHLY",
+      rejected: submission?.status === "REJECTED",
+    });
+  }
+
+  new ApiResponse(200, "OK", { pending }).send(res);
+});
+
 module.exports = {
   listMyProjects,
   getMyEntries,
@@ -352,4 +456,5 @@ module.exports = {
   submitWeek,
   listMySubmissions,
   getSubmissionAttachment,
+  getMyTimesheetStatus,
 };

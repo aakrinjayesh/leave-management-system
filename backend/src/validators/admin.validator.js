@@ -1,24 +1,40 @@
 const { z } = require("zod");
-const { USER_TYPE, GENDER, MARITAL_STATUS, TAX_REGIME, RESIDENTIAL_STATUS } = require("../utils/constants");
+const { USER_TYPE, EMPLOYMENT_TYPE, GENDER, MARITAL_STATUS, TAX_REGIME, RESIDENTIAL_STATUS } = require("../utils/constants");
 const { isEmployeeDomainEmail } = require("../utils/emailDomain.util");
 const env = require("../config/env");
 
-// Every account an admin creates - Employee, Manager, or Admin - must stay
-// on the company domain, same rule as self-registration.
-const createUserSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required.").max(100),
-  lastName: z.string().trim().min(1, "Last name is required.").max(100),
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .email("Please enter a valid email address.")
-    .refine(isEmployeeDomainEmail, { message: `Please use an @${env.EMPLOYEE_EMAIL_DOMAIN} email.` }),
-  userType: z.enum([USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER, USER_TYPE.ADMIN]),
-});
+// Employee, Intern and Admin accounts must stay on the company domain (same
+// rule as self-registration). Hire-to-Contract accounts may use a personal
+// email instead - a contractor often isn't issued a company mailbox.
+const createUserSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "First name is required.").max(100),
+    lastName: z.string().trim().min(1, "Last name is required.").max(100),
+    email: z.string().trim().toLowerCase().email("Please enter a valid email address."),
+    userType: z.enum([USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER, USER_TYPE.ADMIN]),
+    // Label only (Employee / Intern / Contract) - no permission effect.
+    employmentType: z
+      .enum([EMPLOYMENT_TYPE.EMPLOYEE, EMPLOYMENT_TYPE.INTERN, EMPLOYMENT_TYPE.CONTRACT])
+      .optional()
+      .default(EMPLOYMENT_TYPE.EMPLOYEE),
+  })
+  .superRefine((data, ctx) => {
+    if (data.employmentType !== EMPLOYMENT_TYPE.CONTRACT && !isEmployeeDomainEmail(data.email)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["email"],
+        message: `Please use an @${env.EMPLOYEE_EMAIL_DOMAIN} email. A personal email is only allowed for Hire-to-Contract accounts.`,
+      });
+    }
+  });
 
 const updateManagerSchema = z.object({
   managerId: z.union([z.coerce.number().int().positive(), z.null()]),
+});
+
+// Employee <-> Intern only. Contract is intentionally not allowed here.
+const updateEmploymentTypeSchema = z.object({
+  employmentType: z.enum([EMPLOYMENT_TYPE.EMPLOYEE, EMPLOYMENT_TYPE.INTERN]),
 });
 
 const setAdminAccessSchema = z.object({
@@ -30,6 +46,9 @@ const nullableInt = (min = 0) => z.coerce.number().int().min(min).nullable().opt
 const createLeavePolicySchema = z.object({
   leaveName: z.string().trim().min(1, "Leave name is required.").max(100),
   allocatedLeaves: z.coerce.number().int().min(0),
+  // null / omitted = whole yearly allocation granted up front. A number = how
+  // many days are credited each month instead (e.g. 1 = one day/month).
+  monthlyAccrualDays: z.coerce.number().min(0).max(31).nullable().optional(),
   isUnlimited: z.boolean().optional(),
   isUnpaid: z.boolean().optional(),
   allowHalfDay: z.boolean().optional(),
@@ -104,6 +123,8 @@ const nullablePattern = (regex, message, max, { uppercase = false } = {}) =>
     .refine((value) => value === null || regex.test(value), { message });
 
 const EMPLOYEE_CODE_REGEX = /^[A-Za-z0-9_-]+$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PIN_CODE_REGEX = /^\d{6}$/;
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const UAN_REGEX = /^\d{12}$/;
 const AADHAR_REGEX = /^\d{12}$/;
@@ -112,11 +133,14 @@ const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const PF_NUMBER_REGEX = /^[A-Za-z0-9/]+$/;
 
 const updateUserDetailsSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required.").max(100).optional(),
+  lastName: z.string().trim().min(1, "Last name is required.").max(100).optional(),
   employeeCode: nullablePattern(
     EMPLOYEE_CODE_REGEX,
     "Employee code can only contain letters, numbers, hyphens, and underscores.",
     50
   ),
+  personalEmail: nullablePattern(EMAIL_REGEX, "Please enter a valid personal email address.", 255),
   birthDate: z.coerce.date().max(new Date(), "Date of birth can't be in the future.").nullable().optional(),
   joiningDate: z.coerce.date().nullable().optional(),
   gender: z.enum([GENDER.MALE, GENDER.FEMALE, GENDER.OTHER]).nullable().optional(),
@@ -140,8 +164,7 @@ const updateUserDetailsSchema = z.object({
   location: nullableString(100),
   taxRegime: z.enum([TAX_REGIME.OLD, TAX_REGIME.NEW]).nullable().optional(),
   residentialAddress: nullableString(500),
-  wardNo: nullableString(50),
-  micrCode: nullableString(20),
+  pinCode: nullablePattern(PIN_CODE_REGEX, "PIN code must be exactly 6 digits.", 6),
   residentialStatus: z
     .enum([
       RESIDENTIAL_STATUS.RESIDENT,
@@ -181,6 +204,26 @@ const generatePayslipSchema = z.object({
   annualBonusPay: z.coerce.number().min(0).optional().default(0),
 });
 
+// ── Contract-hire payment (employmentType = CONTRACT only) ────────────────
+const monthStringToDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}$/, "Please choose a valid month.")
+  .transform((value) => {
+    const [year, month] = value.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, 1));
+  });
+
+const contractPaymentStructureSchema = z.object({
+  grossPayment: z.coerce.number().min(0, "Gross Payment can't be negative."),
+  tdsRatePercent: z.coerce.number().refine((v) => v === 2 || v === 10, "TDS rate must be 2% or 10%."),
+  effectiveFrom: monthStringToDate,
+});
+
+const generateContractPaymentSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+});
+
 const updateCompanySettingsSchema = z.object({
   fiscalYearStartMonth: z.coerce.number().int().min(1).max(12),
 });
@@ -217,6 +260,7 @@ const previewOfferLetterSchema = z.object({
   letterText: z.string().trim().min(1, "Please provide the offer letter text.").max(50000),
 });
 
+
 // Multipart form fields always arrive as strings, so value/label are plain
 // strings here even though the request may also carry an uploaded file.
 const customFieldSchema = z.object({
@@ -228,6 +272,26 @@ const TIME_OF_DAY_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const projectDetailsSchema = {
   projectType: z.enum(["ASSIGNED", "NOT_ASSIGNED"], { message: "Please select whether this is a client or internal project." }),
+  // Admin-only label for the client this project is for - optional, empty
+  // string stored as null. Never shown to employees.
+  clientName: nullableString(150),
+  // Client / company details - all optional, admin-only (see the Project
+  // model comment). Document fields hold a permanent S3 URL, uploaded
+  // separately via POST /admin/projects/documents/:type before this request
+  // is submitted (same pre-upload-then-reference pattern as leave/timesheet
+  // attachments) - never a raw file here.
+  clientFullName: nullableString(200),
+  clientAddress: nullableString(1000),
+  clientState: nullableString(100),
+  gstNumber: nullableString(30),
+  gstDocumentUrl: nullableString(500),
+  panNumber: nullableString(20),
+  panDocumentUrl: nullableString(500),
+  msmeDocumentUrl: nullableString(500),
+  paymentTerms: nullableString(500),
+  sowDocumentUrl: nullableString(500),
+  rateCard: nullableString(500),
+  agreementDocumentUrl: nullableString(500),
   submissionFrequency: z.enum(["WEEKLY", "MONTHLY"], {
     message: "Please select whether timesheets on this project are submitted weekly or monthly.",
   }),
@@ -294,9 +358,40 @@ const setProjectMembersSchema = z.object({
   members: membersSchema.unwrap(),
 });
 
+// Tax Invoice generation. projectId is optional - admin can pick a saved
+// client project to auto-fill the Bill To block, or leave it unset and type
+// everything by hand (clientFullName is the only client field that's always
+// required either way). totalTaxableValue drives every downstream tax
+// figure - IGST vs CGST+SGST is decided server-side from clientState against
+// the company's home state, never trusted from the client.
+const createInvoiceSchema = z.object({
+  invoiceNo: z.string().trim().min(1, "Please enter an invoice number.").max(60),
+  invoiceDate: z.coerce.date({ errorMap: () => ({ message: "Please choose a valid invoice date." }) }),
+  projectId: z.coerce.number().int().positive().nullable().optional(),
+  clientFullName: z.string().trim().min(1, "Please enter the client's company name.").max(200),
+  clientAddress: nullableString(1000),
+  clientState: nullableString(100),
+  clientGstNumber: nullableString(30),
+  hsnCode: nullableString(20),
+  description: z.string().trim().min(1, "Please describe the service provided.").max(2000),
+  paymentAdviceText: nullableString(300),
+  totalTaxableValue: z.coerce.number().positive("Total taxable value must be greater than 0."),
+  bankAccountName: nullableString(200),
+  bankName: nullableString(150),
+  bankAccountNumber: nullableString(30),
+  bankIfscCode: nullableString(15),
+  declarationText: nullableString(1000),
+  // Only meaningful for the actual Save - the Preview button always renders
+  // a PDF regardless of this (a browser tab can't show an inline .docx the
+  // way it shows a PDF), so this schema is shared by both endpoints and
+  // previewInvoicePdf simply never reads it.
+  format: z.enum(["PDF", "WORD"]).optional().default("PDF"),
+});
+
 module.exports = {
   createUserSchema,
   updateManagerSchema,
+  updateEmploymentTypeSchema,
   setAdminAccessSchema,
   createLeavePolicySchema,
   updateLeavePolicySchema,
@@ -305,6 +400,8 @@ module.exports = {
   updateUserDetailsSchema,
   customFieldSchema,
   generatePayslipSchema,
+  contractPaymentStructureSchema,
+  generateContractPaymentSchema,
   updateCompanySettingsSchema,
   recordSalaryStructureSchema,
   recordExitSchema,
@@ -315,4 +412,5 @@ module.exports = {
   setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
+  createInvoiceSchema,
 };

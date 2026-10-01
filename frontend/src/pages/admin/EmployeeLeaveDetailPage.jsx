@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CalendarDays, ListChecks, Paperclip } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, ListChecks, Paperclip, X } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatusBadge from "../../components/common/StatusBadge";
 import StatCard from "../../components/common/StatCard";
 import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
+import Modal from "../../components/common/Modal";
+import TextArea from "../../components/common/TextArea";
+import Button from "../../components/common/Button";
 import Calendar from "../../components/common/Calendar";
 import LeaveLedgerCard from "../../components/common/LeaveLedgerCard";
+import LogLeaveForEmployeeModal from "../manager/LogLeaveForEmployeeModal";
 import { useMonthNavigation } from "../../hooks/useMonthNavigation";
 import * as adminApi from "../../api/admin.api";
 import { formatDateRange } from "../../utils/formatDate";
@@ -15,6 +19,51 @@ import { formatLeaveDays } from "../../utils/formatLeaveDays";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { openBlobInNewTab } from "../../utils/openBlob";
 import "../../styles/dashboardShared.css";
+
+function RejectModal({ request, employeeFirstName, onClose, onRejected }) {
+  const [remarks, setRemarks] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!remarks.trim()) {
+      setError("Please explain why this request is being rejected.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await adminApi.rejectLeaveRequest(request.id, remarks.trim());
+      onRejected();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal title={`Reject ${employeeFirstName}'s request`} onClose={onClose}>
+      <Alert type="error">{error}</Alert>
+      <form onSubmit={handleSubmit} noValidate>
+        <TextArea
+          label="Reason for rejection"
+          placeholder="Let them know why this request can't be approved"
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+        />
+        <div className="modal-actions">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" isLoading={isSubmitting}>
+            Reject request
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 const toDateKey = (input) => new Date(input).toISOString().slice(0, 10);
 
@@ -58,17 +107,30 @@ function EmployeeLeaveDetailContent({ id }) {
   const [error, setError] = useState("");
   const { year, month, goToPrevMonth, goToNextMonth } = useMonthNavigation();
   const [calendarData, setCalendarData] = useState(null);
+  const [actioningId, setActioningId] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [isLogOpen, setIsLogOpen] = useState(false);
+
+  const loadDetail = () => adminApi.getUserLeaveDetail(id).then(setData);
+  const loadCalendar = () => adminApi.getUserCalendar(id, year, month).then(setCalendarData);
 
   useEffect(() => {
-    adminApi.getUserLeaveDetail(id).then(setData);
+    loadDetail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
+    // Clear so the previous month's calendar isn't shown while the new one loads.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCalendarData(null);
-    adminApi.getUserCalendar(id, year, month).then(setCalendarData);
+    loadCalendar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, year, month]);
+
+  const refresh = () => {
+    loadDetail();
+    loadCalendar();
+  };
 
   const handleViewAttachment = async (requestId) => {
     setError("");
@@ -77,6 +139,19 @@ function EmployeeLeaveDetailContent({ id }) {
       openBlobInNewTab(blob);
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't open this attachment."));
+    }
+  };
+
+  const handleApprove = async (request) => {
+    setError("");
+    setActioningId(request.id);
+    try {
+      await adminApi.approveLeaveRequest(request.id);
+      refresh();
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't approve this request."));
+    } finally {
+      setActioningId(null);
     }
   };
 
@@ -101,6 +176,10 @@ function EmployeeLeaveDetailContent({ id }) {
           </h1>
           <p>{employee.email}</p>
         </div>
+        <Button onClick={() => setIsLogOpen(true)} className="page-header-btn">
+          <CalendarPlus size={16} />
+          Log leave
+        </Button>
       </div>
 
       <Alert type="error">{error}</Alert>
@@ -188,7 +267,11 @@ function EmployeeLeaveDetailContent({ id }) {
                       <td className="table-cell-secondary">{request.reason}</td>
                       <td>
                         <StatusBadge status={request.status} />
-                        {request.createdByManager && <span className="logged-by-manager-tag">Logged by manager</span>}
+                        {request.createdByManager && (
+                          <span className="logged-by-manager-tag">
+                            {request.createdByAdmin ? "Logged by admin" : "Logged by manager"}
+                          </span>
+                        )}
                       </td>
                       <td className="table-cell-secondary">
                         {request.approvedBy
@@ -199,16 +282,40 @@ function EmployeeLeaveDetailContent({ id }) {
                       </td>
                       <td className="table-cell-secondary">{request.managerRemarks || "—"}</td>
                       <td>
-                        {request.attachmentUrl && (
-                          <button
-                            type="button"
-                            className="row-action-btn"
-                            onClick={() => handleViewAttachment(request.id)}
-                          >
-                            <Paperclip size={14} />
-                            Attachment
-                          </button>
-                        )}
+                        <div className="row-actions">
+                          {request.attachmentUrl && (
+                            <button
+                              type="button"
+                              className="row-action-btn"
+                              onClick={() => handleViewAttachment(request.id)}
+                            >
+                              <Paperclip size={14} />
+                              Attachment
+                            </button>
+                          )}
+                          {request.status === "PENDING" && (
+                            <>
+                              <button
+                                type="button"
+                                className="row-action-btn approve"
+                                disabled={actioningId === request.id}
+                                onClick={() => handleApprove(request)}
+                              >
+                                <Check size={14} />
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="row-action-btn reject"
+                                disabled={actioningId === request.id}
+                                onClick={() => setRejectTarget(request)}
+                              >
+                                <X size={14} />
+                                Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -218,6 +325,30 @@ function EmployeeLeaveDetailContent({ id }) {
           )}
         </div>
       </div>
+
+      {rejectTarget && (
+        <RejectModal
+          request={rejectTarget}
+          employeeFirstName={employee.firstName}
+          onClose={() => setRejectTarget(null)}
+          onRejected={() => {
+            setRejectTarget(null);
+            refresh();
+          }}
+        />
+      )}
+
+      {isLogOpen && (
+        <LogLeaveForEmployeeModal
+          employee={employee}
+          submitFn={adminApi.logLeaveForEmployee}
+          onClose={() => setIsLogOpen(false)}
+          onSuccess={() => {
+            setIsLogOpen(false);
+            refresh();
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

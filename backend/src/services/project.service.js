@@ -1,11 +1,40 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
+const { deleteFromS3 } = require("../utils/s3.util");
+
+// Client/company document URL fields - when one of these changes on an edit,
+// the old S3 object is now orphaned and can be cleaned up.
+const CLIENT_DOCUMENT_FIELDS = [
+  "gstDocumentUrl",
+  "panDocumentUrl",
+  "msmeDocumentUrl",
+  "sowDocumentUrl",
+  "agreementDocumentUrl",
+];
 
 const MEMBER_SELECT = {
   userId: true,
   assignedAt: true,
   endDate: true,
   user: { select: { id: true, firstName: true, lastName: true, email: true } },
+};
+
+// Every Project scalar EXCEPT clientName - what an employee is allowed to see
+// about a project on their own timesheet. clientName is admin-only.
+const EMPLOYEE_PROJECT_SELECT = {
+  id: true,
+  name: true,
+  isActive: true,
+  projectType: true,
+  timezone: true,
+  workStartTime: true,
+  workEndTime: true,
+  startDate: true,
+  endDate: true,
+  submissionFrequency: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
 };
 
 // Flattens a ProjectMembership row into the shape the frontend actually
@@ -99,9 +128,20 @@ const getProjectOr404 = async (id) => {
 // timezone, working hours, members) - same endpoint, since they're all just
 // fields on the same row and never need to change independently of each other.
 const renameProject = async (id, name, details, members) => {
-  await getProjectOr404(id);
+  const existing = await getProjectOr404(id);
   await assertNameAvailable(name, id);
   await prisma.project.update({ where: { id }, data: { name, ...details } });
+
+  // A client document that got replaced (or cleared) leaves its old S3
+  // object orphaned - best-effort cleanup, never blocks the save.
+  for (const field of CLIENT_DOCUMENT_FIELDS) {
+    if (existing[field] && existing[field] !== details[field]) {
+      deleteFromS3(existing[field]).catch((err) =>
+        console.error(`Failed to delete superseded project document (${field}):`, err)
+      );
+    }
+  }
+
   if (members !== undefined) {
     await setProjectMembers(id, members);
   }
@@ -128,9 +168,11 @@ const listProjectsForEmployee = (userId) =>
   prisma.project.findMany({
     where: { memberships: { some: { userId } } },
     orderBy: { name: "asc" },
+    select: EMPLOYEE_PROJECT_SELECT,
   });
 
 module.exports = {
+  EMPLOYEE_PROJECT_SELECT,
   listAllProjects,
   createProject,
   renameProject,

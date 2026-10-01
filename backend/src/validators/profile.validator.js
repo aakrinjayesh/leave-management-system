@@ -1,5 +1,10 @@
 const { z } = require("zod");
-const { GENDER, MARITAL_STATUS } = require("../utils/constants");
+const {
+  GENDER,
+  MARITAL_STATUS,
+  INTRO_PROMPT_KEYS,
+  INTRO_ANSWER_MAX_LENGTH,
+} = require("../utils/constants");
 
 // Empty-string form fields are left alone (undefined) rather than clearing
 // the field - unlike admin's editor, an employee leaving a field blank on
@@ -31,9 +36,23 @@ const BANK_ACCOUNT_REGEX = /^\d{9,18}$/;
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 // Employee's own self-service edit of their Personal Information section -
-// name, employee code, and email are excluded on purpose (see
-// updateMyPersonalInfo in profile.controller.js).
+// employee code and login email are still admin-only (see updateUserDetails
+// in admin.controller.js); first/last name can be changed here.
 const updateMyPersonalInfoSchema = z.object({
+  // Unlike the rest of this schema, a blank value isn't "leave it alone" -
+  // a name can't be blanked, so this rejects an empty string outright rather
+  // than silently ignoring it.
+  firstName: z.string().trim().min(1, "First name is required.").max(100).optional(),
+  lastName: z.string().trim().min(1, "Last name is required.").max(100).optional(),
+  personalEmail: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .transform((value) => (value ? value : undefined))
+    .refine((value) => value === undefined || z.string().email().safeParse(value).success, {
+      message: "Please enter a valid personal email address.",
+    }),
   phone: nullableString(20),
   birthDate: z.coerce.date().max(new Date(), "Date of birth can't be in the future.").optional(),
   gender: z.enum([GENDER.MALE, GENDER.FEMALE, GENDER.OTHER]).optional(),
@@ -86,9 +105,24 @@ const submitResignationSchema = z
     }
   );
 
+// Private "Introduce yourself" answers. Every prompt key is accepted and
+// optional; a blank/whitespace answer clears that one. Unknown keys are
+// rejected so the stored object can't accumulate junk.
+const updateMyIntroSchema = z
+  .object(
+    Object.fromEntries(
+      INTRO_PROMPT_KEYS.map((key) => [
+        key,
+        z.string().trim().max(INTRO_ANSWER_MAX_LENGTH).optional(),
+      ])
+    )
+  )
+  .strict();
+
 module.exports = {
   submitResignationSchema,
   updateMyPersonalInfoSchema,
   updateMyStatutoryInfoSchema,
   updateMyBankInfoSchema,
+  updateMyIntroSchema,
 };

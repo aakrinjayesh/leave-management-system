@@ -7,9 +7,7 @@ import {
   Clock,
   Download,
   ListChecks,
-  Pencil,
   Plus,
-  RotateCcw,
   Search,
   Users,
   X,
@@ -28,6 +26,7 @@ import EditProjectModal from "./EditProjectModal";
 import ManageProjectMembersModal from "./ManageProjectMembersModal";
 import ProjectHistoryModal from "./ProjectHistoryModal";
 import ProjectMembersField from "./ProjectMembersField";
+import ClientDetailsFields from "./ClientDetailsFields";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
@@ -251,6 +250,19 @@ function EmployeeListCard({
 
 const DEFAULT_NEW_PROJECT = {
   name: "",
+  clientName: "",
+  clientFullName: "",
+  clientAddress: "",
+  clientState: "",
+  gstNumber: "",
+  gstDocumentUrl: "",
+  panNumber: "",
+  panDocumentUrl: "",
+  msmeDocumentUrl: "",
+  paymentTerms: "",
+  sowDocumentUrl: "",
+  rateCard: "",
+  agreementDocumentUrl: "",
   projectType: "",
   timezone: "",
   workStartTime: "",
@@ -274,7 +286,15 @@ function ManageProjectsCard() {
   const loadProjects = () =>
     adminApi
       .listProjects()
-      .then((res) => setProjects(res.projects))
+      .then((res) => {
+        setProjects(res.projects);
+        // Keep an open "Manage members" modal pointed at the fresh row so its
+        // header (type, status, member count) reflects edits made from within it.
+        setManagingMembersProject((cur) =>
+          cur ? res.projects.find((p) => p.id === cur.id) ?? null : cur,
+        );
+        return res.projects;
+      })
       .catch((err) => setError(getErrorMessage(err)));
 
   useEffect(() => {
@@ -283,6 +303,12 @@ function ManageProjectsCard() {
 
   const handleNewProjectChange = (field) => (e) =>
     setNewProject((prev) => ({ ...prev, [field]: e.target.value }));
+
+  // Same as above but takes the value directly rather than an event - what
+  // ClientDetailsFields uses for both its text inputs and its document
+  // uploads (which hand back a URL, not an event).
+  const handleNewProjectFieldChange = (field, value) =>
+    setNewProject((prev) => ({ ...prev, [field]: value }));
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -435,20 +461,30 @@ function ManageProjectsCard() {
                   </option>
                 ))}
               </FormSelect>
-              <div className="form-two-col" style={{ margin: 0 }}>
-                <TextInput
-                  label="Project Start date"
-                  type="date"
-                  value={newProject.startDate}
-                  onChange={handleNewProjectChange("startDate")}
-                />
-                <TextInput
-                  label="Project End date"
-                  type="date"
-                  value={newProject.endDate}
-                  onChange={handleNewProjectChange("endDate")}
-                />
-              </div>
+              <TextInput
+                label="Client name (optional)"
+                placeholder="e.g. Acme Corp"
+                value={newProject.clientName}
+                onChange={handleNewProjectChange("clientName")}
+              />
+            </div>
+
+            <ClientDetailsFields form={newProject} onFieldChange={handleNewProjectFieldChange} />
+
+            <hr className="modal-section-divider" />
+            <div className="form-two-col">
+              <TextInput
+                label="Project Start date"
+                type="date"
+                value={newProject.startDate}
+                onChange={handleNewProjectChange("startDate")}
+              />
+              <TextInput
+                label="Project End date"
+                type="date"
+                value={newProject.endDate}
+                onChange={handleNewProjectChange("endDate")}
+              />
             </div>
             <div className="form-three-col">
               <TextInput
@@ -539,6 +575,9 @@ function ManageProjectsCard() {
               >
                 <td className="table-cell-primary">{project.name}</td>
                 <td className="table-cell-secondary">
+                  {project.clientName || "—"}
+                </td>
+                <td className="table-cell-secondary">
                   {formatProjectType(project.projectType)}
                 </td>
                 <td className="table-cell-secondary">
@@ -567,31 +606,6 @@ function ManageProjectsCard() {
                     status={project.isActive ? "ACTIVE" : "INACTIVE"}
                   />
                 </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <div className="row-actions">
-                    <button
-                      type="button"
-                      className="row-action-btn"
-                      onClick={() => setEditingProject(project)}
-                    >
-                      <Pencil size={14} />
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className={`row-action-btn ${project.isActive ? "reject" : "approve"}`}
-                      disabled={actioningId === project.id}
-                      onClick={() => handleToggleActive(project)}
-                    >
-                      {project.isActive ? (
-                        <Ban size={14} />
-                      ) : (
-                        <RotateCcw size={14} />
-                      )}
-                      {project.isActive ? "Deactivate" : "Reactivate"}
-                    </button>
-                  </div>
-                </td>
               </tr>
             );
 
@@ -599,6 +613,7 @@ function ManageProjectsCard() {
               <thead>
                 <tr>
                   <th>Project name</th>
+                  <th>Client</th>
                   <th>Type</th>
                   <th>Working hours</th>
                   <th>Start date</th>
@@ -606,7 +621,6 @@ function ManageProjectsCard() {
                   <th>Submission</th>
                   <th>Members</th>
                   <th>Status</th>
-                  <th></th>
                 </tr>
               </thead>
             );
@@ -649,19 +663,23 @@ function ManageProjectsCard() {
         )}
       </div>
 
-      {editingProject && (
-        <EditProjectModal
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          onSuccess={handleEditSuccess}
-        />
-      )}
-
       {managingMembersProject && (
         <ManageProjectMembersModal
           project={managingMembersProject}
           onClose={() => setManagingMembersProject(null)}
           onSuccess={handleMembersSuccess}
+          onEdit={() => setEditingProject(managingMembersProject)}
+          onToggleActive={() => handleToggleActive(managingMembersProject)}
+          isToggling={actioningId === managingMembersProject.id}
+        />
+      )}
+
+      {/* After the members modal so an Edit opened from inside it stacks on top. */}
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSuccess={handleEditSuccess}
         />
       )}
     </div>

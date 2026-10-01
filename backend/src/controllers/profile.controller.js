@@ -3,15 +3,90 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
-const { SELF_PROFILE_EDIT_LIMIT } = require("../utils/constants");
+const {
+  PROFILE_CHANGE_SECTIONS,
+  PROFILE_CHANGE_DOCUMENTS,
+  PROFILE_CHANGE_DATE_FIELDS,
+  PROFILE_CHANGE_DOCUMENT_FIELDS,
+  INTRO_PROMPT_KEYS,
+} = require("../utils/constants");
 const incomeTaxService = require("../services/incomeTax.service");
 const resignationService = require("../services/resignation.service");
 const { streamIncomeTaxComputationPdf } = require("../services/incomeTaxPdf.service");
-const { sendResignationSubmittedEmail, sendResignationWithdrawnEmail } = require("../utils/email.util");
+const {
+  sendResignationSubmittedEmail,
+  sendResignationWithdrawnEmail,
+  sendProfileChangeEmployeeEmail,
+  sendProfileChangeAdminEmail,
+} = require("../utils/email.util");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
-const { isS3Url } = require("../utils/s3.util");
+const { isS3Url, uploadToS3, deleteFromS3 } = require("../utils/s3.util");
 const { EMPLOYEE_DOCUMENT_DIR } = require("../config/employeeDocumentUpload");
+
+// Document type route param (photo|pan|aadhar|bank) -> User column.
+const DOC_COLUMN_BY_TYPE = {
+  photo: "photoUrl",
+  pan: "panDocumentUrl",
+  aadhar: "aadharDocumentUrl",
+  bank: "bankDocumentUrl",
+};
+
+// Uploads any files the employee attached to a profile section form to S3 and
+// merges the resulting URLs into req.body (as the User column names) so they
+// ride along in the same change request as the section's field edits. Only
+// the document fields that belong to `section` are considered - the schema
+// already stripped any URL the client tried to put in the body directly.
+const attachSectionDocuments = async (req, section) => {
+  const config = PROFILE_CHANGE_SECTIONS[section];
+  const uploaded = [];
+  for (const [column, doc] of Object.entries(PROFILE_CHANGE_DOCUMENTS)) {
+    if (!config.fields.includes(column)) continue;
+    const file = req.files?.[doc.uploadField]?.[0];
+    if (!file) continue;
+    const { url } = await uploadToS3(file, doc.folder);
+    req.body[column] = url;
+    uploaded.push(url);
+  }
+  return uploaded;
+};
+
+// Applies the section change, cleaning up any just-uploaded files if the
+// apply itself throws (e.g. nothing actually changed).
+const applyProfileSectionWithDocs = async (req, section) => {
+  const uploaded = await attachSectionDocuments(req, section);
+  try {
+    return await applyProfileSectionChange(req.user.id, section, req.body);
+  } catch (err) {
+    for (const url of uploaded) {
+      deleteFromS3(url).catch((e) => console.error("Failed to clean up abandoned profile document:", e));
+    }
+    throw err;
+  }
+};
+
+const getMyDocument = asyncHandler(async (req, res) => {
+  const column = DOC_COLUMN_BY_TYPE[req.params.type];
+  if (!column) {
+    throw ApiError.badRequest("Unknown document type.");
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user || !user[column]) {
+    throw ApiError.notFound("No document uploaded yet.");
+  }
+
+  if (isS3Url(user[column])) {
+    return res.redirect(user[column]);
+  }
+
+  const filePath = path.join(EMPLOYEE_DOCUMENT_DIR, path.basename(user[column]));
+  res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) {
+      res.status(404).json({ success: false, message: "Document file not found." });
+    }
+  });
+});
 
 // Self-service version of admin's downloadUserDocument (type "photo" only) -
 // admin is still the only one who can upload/replace it (see
@@ -36,64 +111,109 @@ const getMyPhoto = asyncHandler(async (req, res) => {
   });
 });
 
-// Lets every active admin know an employee changed their own profile - the
-// employee's edit applies immediately (no approval step), this is just a
-// heads-up so admin can review it if something looks off.
-const notifyAdminsOfProfileSelfEdit = async (employee, sectionLabel) => {
+// FYI in-app notification to every active admin after an employee edits one
+// of their own profile sections - no approval needed anymore, this is just
+// for awareness / an audit trail.
+const notifyAdminsOfProfileChange = async (employee, sectionLabel) => {
+  const employeeName = `${employee.firstName} ${employee.lastName}`;
+
+  let admins = [];
   try {
-    const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" }, select: { id: true } });
+    admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
     await notificationService.notifyMany(
       admins.map((admin) => admin.id),
       {
-        type: notificationService.NOTIFICATION_TYPES.PROFILE_UPDATED,
-        title: "Employee updated their profile",
-        message: `${employee.firstName} ${employee.lastName} updated their ${sectionLabel}.`,
+        type: notificationService.NOTIFICATION_TYPES.PROFILE_CHANGE_REQUESTED,
+        title: "Profile updated",
+        message: `${employeeName} updated their ${sectionLabel}.`,
+        link: `/admin/users/${employee.id}/details`,
       }
     );
   } catch (err) {
-    console.error("Failed to create profile self-edit notification:", err);
+    console.error("Failed to create profile change notification:", err);
+  }
+
+  // FYI email to every admin.
+  for (const admin of admins) {
+    try {
+      await sendProfileChangeAdminEmail({
+        to: admin.email,
+        recipientFirstName: admin.firstName,
+        employeeName,
+        sectionLabel,
+        employeeId: employee.id,
+      });
+    } catch (err) {
+      console.error("Failed to send profile change FYI email:", err);
+    }
+  }
+
+  // Confirmation email to the employee - a security signal if it wasn't them.
+  try {
+    await sendProfileChangeEmployeeEmail({
+      to: employee.email,
+      firstName: employee.firstName,
+      sectionLabel,
+    });
+  } catch (err) {
+    console.error("Failed to send profile change confirmation email:", err);
   }
 };
 
-// Shared by all three updateMy*Info handlers below - checks the section's
-// edit count against SELF_PROFILE_EDIT_LIMIT, applies the (already-validated)
-// changes, and bumps the counter. Undefined fields in `data` are left
-// untouched by Prisma, so a field the employee didn't fill in on this save
-// just keeps its existing value.
-const applySelfEdit = async (userId, countField, data, sectionLabel) => {
+// Normalises a stored/db value to a string so the "did this actually change?"
+// comparison isn't fooled by Date objects vs ISO strings, null vs "", etc.
+const normaliseForCompare = (value) => {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+};
+
+// Shared by all three updateMy*Info handlers - applies the (already-validated)
+// changes straight to the User row. No admin approval, no per-section limit.
+// Superseded document files are cleaned up from S3; admins get an FYI notice.
+const applyProfileSectionChange = async (userId, section, data) => {
+  const config = PROFILE_CHANGE_SECTIONS[section];
   const existing = await prisma.user.findUnique({ where: { id: userId } });
-  if (existing[countField] >= SELF_PROFILE_EDIT_LIMIT) {
-    throw ApiError.forbidden(
-      `You've used all ${SELF_PROFILE_EDIT_LIMIT} edits allowed for ${sectionLabel}. Contact your admin to make further changes.`
-    );
+
+  // Keep only the fields the employee actually provided AND that differ from
+  // what's already on record - a no-op save shouldn't do anything.
+  const patch = {};
+  const supersededFiles = [];
+  for (const field of config.fields) {
+    const value = data[field];
+    if (value === undefined) continue;
+    if (normaliseForCompare(existing[field]) === normaliseForCompare(value)) continue;
+
+    patch[field] = PROFILE_CHANGE_DATE_FIELDS.has(field) && value ? new Date(value) : value;
+    if (PROFILE_CHANGE_DOCUMENT_FIELDS.has(field) && existing[field] && existing[field] !== value) {
+      supersededFiles.push(existing[field]);
+    }
+  }
+  if (Object.keys(patch).length === 0) {
+    throw ApiError.badRequest("Nothing has changed in this section.");
   }
 
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: { ...data, [countField]: { increment: 1 } },
-  });
+  const updatedUser = await prisma.user.update({ where: { id: userId }, data: patch });
 
-  await notifyAdminsOfProfileSelfEdit(user, sectionLabel);
-
-  return SELF_PROFILE_EDIT_LIMIT - user[countField];
+  for (const oldUrl of supersededFiles) {
+    deleteFromS3(oldUrl).catch((err) => console.error("Failed to delete superseded profile document:", err));
+  }
+  await notifyAdminsOfProfileChange(updatedUser, config.label);
 };
 
 const updateMyPersonalInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await applySelfEdit(req.user.id, "personalInfoEditCount", req.body, "Personal Information");
-
-  new ApiResponse(200, "Personal information updated.", { editsRemaining }).send(res);
+  await applyProfileSectionWithDocs(req, "PERSONAL");
+  new ApiResponse(200, "Personal information updated.").send(res);
 });
 
 const updateMyStatutoryInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await applySelfEdit(req.user.id, "statutoryInfoEditCount", req.body, "Statutory Information");
-
-  new ApiResponse(200, "Statutory information updated.", { editsRemaining }).send(res);
+  await applyProfileSectionWithDocs(req, "STATUTORY");
+  new ApiResponse(200, "Statutory information updated.").send(res);
 });
 
 const updateMyBankInfo = asyncHandler(async (req, res) => {
-  const editsRemaining = await applySelfEdit(req.user.id, "bankInfoEditCount", req.body, "Bank Information");
-
-  new ApiResponse(200, "Bank information updated.", { editsRemaining }).send(res);
+  await applyProfileSectionWithDocs(req, "BANK");
+  new ApiResponse(200, "Bank information updated.").send(res);
 });
 
 // Every active admin, plus this employee's own active manager if they have
@@ -201,19 +321,24 @@ const submitMyResignation = asyncHandler(async (req, res) => {
 
   new ApiResponse(201, "Resignation submitted.", { resignation }).send(res);
 
-  // Notify every active admin - sent after the response so the employee
-  // doesn't wait on the email round-trips; failures here shouldn't fail the
-  // submission itself.
+  // Notify every active admin, plus the employee's manager (view-only on
+  // resignations, but still notified for visibility - matches the withdrawn
+  // email and the in-app notification below, both of which already include
+  // the manager; this email previously left the manager out, which was a bug).
+  // Sent after the response so the employee doesn't wait on the email
+  // round-trips; failures here shouldn't fail the submission itself.
   const employeeName = `${req.user.firstName} ${req.user.lastName}`;
   try {
-    const admins = await prisma.user.findMany({ where: { userType: "ADMIN", status: "ACTIVE" } });
-    for (const admin of admins) {
+    const recipients = await getResignationNoticeRecipients(req.user);
+    for (const recipient of recipients) {
       await sendResignationSubmittedEmail({
-        to: admin.email,
-        recipientFirstName: admin.firstName,
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
         employeeName,
         proposedLastWorkingDate,
         reason,
+        resignationId: resignation.id,
+        viewerRole: recipient.id === req.user.managerId ? "MANAGER" : "ADMIN",
       });
     }
   } catch (err) {
@@ -274,6 +399,8 @@ const withdrawMyResignation = asyncHandler(async (req, res) => {
           to: recipient.email,
           recipientFirstName: recipient.firstName,
           employeeName,
+          resignationId: resignation.id,
+          viewerRole: recipient.id === req.user.managerId ? "MANAGER" : "ADMIN",
         });
       } catch (err) {
         console.error("Failed to send resignation withdrawn email:", err);
@@ -295,13 +422,56 @@ const withdrawMyResignation = asyncHandler(async (req, res) => {
   }
 });
 
+// ---- "Introduce yourself" (private, employee-managed free text) ----------
+
+// Normalise whatever's stored (or missing) into a plain key->string map with
+// an entry for every known prompt, so the frontend always gets a full shape.
+const toIntroView = (stored) => {
+  const source = stored && typeof stored === "object" ? stored : {};
+  return Object.fromEntries(INTRO_PROMPT_KEYS.map((key) => [key, source[key] || ""]));
+};
+
+const getMyIntro = asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { intro: true },
+  });
+
+  new ApiResponse(200, "OK", { intro: toIntroView(user?.intro) }).send(res);
+});
+
+// Merges the submitted answers onto whatever's stored - an omitted prompt is
+// left as-is, an empty string clears just that one.
+const updateMyIntro = asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { intro: true },
+  });
+
+  const current = user?.intro && typeof user.intro === "object" ? user.intro : {};
+  const next = { ...current };
+
+  for (const key of INTRO_PROMPT_KEYS) {
+    if (req.body[key] === undefined) continue;
+    if (req.body[key] === "") delete next[key];
+    else next[key] = req.body[key];
+  }
+
+  await prisma.user.update({ where: { id: req.user.id }, data: { intro: next } });
+
+  new ApiResponse(200, "Saved.", { intro: toIntroView(next) }).send(res);
+});
+
 module.exports = {
   markAnniversaryCelebrationSeen,
   markBirthdayCelebrationSeen,
+  getMyIntro,
+  updateMyIntro,
   updateMyPersonalInfo,
   updateMyStatutoryInfo,
   updateMyBankInfo,
   getMyPhoto,
+  getMyDocument,
   getMyIncomeTaxComputation,
   listMyIncomeTaxComputationGenerations,
   downloadMyIncomeTaxComputationPdf,

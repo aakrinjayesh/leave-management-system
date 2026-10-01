@@ -4,11 +4,11 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const timesheetService = require("../services/timesheet.service");
+const timesheetConstraints = require("../services/timesheetConstraints.service");
 const projectService = require("../services/project.service");
-const { sendTimesheetDecisionEmail } = require("../utils/email.util");
-const notificationService = require("../services/notification.service");
-const { formatDateShort } = require("../utils/formatDate.util");
-const { isS3Url } = require("../utils/s3.util");
+const timesheetDecisionService = require("../services/timesheetDecision.service");
+const timesheetLogService = require("../services/timesheetLog.service");
+const { isS3Url, uploadToS3 } = require("../utils/s3.util");
 const { TIMESHEET_ATTACHMENT_DIR } = require("../config/timesheetAttachmentUpload");
 
 const listTeamSubmissions = asyncHandler(async (req, res) => {
@@ -47,9 +47,16 @@ const getEmployeeTimesheet = asyncHandler(async (req, res) => {
     requestedProjectId && projects.some((p) => p.id === requestedProjectId) ? requestedProjectId : projects[0]?.id ?? null;
 
   const { start, end } = timesheetService.getViewRange(view, anchorDate);
-  const [entries, submissions] = await Promise.all([
+  const activeProject = projects.find((p) => p.id === projectId) || null;
+  const [entries, submissions, blocked] = await Promise.all([
     timesheetService.getSubmittedEntriesInRange(employeeId, start, end, projectId),
     timesheetService.getSubmissionsOverlappingRange(employeeId, start, end, projectId),
+    timesheetConstraints.getBlockedDays({
+      userId: employeeId,
+      start,
+      end,
+      hoursPerDay: timesheetService.getHoursPerDay(activeProject),
+    }),
   ]);
 
   new ApiResponse(200, "OK", {
@@ -61,6 +68,7 @@ const getEmployeeTimesheet = asyncHandler(async (req, res) => {
     rangeEnd: end,
     entries,
     submissions,
+    dayCounts: timesheetConstraints.summarisePeriod(blocked, entries, start, end),
     totalHours: timesheetService.sumHours(entries),
   }).send(res);
 });
@@ -127,115 +135,75 @@ const getRoutedSubmissionOr404 = async (id, routedToId) => {
   return submission;
 };
 
-const approveSubmission = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { remarks } = req.body;
+const decideSubmission = (decision) =>
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { remarks } = req.body;
 
-  const submission = await getRoutedSubmissionOr404(id, req.user.id);
-  if (submission.status !== "PENDING") {
-    throw ApiError.badRequest("This timesheet has already been actioned.");
-  }
+    const submission = await getRoutedSubmissionOr404(id, req.user.id);
 
-  const updated = await prisma.timesheetSubmission.update({
-    where: { id },
-    data: {
-      status: "APPROVED",
-      approvedById: req.user.id,
-      approvedAt: new Date(),
-      managerRemarks: remarks || null,
-    },
-  });
-
-  new ApiResponse(200, "Timesheet approved.", { submission: updated }).send(res);
-
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendTimesheetDecisionEmail({
-      to: submission.user.email,
-      employeeFirstName: submission.user.firstName,
-      weekStartDate: submission.weekStartDate,
-      weekEndDate: submission.weekEndDate,
-      totalHours: submission.totalHours,
-      status: "APPROVED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
-      remarks: remarks || null,
-    });
-  } catch (err) {
-    console.error("Failed to send timesheet approved email:", err);
-  }
-
-  try {
-    await notificationService.notify({
-      userId: submission.user.id,
-      type: notificationService.NOTIFICATION_TYPES.TIMESHEET_DECIDED,
-      title: "Timesheet approved",
-      message: `Your timesheet for the week of ${formatDateShort(submission.weekStartDate)} - ${formatDateShort(
-        submission.weekEndDate
-      )} was approved by ${req.user.firstName} ${req.user.lastName}.`,
-    });
-  } catch (err) {
-    console.error("Failed to create timesheet approved notification:", err);
-  }
-});
-
-const rejectSubmission = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { remarks } = req.body;
-
-  const submission = await getRoutedSubmissionOr404(id, req.user.id);
-  if (submission.status !== "PENDING") {
-    throw ApiError.badRequest("This timesheet has already been actioned.");
-  }
-
-  // Rejecting doesn't touch the entries' hours/description at all - it just
-  // lifts the lock so the employee can fix them and submit the week again.
-  // The rejected submission record itself stays exactly as-is for history.
-  const [updated] = await prisma.$transaction([
-    prisma.timesheetSubmission.update({
-      where: { id },
-      data: {
-        status: "REJECTED",
-        approvedById: req.user.id,
-        rejectedAt: new Date(),
-        managerRemarks: remarks,
-      },
-    }),
-    prisma.timesheetEntry.updateMany({
-      where: { timesheetSubmissionId: id },
-      data: { timesheetSubmissionId: null },
-    }),
-  ]);
-
-  new ApiResponse(200, "Timesheet rejected.", { submission: updated }).send(res);
-
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendTimesheetDecisionEmail({
-      to: submission.user.email,
-      employeeFirstName: submission.user.firstName,
-      weekStartDate: submission.weekStartDate,
-      weekEndDate: submission.weekEndDate,
-      totalHours: submission.totalHours,
-      status: "REJECTED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
+    const updated = await timesheetDecisionService.applyDecision({
+      submission,
+      actor: req.user,
+      decision,
       remarks,
     });
-  } catch (err) {
-    console.error("Failed to send timesheet rejected email:", err);
-  }
 
-  try {
-    await notificationService.notify({
-      userId: submission.user.id,
-      type: notificationService.NOTIFICATION_TYPES.TIMESHEET_DECIDED,
-      title: "Timesheet rejected",
-      message: `Your timesheet for the week of ${formatDateShort(submission.weekStartDate)} - ${formatDateShort(
-        submission.weekEndDate
-      )} was rejected by ${req.user.firstName} ${req.user.lastName}.`,
-    });
-  } catch (err) {
-    console.error("Failed to create timesheet rejected notification:", err);
+    new ApiResponse(
+      200,
+      decision === "APPROVED" ? "Timesheet approved." : "Timesheet rejected.",
+      { submission: updated }
+    ).send(res);
+
+    await timesheetDecisionService.sendDecisionSideEffects({ submission, actor: req.user, decision, remarks });
+  });
+
+const approveSubmission = decideSubmission("APPROVED");
+const rejectSubmission = decideSubmission("REJECTED");
+
+// ---------- Log timesheet on a direct report's behalf ----------
+
+const getDirectReportOr404 = async (employeeId, managerId) => {
+  const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+  if (!employee || employee.managerId !== managerId) {
+    throw ApiError.notFound("Employee not found.");
   }
+  return employee;
+};
+
+const getLogPeriod = asyncHandler(async (req, res) => {
+  const employee = await getDirectReportOr404(Number(req.params.id), req.user.id);
+
+  const data = await timesheetLogService.getLogPeriod({
+    employee,
+    projectId: req.query.projectId,
+    anchorDate: req.query.date,
+  });
+
+  new ApiResponse(200, "OK", data).send(res);
+});
+
+const uploadLogAttachment = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw ApiError.badRequest("Please choose a file to upload.");
+  }
+  const { url } = await uploadToS3(req.file, "timesheet-attachments");
+  new ApiResponse(201, "File uploaded.", {
+    attachmentStoredName: url,
+    attachmentOriginalName: req.file.originalname,
+  }).send(res);
+});
+
+const logTimesheet = asyncHandler(async (req, res) => {
+  const employee = await getDirectReportOr404(Number(req.params.id), req.user.id);
+
+  const { submission } = await timesheetLogService.logTimesheetForEmployee({
+    employee,
+    actor: req.user,
+    ...req.body,
+  });
+
+  new ApiResponse(201, "Timesheet logged and approved.", { submission }).send(res);
 });
 
 module.exports = {
@@ -245,4 +213,7 @@ module.exports = {
   exportEmployeeTimesheet,
   approveSubmission,
   rejectSubmission,
+  getLogPeriod,
+  uploadLogAttachment,
+  logTimesheet,
 };

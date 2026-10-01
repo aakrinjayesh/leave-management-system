@@ -1,0 +1,966 @@
+<title>Employee Portal Handbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..48,600;12..48,700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+  :root {
+    --ground: #f7f5fb;
+    --surface: #ffffff;
+    --surface-sunk: #f1edf8;
+    --ink: #221a30;
+    --muted: #6d6580;
+    --faint: #8c85a0;
+    --line: #e5dff0;
+    --line-strong: #d3c9e6;
+    --brand: #4c2a86;
+    --brand-deep: #35205f;
+    --accent: #c47d18;
+    --accent-wash: #fbf1de;
+    --ok: #3c8b64;
+    --stop: #b8443c;
+    --shadow: 0 1px 2px rgba(53, 32, 95, .05), 0 8px 28px -12px rgba(53, 32, 95, .16);
+
+    --font-display: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+    --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #14111c;
+      --surface: #1e1a29;
+      --surface-sunk: #191524;
+      --ink: #ece8f2;
+      --muted: #a49bb8;
+      --faint: #837a97;
+      --line: #2d2740;
+      --line-strong: #3c3454;
+      --brand: #b99ceb;
+      --brand-deep: #cbb6f2;
+      --accent: #e2a63f;
+      --accent-wash: #33280f;
+      --ok: #63b78c;
+      --stop: #e0716a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px -14px rgba(0, 0, 0, .55);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #14111c;
+    --surface: #1e1a29;
+    --surface-sunk: #191524;
+    --ink: #ece8f2;
+    --muted: #a49bb8;
+    --faint: #837a97;
+    --line: #2d2740;
+    --line-strong: #3c3454;
+    --brand: #b99ceb;
+    --brand-deep: #cbb6f2;
+    --accent: #e2a63f;
+    --accent-wash: #33280f;
+    --ok: #63b78c;
+    --stop: #e0716a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px -14px rgba(0, 0, 0, .55);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 1.06rem;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 47rem;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* ---- top bar ---- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--ground) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: 47rem;
+    margin: 0 auto;
+    padding: .7rem 1.5rem;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .mark {
+    font-family: var(--font-mono);
+    font-size: .74rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--brand);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-size: .86em;
+    background: var(--surface-sunk);
+    padding: .05em .35em;
+    border-radius: 3px;
+  }
+  .topnav {
+    display: flex;
+    gap: .95rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    font-family: var(--font-mono);
+    font-size: .7rem;
+    letter-spacing: .04em;
+  }
+  .topnav a { color: var(--faint); text-decoration: none; }
+  .topnav a:hover { color: var(--ink); }
+
+  /* ---- masthead ---- */
+  .masthead { padding: 3.4rem 0 2.6rem; border-bottom: 2px solid var(--ink); }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: .73rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1rem;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(2.5rem, 7vw, 3.9rem);
+    line-height: 1.02;
+    letter-spacing: -.02em;
+    margin: 0 0 1.1rem;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 1.22rem;
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 0 0 1.8rem;
+    max-width: 34rem;
+  }
+  .meta {
+    font-family: var(--font-mono);
+    font-size: .74rem;
+    color: var(--faint);
+    letter-spacing: .02em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.1rem;
+  }
+
+  /* ---- sections ---- */
+  section { padding: 3rem 0; border-bottom: 1px solid var(--line); }
+  .sec-head { display: flex; gap: 1rem; align-items: baseline; margin: 0 0 1.6rem; }
+  .sec-num {
+    font-family: var(--font-mono);
+    font-size: .8rem;
+    color: var(--accent);
+    font-weight: 500;
+    padding-top: .35rem;
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(1.7rem, 4vw, 2.25rem);
+    line-height: 1.1;
+    letter-spacing: -.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.16rem;
+    letter-spacing: -.005em;
+    margin: 2.3rem 0 .5rem;
+    color: var(--ink);
+  }
+  p { margin: 0 0 1rem; }
+  a { color: var(--brand); text-underline-offset: 2px; }
+  strong { font-weight: 600; }
+
+  ul, ol { margin: 0 0 1rem; padding-left: 1.25rem; }
+  li { margin: .3rem 0; padding-left: .2rem; }
+  li::marker { color: var(--faint); }
+
+  /* ---- role chips ---- */
+  .chips { display: inline-flex; gap: .3rem; vertical-align: .06em; }
+  .chip {
+    font-family: var(--font-mono);
+    font-size: .64rem;
+    font-weight: 500;
+    letter-spacing: .06em;
+    padding: .13em .5em;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .chip.e { background: var(--surface-sunk); color: var(--muted); border-color: var(--line-strong); }
+  .chip.m { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); border-color: color-mix(in srgb, var(--brand) 34%, transparent); }
+  .chip.a { background: var(--accent-wash); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.3rem;
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    color: var(--muted);
+    margin: 0 0 1.7rem;
+    padding: .8rem 1rem;
+    background: var(--surface-sunk);
+    border-radius: 8px;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: .45rem; }
+
+  /* ---- tables ---- */
+  .table-scroll { overflow-x: auto; margin: 1.4rem 0 1.2rem; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { text-align: left; padding: .7rem .9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    background: var(--surface-sunk);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: color-mix(in srgb, var(--brand) 5%, transparent); }
+  td.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: .86rem; white-space: nowrap; }
+  .yes { color: var(--ok); font-weight: 600; }
+  .no { color: var(--faint); }
+
+  /* ---- callouts ---- */
+  .call {
+    margin: 1.4rem 0;
+    padding: .9rem 1.1rem .9rem 1.2rem;
+    border-left: 3px solid var(--brand);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    box-shadow: var(--shadow);
+    font-size: .97rem;
+  }
+  .call.watch { border-left-color: var(--stop); }
+  .call.key { border-left-color: var(--accent); }
+  .call .tag {
+    font-family: var(--font-mono);
+    font-size: .64rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--brand);
+    display: block;
+    margin-bottom: .3rem;
+  }
+  .call.watch .tag { color: var(--stop); }
+  .call.key .tag { color: var(--accent); }
+  .call p:last-child { margin-bottom: 0; }
+
+  /* ---- flow steps ---- */
+  .flow { list-style: none; padding: 0; margin: 1.4rem 0; counter-reset: step; }
+  .flow li {
+    position: relative;
+    padding: .1rem 0 1.1rem 2.4rem;
+    margin: 0;
+    border-left: 1px solid var(--line-strong);
+  }
+  .flow li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  .flow li::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: -0.85rem;
+    top: 0;
+    width: 1.7rem;
+    height: 1.7rem;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--surface);
+    background: var(--brand);
+    border-radius: 50%;
+  }
+  .flow li b { font-family: var(--font-display); font-weight: 600; }
+
+  /* ---- formula panel ---- */
+  .formula {
+    margin: 1.6rem 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .formula-head {
+    background: var(--brand-deep);
+    color: #fff;
+    padding: .8rem 1.1rem;
+    font-family: var(--font-mono);
+    font-size: .74rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  :root[data-theme="dark"] .formula-head,
+  :root:not([data-theme="light"]) .formula-head { color: #14111c; }
+  .formula-body { padding: 1.2rem 1.1rem; }
+  .eq {
+    font-family: var(--font-mono);
+    font-size: .84rem;
+    line-height: 1.7;
+    background: var(--surface-sunk);
+    padding: .9rem 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 0 0 1rem;
+    color: var(--ink);
+    white-space: pre;
+    -webkit-overflow-scrolling: touch;
+  }
+  .eq strong { color: var(--brand); font-weight: 600; }
+  .eq .op { color: var(--faint); }
+  .worked {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0;
+    font-family: var(--font-mono);
+    font-size: .84rem;
+  }
+  .worked dt, .worked dd {
+    margin: 0;
+    padding: .38rem .2rem;
+    border-bottom: 1px dashed var(--line);
+  }
+  .worked dt { color: var(--muted); }
+  .worked dd { text-align: right; font-variant-numeric: tabular-nums; }
+  .worked dt.sub, .worked dd.sub {
+    border-bottom: 1px solid var(--line-strong);
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .worked dt.total, .worked dd.total {
+    border-bottom: none;
+    border-top: 2px solid var(--ink);
+    font-weight: 600;
+    color: var(--ink);
+    padding-top: .5rem;
+    font-size: .95rem;
+  }
+  .worked dd.pos { color: var(--ok); }
+  .worked dd.neg { color: var(--stop); }
+
+  .example-note {
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    color: var(--faint);
+    margin: .6rem 0 0;
+  }
+
+  /* ---- key-value grid for "at a glance" ---- */
+  .kv { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 1.3rem 0; }
+  .kv > div { display: grid; grid-template-columns: 8.5rem 1fr; border-bottom: 1px solid var(--line); }
+  .kv > div:last-child { border-bottom: none; }
+  .kv dt {
+    margin: 0; padding: .6rem .9rem;
+    font-family: var(--font-mono); font-size: .72rem; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--faint);
+    background: var(--surface-sunk);
+  }
+  .kv dd { margin: 0; padding: .6rem .9rem; font-size: .95rem; }
+
+  footer {
+    padding: 2.6rem 0 0;
+    font-family: var(--font-mono);
+    font-size: .74rem;
+    color: var(--faint);
+    line-height: 1.7;
+  }
+
+  @media (max-width: 33rem) {
+    body { font-size: 1.02rem; }
+    .kv > div { grid-template-columns: 1fr; }
+    .kv dt { border-bottom: 1px solid var(--line); }
+    .sec-head { flex-direction: column; gap: .3rem; }
+    .sec-num { padding-top: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+  html { scroll-behavior: smooth; }
+  :target { scroll-margin-top: 4.5rem; }
+  a:focus-visible, .topnav a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="mark">Aakrin · Employee Portal</span>
+    <nav class="topnav">
+      <a href="#roles">Roles</a>
+      <a href="#signin">Sign in</a>
+      <a href="#tabs">Screens</a>
+      <a href="#leave">Leave</a>
+      <a href="#timesheets">Timesheets</a>
+      <a href="#reimbursements">Claims</a>
+      <a href="#pay">Pay &amp; LOP</a>
+      <a href="#admin">Admin</a>
+      <a href="#matrix">Approvals</a>
+      <a href="#email">Email</a>
+    </nav>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Internal reference · how the system works</p>
+    <h1>Employee Portal Handbook</h1>
+    <p class="standfirst">Every flow in the portal, end to end &mdash; who logs in, what each role sees, how leave and timesheets move through approval, and exactly how a payslip is built.</p>
+    <div class="meta">
+      <span>Covers: leave · timesheets · WFH · attendance · resignation · payroll</span>
+      <span>Fiscal year: April&nbsp;&ndash;&nbsp;March</span>
+    </div>
+  </header>
+
+  <!-- 01 -->
+  <section id="roles">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Roles &amp; access</h2></div>
+
+    <p>Every account has one <strong>account type</strong> &mdash; Employee, Manager, or Admin &mdash; but day-to-day permissions are decided by two things working together:</p>
+
+    <div class="kv">
+      <div><dt>Account type</dt><dd><strong>Employee / Manager / Admin.</strong> Set by an admin. Admin is the only type with system-wide reach.</dd></div>
+      <div><dt>Is a manager?</dt><dd>Derived, not stored &mdash; <strong>true whenever at least one person has picked this account as their reporting manager</strong>. Any account, Admin included, gains the manager screens the moment someone reports to them, and loses them when nobody does.</dd></div>
+      <div><dt>Employment type</dt><dd><strong>Employee / Intern / Contract.</strong> A label only &mdash; it changes the badge shown and, for <em>Contract</em>, swaps payroll to a separate flat model. Interns and contractors otherwise use the identical leave / timesheet / WFH flows.</dd></div>
+    </div>
+
+    <div class="call">
+      <span class="tag">In this document</span>
+      <p>Role tags mark who a paragraph or row applies to: <span class="chips"><span class="chip e">EMPLOYEE</span> <span class="chip m">MANAGER</span> <span class="chip a">ADMIN</span></span></p>
+    </div>
+
+    <p>Accounts are created by an admin from <strong>Manage Accounts &rarr; Add account</strong>. Employee accounts must use the company email domain; a Hire-to-Contract account may be given an outside email. A new account starts <em>Pending</em> until the person activates it.</p>
+  </section>
+
+  <!-- 02 -->
+  <section id="signin">
+    <div class="sec-head"><span class="sec-num">02</span><h2>Signing in</h2></div>
+
+    <h3>First time &mdash; activation</h3>
+    <ol class="flow">
+      <li><b>Open the activation page</b> and enter your work email.</li>
+      <li><b>Verify the code</b> emailed to you (one-time password).</li>
+      <li><b>Set a password.</b> The account flips from Pending to Active and you land on your dashboard.</li>
+    </ol>
+
+    <h3>Every time after</h3>
+    <p>Sign in with <strong>email + password</strong>, or choose <strong>Sign in with a code</strong> to get a one-time password by email instead. <strong>Forgot password</strong> runs the same email &rarr; code &rarr; new password sequence.</p>
+
+    <h3>Where you land</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Account</th><th>Landing screen after login</th><th>&ldquo;Dashboard&rdquo; in the sidebar opens&hellip;</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip a">ADMIN</span></td><td>Manage Accounts</td><td>the manager or employee dashboard (with the <em>My Workspace</em> card)</td></tr>
+          <tr><td><span class="chip m">MANAGER</span></td><td>Manager dashboard</td><td>Manager dashboard</td></tr>
+          <tr><td><span class="chip e">EMPLOYEE</span></td><td>Employee dashboard</td><td>Employee dashboard</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The dashboard shows a welcome banner with your help contact (your manager, or the primary admin), upcoming company holidays, a &ldquo;mark me present today&rdquo; card, and an amber strip when you have an unsubmitted timesheet or unmarked attendance.</p>
+  </section>
+
+  <!-- 03 -->
+  <section id="tabs">
+    <div class="sec-head"><span class="sec-num">03</span><h2>What each role sees</h2></div>
+
+    <p>The left sidebar is built from your role. Managers get the employee set <em>plus</em> team screens; admins get company-wide screens instead of team ones and never see the personal &ldquo;my own&rdquo; tabs &mdash; their self-service lives in a dashboard card (see <a href="#adminself">&sect;10</a>).</p>
+
+    <h3><span class="chip e">EMPLOYEE</span> &mdash; and the base set every role keeps</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Tab</th><th>What it&rsquo;s for</th></tr></thead>
+        <tbody>
+          <tr><td>Dashboard</td><td>Banner, holidays, today&rsquo;s attendance, reminders</td></tr>
+          <tr><td>My Leave Requests</td><td>Balances, apply for leave, request history</td></tr>
+          <tr><td>My Calendar</td><td>Your leave &amp; approved WFH on a month grid</td></tr>
+          <tr><td>Timesheet</td><td>Fill and submit the weekly / monthly grid per project</td></tr>
+          <tr><td>WFH</td><td>Request work-from-home days; withdraw a pending one</td></tr>
+          <tr><td>Attendance</td><td>Mark yourself present / half-day per project per day</td></tr>
+          <tr><td>Reimbursements</td><td>File an expense claim with receipts; cancel a pending one</td></tr>
+          <tr><td>Profile</td><td>Personal / statutory / bank details, documents, payslips, resignation</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3><span class="chip m">MANAGER</span> &mdash; adds team screens</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Tab</th><th>What it&rsquo;s for</th></tr></thead>
+        <tbody>
+          <tr><td>Employees</td><td>Your direct reports, their balances and projects</td></tr>
+          <tr><td>Leave Requests</td><td>Approve / reject leave routed to you</td></tr>
+          <tr><td>Team Timesheets</td><td>Approve / reject submissions; log one on a report&rsquo;s behalf</td></tr>
+          <tr><td>Team WFH</td><td>Approve / reject your reports&rsquo; WFH requests</td></tr>
+          <tr><td>Team Reimbursements</td><td>Approve / reject expense claims; log one on a report&rsquo;s behalf</td></tr>
+          <tr><td>Team Calendar</td><td>The team&rsquo;s leave &amp; WFH on one grid</td></tr>
+          <tr><td>Team Attendance</td><td>Your reports&rsquo; attendance, read-only</td></tr>
+          <tr><td>Team Resignations</td><td>Your reports&rsquo; resignations, <em>view only</em> &mdash; admin decides</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3><span class="chip a">ADMIN</span> &mdash; company-wide, plus setup</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Tab</th><th>What it&rsquo;s for</th></tr></thead>
+        <tbody>
+          <tr><td>All Leave Requests</td><td>Every leave request in the company; approve / reject / log</td></tr>
+          <tr><td>All Timesheets</td><td>Every employee&rsquo;s submission status; approve / reject / log</td></tr>
+          <tr><td>All Calendar</td><td>Company-wide leave &amp; WFH</td></tr>
+          <tr><td>All Attendance</td><td>Everyone&rsquo;s attendance; correct any day</td></tr>
+          <tr><td>All WFH Requests</td><td>Approve / reject / revoke any WFH request</td></tr>
+          <tr><td>All Resignations</td><td>Accept / reject resignations</td></tr>
+          <tr><td>All Reimbursements</td><td>Approve / reject any expense claim; log one for anyone</td></tr>
+          <tr><td>Manage Accounts</td><td>Create accounts, set managers, grant admin, exit, salary structure</td></tr>
+          <tr><td>Project</td><td>Projects, members, assignment &amp; timesheet reports</td></tr>
+          <tr><td>Report</td><td>Payroll register for the month</td></tr>
+          <tr><td>Manage Leave Policy</td><td>Leave types, allocations, holidays, company settings</td></tr>
+          <tr><td>Payslips</td><td>Generate &amp; send payslips per employee per month</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>An admin who also has direct reports sees the Manager team tabs as well.</p>
+  </section>
+
+  <!-- 04 -->
+  <section id="leave">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Leave</h2></div>
+
+    <h3>The leave types</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Type</th><th class="num">Annual</th><th>Half day</th><th class="num">Per request</th><th>Rules that bite</th></tr></thead>
+        <tbody>
+          <tr><td>Casual Leave</td><td class="num">12</td><td class="yes">yes</td><td class="num">5 days</td><td>&gt; 4 days needs 20 days&rsquo; notice; weekend between two leave days in one request is also charged (&ldquo;sandwich rule&rdquo;)</td></tr>
+          <tr><td>Sick Leave</td><td class="num">8</td><td class="yes">yes</td><td class="num">2 days</td><td>only today / tomorrow; &gt; 2 days needs a supporting document (then up to 7)</td></tr>
+          <tr><td>Earned Leave</td><td class="num">15</td><td class="yes">yes</td><td class="num">15 days</td><td>for longer planned breaks</td></tr>
+          <tr><td>Unpaid Leave</td><td class="num">&infin;</td><td class="no">no</td><td class="num">30 days</td><td>salary is deducted per day &mdash; this is Loss of Pay (see <a href="#pay">&sect;10</a>)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="example-note">Allocations and rules are the defaults; an admin edits them in Manage Leave Policy.</p>
+
+    <h3>Balances &amp; carry-forward</h3>
+    <p>By default a paid type&rsquo;s <strong>full annual allowance is available from the start of the fiscal year</strong> (April). An admin can switch a type to <strong>monthly accrual</strong>, in which case days are credited gradually and whatever you don&rsquo;t use keeps rolling forward &mdash; nothing resets between months, only at the next fiscal year, when a fresh balance starts from zero.</p>
+
+    <h3>Applying &mdash; <span class="chip e">EMPLOYEE</span> <span class="chip m">MANAGER</span> <span class="chip a">ADMIN</span></h3>
+    <ol class="flow">
+      <li><b>My Leave Requests &rarr; Apply for leave.</b> Pick the type, the dates, half-day if it&rsquo;s a single day, and a reason. Attach a document if the type needs one.</li>
+      <li><b>The portal checks the rules</b> &mdash; past-date block, the 90-day forward window, the per-type limits above, and that the dates don&rsquo;t overlap existing leave or an approved WFH.</li>
+      <li><b>Balance is worked out.</b> If the request fits, it&rsquo;s booked under that type. If it doesn&rsquo;t: an accrual-configured type auto-books the excess days as <strong>Unpaid Leave</strong> so the request still goes through; other types are blocked until you shorten it.</li>
+      <li><b>It routes to your manager</b> and shows as <em>Pending</em>. You&rsquo;ll be notified on the decision.</li>
+    </ol>
+
+    <div class="call">
+      <span class="tag">Who approves</span>
+      <p>Your assigned <strong>manager</strong>, <em>or</em> <strong>any admin</strong> (from All Leave Requests). You can <strong>cancel</strong> a request only while it&rsquo;s still Pending.</p>
+    </div>
+    <div class="call watch">
+      <span class="tag">Logged, not requested</span>
+      <p>A manager (for a direct report) or an admin (for anyone) can <strong>log leave on someone&rsquo;s behalf</strong> &mdash; it&rsquo;s recorded already approved, skipping the notice-period and past-date guards. Balance and double-booking are still enforced.</p>
+    </div>
+    <div class="call">
+      <span class="tag">Holidays added later</span>
+      <p>If an admin adds a company holiday that falls inside an approved leave, that leave is automatically trimmed or cancelled and the balance refunded.</p>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section id="timesheets">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Timesheets</h2></div>
+
+    <p>Timesheets are <strong>per project</strong>. Each project submits either <strong>weekly</strong> (Mon&ndash;Sun) or <strong>monthly</strong>, set by the admin. Someone on three projects fills three separate grids.</p>
+
+    <h3>Filling &amp; submitting &mdash; <span class="chip e">EMPLOYEE</span> <span class="chip m">MANAGER</span> <span class="chip a">ADMIN</span></h3>
+    <ol class="flow">
+      <li><b>Timesheet tab &rarr; pick the project.</b> Enter hours (and an optional note) for each working day. Weekends, holidays and approved full-day leave are locked; a half-day leave caps that day at half.</li>
+      <li><b>Client project?</b> Upload that period&rsquo;s Excel sheet (<span class="mono">.xls / .xlsx</span>). <strong>Internal projects don&rsquo;t need one</strong> &mdash; the hours grid submits on its own.</li>
+      <li><b>Save</b> keeps a draft you can keep editing. <b>Submit</b> sends the period to your manager and locks it.</li>
+      <li><b>Manager or admin approves.</b> A rejection reopens the exact same period &mdash; fix it and resubmit into the same row.</li>
+    </ol>
+
+    <div class="call watch">
+      <span class="tag">Once submitted, it&rsquo;s locked</span>
+      <p>A <em>Pending</em> timesheet can&rsquo;t be edited, and there is no self-withdraw. If you spot a mistake before it&rsquo;s actioned, ask your manager or an admin to reject it so it reopens.</p>
+    </div>
+    <div class="call key">
+      <span class="tag">Your uploaded sheet</span>
+      <p>An uploaded-but-not-yet-submitted Excel sheet is remembered per project + period, so switching tabs or refreshing doesn&rsquo;t lose it. <strong>View</strong> opens it in a browser viewer; <strong>Download</strong> saves the file.</p>
+    </div>
+    <div class="call">
+      <span class="tag">Logged on behalf</span>
+      <p><span class="chip m">MANAGER</span> (direct reports) / <span class="chip a">ADMIN</span> (anyone) can log a whole period from the <em>Log timesheet</em> button &mdash; it&rsquo;s recorded <strong>auto-approved</strong>. Same Excel rule: required for client projects, not internal.</p>
+    </div>
+  </section>
+
+  <!-- 06 -->
+  <section id="wfh">
+    <div class="sec-head"><span class="sec-num">06</span><h2>Work from home</h2></div>
+    <ol class="flow">
+      <li><b>WFH tab &rarr; new request.</b> Give a date range and a reason. You must be on at least one project, and you can only have one pending request at a time.</li>
+      <li><b>Checks:</b> the range must contain a working day, and can&rsquo;t overlap an approved leave.</li>
+      <li><b>Decision:</b> <span class="chip a">ADMIN</span> (from All WFH Requests) <em>or</em> the employee&rsquo;s <span class="chip m">MANAGER</span> (from Team WFH) approves or rejects.</li>
+    </ol>
+    <div class="call">
+      <span class="tag">After the fact</span>
+      <p>You can <strong>withdraw</strong> a request while it&rsquo;s pending. An admin can <strong>revoke</strong> one that was already approved (for example, if plans change to leave).</p>
+    </div>
+  </section>
+
+  <!-- 07 -->
+  <section id="reimbursements">
+    <div class="sec-head"><span class="sec-num">07</span><h2>Reimbursements</h2></div>
+    <p>An expense claim runs on the same rails as a leave request &mdash; <span class="chip e">EMPLOYEE</span> <span class="chip m">MANAGER</span> <span class="chip a">ADMIN</span> can all file their own.</p>
+    <ol class="flow">
+      <li><b>Reimbursements tab &rarr; New claim.</b> Give a <strong>subject</strong>, a <strong>description</strong>, the <strong>amount</strong>, and attach <strong>at least one</strong> receipt or invoice (several are allowed &mdash; PDF, image, Word, Excel or CSV).</li>
+      <li><b>It routes to your manager</b> and shows as <em>Pending</em>. If you have no manager it goes straight to the admins.</li>
+      <li><b>Your manager <em>or</em> any admin</b> approves or rejects it. A rejection <strong>always needs a reason</strong>, which then shows against the claim in your history.</li>
+    </ol>
+    <div class="call">
+      <span class="tag">Cancel &amp; log-on-behalf</span>
+      <p>You can <strong>cancel</strong> a claim while it&rsquo;s still Pending. A manager (for a direct report) or an admin (for anyone) can <strong>log a claim on someone&rsquo;s behalf</strong> from the Team / All Reimbursements page &mdash; recorded auto-approved, attachment still required.</p>
+    </div>
+    <div class="call watch">
+      <span class="tag">No payment tracking</span>
+      <p><em>Approved</em> is the final state &mdash; the portal doesn&rsquo;t track when the money is actually paid out. And you can never approve your own claim.</p>
+    </div>
+  </section>
+
+  <!-- 08 -->
+  <section id="attendance">
+    <div class="sec-head"><span class="sec-num">08</span><h2>Attendance</h2></div>
+    <p>Attendance is a <strong>self-reported, per-project daily log</strong> &mdash; there is no approval and no on-time / late judgement. Each day you get a control per project: <strong>Present</strong> or <strong>Half day</strong>.</p>
+    <ul>
+      <li>Weekend, holiday, on-leave and WFH days are shown automatically &mdash; you never mark those.</li>
+      <li>You can mark or fix any working day from the tracking start (or your joining date, whichever is later) up to today. Earlier days can only be corrected by an admin.</li>
+      <li>The dashboard&rsquo;s <em>Today&rsquo;s attendance</em> card and the amber reminder strip are shortcuts to the same thing.</li>
+    </ul>
+  </section>
+
+  <!-- 09 -->
+  <section id="resignation">
+    <div class="sec-head"><span class="sec-num">09</span><h2>Resignation</h2></div>
+    <ol class="flow">
+      <li><b>Profile &rarr; submit resignation</b> with a reason and a proposed last working day. One active resignation at a time; you can withdraw it while pending.</li>
+      <li><b>Your manager sees it</b> on Team Resignations &mdash; <em>view only</em>.</li>
+      <li><b>An admin accepts or rejects</b> from All Resignations. On acceptance the confirmed last working day is set to <strong>proposed date + notice period</strong> (90 days by default).</li>
+    </ol>
+    <div class="call watch">
+      <span class="tag">After acceptance</span>
+      <p>Once a resignation is accepted the employee can no longer apply for new leave. A manager or admin can still log leave on their behalf if needed.</p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section id="pay">
+    <div class="sec-head"><span class="sec-num">10</span><h2>Payslips &amp; Loss of Pay</h2></div>
+
+    <h3>Salary structure &mdash; <span class="chip a">ADMIN</span></h3>
+    <p>Each employee has a <strong>CTC</strong> and a <strong>salary structure</strong> set by an admin (Manage Accounts &rarr; employee details &rarr; Salary). The structure is a set of percentages &mdash; Basic as a % of CTC, HRA / LTA / guaranteed allowance as a % of Basic &mdash; plus flat amounts for conveyance, PF and professional tax. Changes are dated (<em>effective from</em>) and the history is kept, so a payslip always uses the structure that applied <em>that</em> month.</p>
+
+    <h3>Generating a payslip</h3>
+    <p>Payslips are <strong>not automatic</strong>. From <strong>Payslips &rarr; an employee &rarr; a month</strong>, the admin previews the computed figures, enters <strong>TDS</strong> and any one-time <strong>annual bonus</strong>, and confirms. A PDF is produced and stored; the employee can view it on their Profile, or the admin can email them a link.</p>
+
+    <h3>How the monthly figure is built</h3>
+    <div class="formula">
+      <div class="formula-head">From annual CTC to net pay</div>
+      <div class="formula-body">
+        <div class="eq">monthly CTC       <span class="op">=</span>  annual CTC <span class="op">&divide;</span> 12
+Basic             <span class="op">=</span>  monthly CTC <span class="op">&times;</span> basic%
+HRA, LTA, g.allow <span class="op">=</span>  Basic <span class="op">&times;</span> their own %
+special allowance <span class="op">=</span>  monthly CTC <span class="op">&minus;</span> (all of the above <span class="op">+</span> conveyance <span class="op">+</span> employer PF)
+
+Gross earnings    <span class="op">=</span>  Basic <span class="op">+</span> HRA <span class="op">+</span> LTA <span class="op">+</span> conveyance <span class="op">+</span> g.allow <span class="op">+</span> special
+
+Standard days     <span class="op">=</span>  working days in the month  (weekends &amp; holidays out)
+per-day rate      <span class="op">=</span>  Gross earnings <span class="op">&divide;</span> Standard days
+<strong>LOP amount</strong>        <span class="op">=</span>  per-day rate <span class="op">&times;</span> LOP days
+
+Gross pay         <span class="op">=</span>  Gross earnings <span class="op">+</span> annual bonus
+Deductions        <span class="op">=</span>  employee PF <span class="op">+</span> professional tax <span class="op">+</span> TDS <span class="op">+</span> <strong>LOP amount</strong>
+<strong>Net pay</strong>           <span class="op">=</span>  Gross pay <span class="op">&minus;</span> Deductions</div>
+        <p style="margin:0 0 .4rem"><strong>LOP days</strong> = approved <em>Unpaid Leave</em> working days that fall in the month, plus (in your joining month only) any working days before you started. Everything you take beyond your paid balance becomes Unpaid Leave, which is what feeds this.</p>
+      </div>
+    </div>
+
+    <h3>Worked example</h3>
+    <div class="formula">
+      <div class="formula-head">CTC &#8377;9,00,000 · October 2026 · 3 days unpaid leave</div>
+      <div class="formula-body">
+        <dl class="worked">
+          <dt>Monthly CTC (9,00,000 &divide; 12)</dt><dd>75,000.00</dd>
+          <dt>Basic (40% of monthly CTC)</dt><dd>30,000.00</dd>
+          <dt>HRA (50% of Basic)</dt><dd>15,000.00</dd>
+          <dt>LTA (8.33% of Basic)</dt><dd>2,499.00</dd>
+          <dt>Guaranteed allowance (10% of Basic)</dt><dd>3,000.00</dd>
+          <dt>Conveyance (flat)</dt><dd>1,600.00</dd>
+          <dt>Employer PF (flat)</dt><dd>1,800.00</dd>
+          <dt>Special allowance (balancing figure)</dt><dd>21,101.00</dd>
+          <dt class="sub">Gross earnings</dt><dd class="sub">73,200.00</dd>
+          <dt>Standard days (Oct: 31 &minus; 9 weekend &minus; 1 holiday)</dt><dd>21</dd>
+          <dt>Per day (73,200 &divide; 21)</dt><dd>3,485.71</dd>
+          <dt>LOP days</dt><dd>3</dd>
+          <dt>LOP amount (3,485.71 &times; 3)</dt><dd class="neg">&minus;10,457.14</dd>
+          <dt>Employee PF</dt><dd class="neg">&minus;1,800.00</dd>
+          <dt>Professional tax</dt><dd class="neg">&minus;200.00</dd>
+          <dt>TDS (entered by admin)</dt><dd class="neg">&minus;4,000.00</dd>
+          <dt class="total">Net pay</dt><dd class="total">56,742.86</dd>
+        </dl>
+        <p class="example-note">Days worked shown on the slip = 21 &minus; 3 = 18. Figures use the default structure; a real employee&rsquo;s percentages may differ. Amounts in &#8377;.</p>
+      </div>
+    </div>
+
+    <div class="call">
+      <span class="tag">Contract hires</span>
+      <p>Employment type <em>Contract</em> uses a separate model &mdash; a flat <strong>Gross &minus; TDS</strong> with no structure, PF or LOP &mdash; on its own screens.</p>
+    </div>
+    <p>A separate <strong>income-tax computation</strong> (projected annual tax, old vs new regime) is available per employee and on each person&rsquo;s Profile.</p>
+
+    <h3 id="adminself"><span class="chip a">ADMIN</span> self-service &mdash; &ldquo;My Workspace&rdquo;</h3>
+    <p>Admins don&rsquo;t get the personal tabs in the sidebar. Instead the <strong>My Workspace</strong> card on the dashboard links them to their own <strong>leave, timesheet, WFH and attendance</strong>. Their requests route to their assigned manager (if they have one) and can be actioned by that manager <em>or</em> any other admin &mdash; an admin can never approve their own. Admins are also full participants in payroll: they have a CTC and structure and appear in the Payslips list like anyone else. Resignation is intentionally excluded.</p>
+  </section>
+
+  <!-- 11 -->
+  <section id="admin">
+    <div class="sec-head"><span class="sec-num">11</span><h2>The admin toolbox</h2></div>
+    <p>Everything in this section is <span class="chip a">ADMIN</span> only. The company-wide <strong>All Leave Requests / All Timesheets / All Calendar / All Attendance / All WFH Requests / All Resignations / All Reimbursements</strong> screens let an admin see and action <em>any</em> employee&rsquo;s requests regardless of reporting line &mdash; those flows are covered in &sect;04&ndash;10 and the matrix below. What follows is the setup and back-office side.</p>
+
+    <h3>Manage Accounts</h3>
+    <p>The master list of every account, searchable by name, with a headline count of total accounts, employees and manager-tier accounts. Per account:</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Action</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>Add account</td><td>Name, work email, account type, employment type. Hire-to-Contract may use an outside email; Employee / Intern must use the company domain. The account starts <em>Pending</em> until activated.</td></tr>
+          <tr><td>Set manager</td><td>Assign or change who this person reports to &mdash; this is what gives that manager their team screens.</td></tr>
+          <tr><td>Make admin / Remove admin access</td><td>Grant or revoke the Admin account type. Can&rsquo;t remove the last active admin.</td></tr>
+          <tr><td>Employment type</td><td>Switch between Employee and Intern. Contract is fixed once set.</td></tr>
+          <tr><td>View details</td><td>The full record &mdash; personal, statutory (PAN / Aadhaar / UAN), bank, employee code, custom fields, uploaded documents, and the salary structure &amp; CTC history. An admin can edit any of it directly.</td></tr>
+          <tr><td>Upload / Replace / View document</td><td>Attach a file (offer letter, ID, contract&hellip;) to the account.</td></tr>
+          <tr><td>Timesheet / Leave details</td><td>Jump into that person&rsquo;s timesheet or leave record to view history or log an entry on their behalf.</td></tr>
+          <tr><td>Offer letter</td><td>Draft, preview and download an offer-letter PDF for a candidate.</td></tr>
+          <tr><td>Exit</td><td>Record an exit date + relieving-letter text; a relieving letter PDF is generated. <strong>Reactivate</strong> restores an exited account; <strong>Download letter</strong> re-fetches the relieving letter later.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Project</h3>
+    <p>Projects drive timesheets, attendance and the client-vs-internal distinction.</p>
+    <ul>
+      <li><strong>Create / edit a project</strong> &mdash; name, <strong>type</strong> (Client or Internal), client name (admin-only, never shown to employees), <strong>submission frequency</strong> (weekly or monthly), timezone, working hours, start date and optional end date. Members inherit all of these automatically.</li>
+      <li><strong>Manage members</strong> &mdash; add or remove anyone (admins included), each with their own start date and optional end date on the project. A hint lists people who have logged time against the project but aren&rsquo;t formally on it yet.</li>
+      <li><strong>Deactivate / reactivate</strong> a project.</li>
+      <li><strong>Reports</strong> &mdash; a project-assignment report (who is on what, who is on nothing), per-project employee timesheets, a per-person project history, and a weekly timesheet-submission report.</li>
+    </ul>
+
+    <h3>Report &mdash; the payroll register</h3>
+    <p>A chosen month&rsquo;s <strong>payroll register</strong>: every employee&rsquo;s payslip figures in one table, with a <strong>monthly</strong> or <strong>cumulative</strong> (year-to-date) view, and a separate scope for contract hires. Read-only &mdash; it&rsquo;s assembled from the payslips that have been generated.</p>
+
+    <h3>Manage Leave Policy</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Area</th><th>What an admin controls</th></tr></thead>
+        <tbody>
+          <tr><td>Leave types</td><td>Add or edit a type &mdash; annual allocation, monthly accrual on / off, half-day allowed, max days per request, advance-booking limit, long-request notice rule, document-required threshold, unlimited / unpaid flags, description. Deactivate a type to retire it. Past fiscal years&rsquo; policies stay viewable.</td></tr>
+          <tr><td>Holidays</td><td>Add a single day or a date range (up to 31 days), mark it optional, edit or retire it, and browse by year. Adding a holiday that overlaps approved leave or WFH auto-adjusts those.</td></tr>
+          <tr><td>Company settings</td><td>The <strong>fiscal-year start month</strong> (April by default) &mdash; this decides how leave balances and payroll bucket into years.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Payslips</h3>
+    <p>Per employee, per month:</p>
+    <ul>
+      <li>Set and revise the <strong>salary structure &amp; CTC</strong> &mdash; dated <em>effective from</em>, with full history.</li>
+      <li><strong>Preview</strong> the computed payslip, enter <strong>TDS</strong> and any one-time <strong>bonus</strong>, then <strong>generate</strong> &mdash; a PDF is produced and stored.</li>
+      <li><strong>Email</strong> the employee a link to their payslip, or <strong>download</strong> the PDF.</li>
+      <li>Generate a projected <strong>income-tax computation</strong> (annual, old vs new regime) from the employee&rsquo;s tax declaration.</li>
+      <li>Contract hires get their own <strong>contract-payment</strong> structure and payment PDFs on the same screen.</li>
+    </ul>
+  </section>
+
+  <!-- 12 -->
+  <section id="matrix">
+    <div class="sec-head"><span class="sec-num">12</span><h2>Approvals at a glance</h2></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Request</th><th>Anyone can submit</th><th>Routes to</th><th>Can approve / action</th><th>Auto&#8209;approved</th></tr></thead>
+        <tbody>
+          <tr><td>Leave</td><td>employee · manager · admin</td><td>your manager</td><td>that manager <em>or</em> any admin</td><td class="no">no</td></tr>
+          <tr><td>Leave, logged on behalf</td><td>manager (reports) · admin (anyone)</td><td>&mdash;</td><td>the person logging it</td><td class="yes">yes</td></tr>
+          <tr><td>Timesheet</td><td>employee · manager · admin</td><td>your manager</td><td>that manager <em>or</em> any admin</td><td class="no">no</td></tr>
+          <tr><td>Timesheet, logged on behalf</td><td>manager (reports) · admin (anyone)</td><td>&mdash;</td><td>the person logging it</td><td class="yes">yes</td></tr>
+          <tr><td>WFH</td><td>employee · manager · admin</td><td>admins + manager notified</td><td>the employee&rsquo;s manager <em>or</em> any admin</td><td class="no">no</td></tr>
+          <tr><td>Reimbursement</td><td>employee &middot; manager &middot; admin</td><td>your manager (else admins)</td><td>that manager <em>or</em> any admin</td><td class="no">no</td></tr>
+          <tr><td>Reimbursement, logged on behalf</td><td>manager (reports) &middot; admin (anyone)</td><td>&mdash;</td><td>the person logging it</td><td class="yes">yes</td></tr>
+          <tr><td>Resignation</td><td>employee</td><td>admins (manager notified)</td><td>any admin &mdash; manager is view&#8209;only</td><td class="no">no</td></tr>
+          <tr><td>Attendance</td><td>self</td><td>&mdash;</td><td>no approval; admin can correct any day</td><td class="no">n/a</td></tr>
+          <tr><td>Payslip</td><td>admin generates</td><td>&mdash;</td><td>&mdash;</td><td class="no">n/a</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+  <!-- 13 -->
+  <section id="email">
+    <div class="sec-head"><span class="sec-num">13</span><h2>Where the portal sends email</h2></div>
+    <p>The portal has two channels: the <strong>in-app bell</strong> and <strong>email</strong>. Every event below raises a bell notification <em>and</em> sends an email. Emails go out <em>after</em> the action is saved, so a mail failure never blocks the action itself.</p>
+
+    <h3>Signing in</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td>Someone requests an activation code</td><td>Activate your Employee Portal account</td><td>the person activating</td></tr>
+          <tr><td>Someone picks &ldquo;sign in with a code&rdquo;</td><td>Your Employee Portal login code</td><td>the person signing in</td></tr>
+          <tr><td>Someone starts &ldquo;forgot password&rdquo;</td><td>Reset your Employee Portal password</td><td>the account holder</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="example-note">Creating an account does <strong>not</strong> send a welcome email &mdash; the admin tells the person to go activate, and the activation email is sent when they request the code.</p>
+
+    <h3>Leave</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td>Employee submits a leave request</td><td>Leave request from {name}</td><td>the routed manager</td></tr>
+          <tr><td>&hellip; and that manager is themselves on leave today</td><td>{name}&rsquo;s leave request &ndash; {manager} is on leave</td><td>the manager&rsquo;s own manager (backup)</td></tr>
+          <tr><td>A manager or admin approves / declines a request</td><td>Your leave request was approved / declined</td><td>the employee</td></tr>
+          <tr><td>Employee cancels a still-pending request</td><td>{name} cancelled a leave request</td><td>the routed manager</td></tr>
+          <tr><td>A manager or admin logs leave on someone&rsquo;s behalf</td><td>Your leave request was approved</td><td>the employee</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Timesheets</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td>Employee submits a timesheet</td><td>{name}&rsquo;s timesheet for the week of {date}</td><td>the routed manager <strong>and every active admin</strong></td></tr>
+          <tr><td>A manager or admin approves / declines a timesheet</td><td>Your timesheet was approved / declined</td><td>the employee</td></tr>
+          <tr><td>A manager or admin logs a timesheet on someone&rsquo;s behalf</td><td>A timesheet was logged for you</td><td>the employee</td></tr>
+          <tr><td>Month-end: a client-project timesheet is still unsubmitted (checked daily in the last week of the month)</td><td>Reminder: {project} timesheet not submitted</td><td>the employee</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Work from home</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td>Employee submits a WFH request</td><td>WFH request from {name}</td><td>every active admin + the employee&rsquo;s manager</td></tr>
+          <tr><td>A manager or admin approves / rejects / revokes it</td><td>Your WFH request was approved / rejected / revoked</td><td>the employee, plus their manager (admin decided) or every admin (manager decided)</td></tr>
+          <tr><td>Employee withdraws a pending WFH request</td><td>{name} withdrew a WFH request</td><td>every active admin + the employee&rsquo;s manager</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Reimbursements</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td>Someone submits a claim</td><td>Reimbursement claim from {name}</td><td>the routed manager + every active admin</td></tr>
+          <tr><td>A manager or admin approves / rejects a claim</td><td>Your reimbursement claim was approved / rejected</td><td>the claimant</td></tr>
+          <tr><td>Someone cancels a pending claim</td><td>{name} cancelled a reimbursement claim</td><td>the routed manager + every active admin</td></tr>
+          <tr><td>A manager or admin logs a claim on someone&rsquo;s behalf</td><td>A reimbursement claim was logged for you</td><td>the claimant</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Resignation &amp; exit</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td>Employee submits a resignation</td><td>Resignation submitted by {name}</td><td>every active admin</td></tr>
+          <tr><td>Admin accepts / rejects a resignation</td><td>Your resignation was accepted / rejected</td><td>the employee</td></tr>
+          <tr><td>Employee withdraws a resignation</td><td>{name} withdrew their resignation</td><td>every active admin + the employee&rsquo;s manager</td></tr>
+          <tr><td>Admin records an exit</td><td>You have exited / {name} has exited the company</td><td>the employee, their manager, and every active admin</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Payroll &amp; account setup</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td>An admin clicks &ldquo;Send payslip&rdquo;</td><td>Your payslip &ndash; {month}</td><td>the employee (a download link, not an attachment)</td></tr>
+          <tr><td>An admin updates someone&rsquo;s salary structure / CTC</td><td>Your salary structure has been updated</td><td>the employee</td></tr>
+          <tr><td>An admin grants another person admin access</td><td>You&rsquo;ve been made an admin</td><td>that person</td></tr>
+          <tr><td>An admin removes another person&rsquo;s admin access</td><td>Your admin access has been removed</td><td>that person</td></tr>
+          <tr><td>Someone edits their Personal / Statutory / Bank section</td><td>Your {section} was updated &nbsp;·&nbsp; {name} updated their {section}</td><td>the employee (confirmation) <strong>and</strong> every admin (FYI)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Leave policy &amp; projects &mdash; admins + managers only</h3>
+    <p>These changes still raise a company-wide bell notification for everyone, but the <strong>email goes only to admins and manager-tier accounts</strong>, so a routine tweak doesn&rsquo;t mail the whole company.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td>A leave type or holiday is added, edited or retired</td><td>Leave policy updated</td><td>every admin + every manager</td></tr>
+          <tr><td>A project is created, edited, has members changed, or is deactivated / reactivated</td><td>Project list updated</td><td>every admin + every manager</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Automatic &mdash; runs once a day, around 9&nbsp;am</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>What triggers it</th><th>Subject</th><th>Goes to</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="2">It&rsquo;s someone&rsquo;s birthday</td><td>Happy Birthday, {name}!</td><td>the person</td></tr>
+          <tr><td>Today is {name}&rsquo;s birthday</td><td>their manager &mdash; and, if the person is an admin, every admin</td></tr>
+          <tr><td rowspan="2">It&rsquo;s someone&rsquo;s work anniversary</td><td>Happy {n} work anniversary, {name}!</td><td>the person</td></tr>
+          <tr><td>{name} completes {n} today</td><td>their manager</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="call key">
+      <span class="tag">Bell only &mdash; no email</span>
+      <p>Only lightweight in-app cues stay email-free: the dashboard <strong>&ldquo;needs attention&rdquo;</strong> strip, the <strong>birthday / anniversary celebration</strong> pop-ups, and the account-approval notices for any self-registration flow. Every substantive event above sends both.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>Aakrin Consulting Services &mdash; Employee Portal. Internal reference; behaviour described reflects the current build and may change as the product evolves.</p>
+  </footer>
+
+</div>

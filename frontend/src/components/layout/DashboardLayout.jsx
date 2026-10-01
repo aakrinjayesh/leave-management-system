@@ -1,23 +1,27 @@
+import { useState } from "react";
 import {
   ArrowLeft,
   LayoutDashboard,
   ListChecks,
   LogOut,
   Users,
-  CalendarDays,
   ShieldCheck,
-  UserCog,
   Clock,
   CalendarRange,
   FileText,
   BarChart3,
+  Table2,
   FileWarning,
   Home,
+  CalendarCheck,
+  Receipt,
+  ReceiptIndianRupee,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useBackNavigation } from "../../hooks/useBackNavigation";
 import NotificationBell from "./NotificationBell";
+import ProfileContent from "../../pages/profile/ProfileContent";
 import aakrinLogo from "../../assets/aakrin-logo.png";
 import { COPYRIGHT_TEXT } from "../../utils/copyright";
 import "./DashboardLayout.css";
@@ -26,6 +30,13 @@ const ROLE_LABELS = {
   MANAGER: "Manager",
   ADMIN: "Admin",
   EMPLOYEE: "Employee",
+};
+
+// Employment type is a label that overrides the role label in the top-right
+// corner (interns/contractors are still EMPLOYEE userType under the hood).
+const EMPLOYMENT_TYPE_LABELS = {
+  INTERN: "Intern",
+  CONTRACT: "Contract",
 };
 
 // Nav is driven by isManager (derived: does anyone currently report to this
@@ -41,32 +52,67 @@ const buildNavItems = (user) => {
     icon: LayoutDashboard,
   });
 
+  if (isAdmin) {
+    items.push({
+      to: "/admin/leave-requests",
+      label: "All Leave Requests",
+      icon: ListChecks,
+    });
+    items.push({
+      to: "/admin/timesheets",
+      label: "All Timesheets",
+      icon: Clock,
+    });
+    items.push({
+      to: "/admin/attendance",
+      label: "All Attendance",
+      icon: CalendarCheck,
+    });
+    items.push({
+      to: "/admin/wfh-requests",
+      label: "All WFH Requests",
+      icon: Home,
+    });
+    items.push({
+      to: "/admin/resignations",
+      label: "All Resignations",
+      icon: FileWarning,
+    });
+    items.push({
+      to: "/admin/reimbursements",
+      label: "All Reimbursements",
+      icon: Receipt,
+    });
+  }
+
   if (!isAdmin) {
     items.push({
       to: "/employee/leave-requests",
       label: "My Leave Requests",
       icon: ListChecks,
     });
-    items.push({
-      to: "/employee/calendar",
-      label: "My Calendar",
-      icon: CalendarDays,
-    });
     items.push({ to: "/timesheet", label: "Timesheet", icon: Clock });
     items.push({ to: "/wfh", label: "WFH", icon: Home });
+    items.push({ to: "/attendance", label: "Attendance", icon: CalendarCheck });
+    items.push({ to: "/reimbursements", label: "Reimbursements", icon: Receipt });
   }
 
-  if (user?.isManager) {
+  if (user?.isManager && !isAdmin) {
+    // Admin doesn't get the manager tabs at all: the team roster + team-scoped
+    // Leave Requests / Calendar / Timesheets are replaced by the company-wide
+    // "All ..." tabs added right after Dashboard above, and Team WFH / Team
+    // Resignations were view-only mirrors of the admin's own WFH / Resignations
+    // pages (also promoted up top).
     items.push({ to: "/manager/employees", label: "Employees", icon: Users });
+    items.push({
+      to: "/manager/attendance",
+      label: "Team Attendance",
+      icon: CalendarCheck,
+    });
     items.push({
       to: "/manager/leave-requests",
       label: "Leave Requests",
       icon: ListChecks,
-    });
-    items.push({
-      to: "/manager/calendar",
-      label: "Team Calendar",
-      icon: CalendarDays,
     });
     items.push({
       to: "/manager/timesheets",
@@ -83,6 +129,11 @@ const buildNavItems = (user) => {
       label: "Team WFH",
       icon: Home,
     });
+    items.push({
+      to: "/manager/reimbursements",
+      label: "Team Reimbursements",
+      icon: Receipt,
+    });
   }
 
   if (isAdmin) {
@@ -97,23 +148,22 @@ const buildNavItems = (user) => {
       icon: BarChart3,
     });
     items.push({
+      to: "/admin/invoices",
+      label: "Invoice",
+      icon: ReceiptIndianRupee,
+    });
+    items.push({
       to: "/admin/manage-leaves",
       label: "Manage Leave Policy",
       icon: CalendarRange,
     });
     items.push({ to: "/admin/payslips", label: "Payslips", icon: FileText });
     items.push({
-      to: "/admin/resignations",
-      label: "Resignations",
-      icon: FileWarning,
-    });
-    items.push({
-      to: "/admin/wfh-requests",
-      label: "WFH Requests",
-      icon: Home,
+      to: "/admin/report",
+      label: "Report",
+      icon: Table2,
     });
   }
-  items.push({ to: "/profile", label: "Profile", icon: UserCog });
 
   return items;
 };
@@ -122,10 +172,12 @@ export default function DashboardLayout({ title, children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { canGoBack, goBack } = useBackNavigation();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const initials =
     `${user?.firstName?.[0] || ""}${user?.lastName?.[0] || ""}`.toUpperCase();
-  const roleLabel = ROLE_LABELS[user?.userType] || "Employee";
+  const roleLabel =
+    EMPLOYMENT_TYPE_LABELS[user?.employmentType] || ROLE_LABELS[user?.userType] || "Employee";
   const navItems = buildNavItems(user);
 
   const handleLogout = async () => {
@@ -179,7 +231,7 @@ export default function DashboardLayout({ title, children }) {
             >
               <ArrowLeft size={18} />
             </button>
-            <span className="dashboard-topbar-title">{title}</span>
+            <span className="dashboard-topbar-title">{isProfileOpen ? "Profile" : title}</span>
           </div>
           <div className="dashboard-user">
             <NotificationBell />
@@ -189,7 +241,15 @@ export default function DashboardLayout({ title, children }) {
               </div>
               <div className="dashboard-user-role">{roleLabel}</div>
             </div>
-            <span className="dashboard-avatar">{initials || "?"}</span>
+            <button
+              type="button"
+              className="dashboard-avatar"
+              onClick={() => setIsProfileOpen(true)}
+              aria-label="Open profile"
+              title="Profile"
+            >
+              {initials || "?"}
+            </button>
             <button
               className="dashboard-logout-btn"
               onClick={handleLogout}
@@ -199,7 +259,9 @@ export default function DashboardLayout({ title, children }) {
             </button>
           </div>
         </header>
-        <main className="dashboard-content">{children}</main>
+        <main className="dashboard-content">
+          {isProfileOpen ? <ProfileContent onClose={() => setIsProfileOpen(false)} /> : children}
+        </main>
         <footer className="dashboard-footer">{COPYRIGHT_TEXT}</footer>
       </div>
     </div>

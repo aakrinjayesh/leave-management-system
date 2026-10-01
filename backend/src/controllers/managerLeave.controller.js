@@ -6,9 +6,8 @@ const asyncHandler = require("../utils/asyncHandler");
 const leaveCalendarService = require("../services/leaveCalendar.service");
 const leaveBalanceService = require("../services/leaveBalance.service");
 const companySettingsService = require("../services/companySettings.service");
-const { sendLeaveDecisionEmail } = require("../utils/email.util");
-const notificationService = require("../services/notification.service");
-const { formatDateShort } = require("../utils/formatDate.util");
+const leaveLogService = require("../services/leaveLog.service");
+const leaveDecisionService = require("../services/leaveDecision.service");
 const { isS3Url } = require("../utils/s3.util");
 const { UPLOAD_DIR } = require("../config/upload");
 
@@ -43,6 +42,16 @@ const listEmployees = asyncHandler(async (req, res) => {
   const fiscalYear = await companySettingsService.getCurrentFiscalYear();
   const managerId = req.user.id;
 
+  // Full yearly entitlement across every countable leave type - used as the
+  // "remaining" fallback for an employee who has no balance rows yet (pending
+  // account, or just never applied for leave), so the column reads the real
+  // allocation instead of a misleading 0.
+  const activePolicies = await prisma.leavePolicy.findMany({
+    where: { isActive: true, isUnlimited: false },
+    select: { allocatedLeaves: true },
+  });
+  const fullEntitlement = activePolicies.reduce((sum, p) => sum + p.allocatedLeaves, 0);
+
   const employees = await prisma.user.findMany({
     where: { managerId },
     orderBy: { firstName: "asc" },
@@ -60,8 +69,11 @@ const listEmployees = asyncHandler(async (req, res) => {
   });
 
   const result = employees.map((employee) => {
+    const hasBalances = employee.leaveBalances.length > 0;
     const totalUsed = employee.leaveBalances.reduce((sum, b) => sum + b.usedLeaves, 0);
-    const totalRemaining = employee.leaveBalances.reduce((sum, b) => sum + b.remainingLeaves, 0);
+    const totalRemaining = hasBalances
+      ? employee.leaveBalances.reduce((sum, b) => sum + b.remainingLeaves, 0)
+      : fullEntitlement;
     return {
       id: employee.id,
       employeeCode: employee.employeeCode,
@@ -154,105 +166,16 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
     throw ApiError.notFound("Employee not found.");
   }
 
-  const leavePolicy = await prisma.leavePolicy.findFirst({ where: { id: leavePolicyId, isActive: true } });
-  if (!leavePolicy) {
-    throw ApiError.notFound("This leave type is not available.");
-  }
-
-  if (isHalfDay && !leavePolicy.allowHalfDay) {
-    throw ApiError.badRequest(`${leavePolicy.leaveName} does not support half-day requests.`);
-  }
-
-  const requestStart = startOfUtcDay(startDate);
-  const requestEnd = startOfUtcDay(endDate);
-
-  // Sandwich rule (weekend between two leave-covered working days in the
-  // same request also gets charged) only applies to Casual Leave.
-  const applySandwichRule = leavePolicy.leaveName === "Casual Leave";
-  const { totalDays, workingDates } = await leaveCalendarService.computeWorkingDays({
-    startDate: requestStart,
-    endDate: requestEnd,
+  const { leaveRequests, wasSplit, leavePolicy } = await leaveLogService.logLeaveForEmployee({
+    employee,
+    actor: req.user,
+    leavePolicyId,
+    startDate,
+    endDate,
     isHalfDay,
-    applySandwichRule,
+    reason,
   });
 
-  const overlapping = await prisma.leaveRequest.findFirst({
-    where: {
-      userId: employeeId,
-      status: { in: ["PENDING", "APPROVED"] },
-      startDate: { lte: requestEnd },
-      endDate: { gte: requestStart },
-    },
-  });
-  if (overlapping) {
-    throw ApiError.badRequest(`${employee.firstName} already has a leave request that overlaps these dates.`);
-  }
-
-  const requestFiscalYear = await companySettingsService.getFiscalYearForDate(requestStart);
-  const balance = await leaveBalanceService.getOrCreateBalance(employeeId, leavePolicy, requestFiscalYear);
-
-  // Default: the whole thing under its own policy, unchanged. Only
-  // recomputed below if it doesn't fit the remaining balance.
-  let requestSpecs = [{ leavePolicyId: leavePolicy.id, startDate: requestStart, endDate: requestEnd, totalDays }];
-  let unpaidPolicy = null;
-  let unpaidBalance = null;
-
-  if (!leavePolicy.isUnlimited && totalDays > balance.remainingLeaves) {
-    // Non-accrual capped policies keep the old hard block - only Sick/
-    // Casual/Earned (accrual policies) auto-split the overage into Unpaid
-    // Leave instead of rejecting the request outright.
-    if (leavePolicy.monthlyAccrualDays == null) {
-      throw ApiError.badRequest(
-        `${employee.firstName} only has ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining.`
-      );
-    }
-
-    unpaidPolicy = await prisma.leavePolicy.findFirst({ where: { isUnpaid: true, isActive: true } });
-    if (!unpaidPolicy) {
-      throw ApiError.badRequest(
-        `${employee.firstName} only has ${balance.remainingLeaves} day(s) of ${leavePolicy.leaveName} remaining, and no Unpaid Leave policy is set up to cover the rest.`
-      );
-    }
-    unpaidBalance = await leaveBalanceService.getOrCreateBalance(employeeId, unpaidPolicy, requestFiscalYear);
-
-    requestSpecs = leaveBalanceService.splitForOverage({
-      leavePolicy,
-      unpaidPolicyId: unpaidPolicy.id,
-      remainingLeaves: balance.remainingLeaves,
-      workingDates,
-      requestStart,
-      requestEnd,
-      isHalfDay,
-      totalDays,
-    });
-  }
-
-  const leaveRequests = [];
-  for (const spec of requestSpecs) {
-    const specBalance = spec.leavePolicyId === leavePolicy.id ? balance : unpaidBalance;
-    await leaveBalanceService.applyUsage(specBalance.id, spec.totalDays);
-
-    const created = await prisma.leaveRequest.create({
-      data: {
-        userId: employeeId,
-        leavePolicyId: spec.leavePolicyId,
-        routedToId: req.user.id,
-        approvedById: req.user.id,
-        startDate: spec.startDate,
-        endDate: spec.endDate,
-        totalDays: spec.totalDays,
-        weekendsCountAsLeave: applySandwichRule,
-        reason,
-        status: "APPROVED",
-        approvedAt: new Date(),
-        createdByManager: true,
-      },
-      include: { leavePolicy: true },
-    });
-    leaveRequests.push(created);
-  }
-
-  const wasSplit = leaveRequests.length > 1;
   new ApiResponse(
     201,
     wasSplit
@@ -261,24 +184,7 @@ const createLeaveForEmployee = asyncHandler(async (req, res) => {
     { leaveRequests }
   ).send(res);
 
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  for (const leaveRequest of leaveRequests) {
-    try {
-      await sendLeaveDecisionEmail({
-        to: employee.email,
-        employeeFirstName: employee.firstName,
-        leaveName: leaveRequest.leavePolicy.leaveName,
-        startDate: leaveRequest.startDate,
-        endDate: leaveRequest.endDate,
-        totalDays: leaveRequest.totalDays,
-        status: "APPROVED",
-        managerName: `${req.user.firstName} ${req.user.lastName}`,
-        remarks: `Logged directly by ${req.user.firstName} ${req.user.lastName} on your behalf.`,
-      });
-    } catch (err) {
-      console.error("Failed to send manager-logged leave email:", err);
-    }
-  }
+  await leaveLogService.sendLoggedLeaveEmails({ leaveRequests, employee, actor: req.user });
 });
 
 const listTeamLeaveRequests = asyncHandler(async (req, res) => {
@@ -339,124 +245,31 @@ const getTeamLeaveRequestAttachment = asyncHandler(async (req, res) => {
   });
 });
 
-const approveLeaveRequest = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { remarks } = req.body;
+const decideLeaveRequest = (decision) =>
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { remarks } = req.body;
 
-  const leaveRequest = await getRoutedLeaveRequestOr404(id, req.user.id);
-  if (leaveRequest.status !== "PENDING") {
-    throw ApiError.badRequest("This request has already been actioned.");
-  }
+    const leaveRequest = await getRoutedLeaveRequestOr404(id, req.user.id);
 
-  const requestFiscalYear = await companySettingsService.getFiscalYearForDate(leaveRequest.startDate);
-  const balance = await leaveBalanceService.getOrCreateBalance(
-    leaveRequest.userId,
-    leaveRequest.leavePolicy,
-    requestFiscalYear
-  );
-
-  if (!leaveRequest.leavePolicy.isUnlimited && leaveRequest.totalDays > balance.remainingLeaves) {
-    throw ApiError.badRequest(
-      `${leaveRequest.user.firstName} only has ${balance.remainingLeaves} day(s) of ${leaveRequest.leavePolicy.leaveName} remaining.`
-    );
-  }
-
-  await leaveBalanceService.applyUsage(balance.id, leaveRequest.totalDays);
-
-  const updated = await prisma.leaveRequest.update({
-    where: { id },
-    data: {
-      status: "APPROVED",
-      approvedById: req.user.id,
-      approvedAt: new Date(),
-      managerRemarks: remarks || null,
-    },
-  });
-
-  new ApiResponse(200, "Leave request approved.", { leaveRequest: updated }).send(res);
-
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendLeaveDecisionEmail({
-      to: leaveRequest.user.email,
-      employeeFirstName: leaveRequest.user.firstName,
-      leaveName: leaveRequest.leavePolicy.leaveName,
-      startDate: leaveRequest.startDate,
-      endDate: leaveRequest.endDate,
-      totalDays: leaveRequest.totalDays,
-      status: "APPROVED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
-      remarks: remarks || null,
-    });
-  } catch (err) {
-    console.error("Failed to send leave approved email:", err);
-  }
-
-  try {
-    await notificationService.notify({
-      userId: leaveRequest.user.id,
-      type: notificationService.NOTIFICATION_TYPES.LEAVE_DECIDED,
-      title: "Leave request approved",
-      message: `Your ${leaveRequest.leavePolicy.leaveName} request (${formatDateShort(
-        leaveRequest.startDate
-      )} - ${formatDateShort(leaveRequest.endDate)}) was approved by ${req.user.firstName} ${req.user.lastName}.`,
-    });
-  } catch (err) {
-    console.error("Failed to create leave approved notification:", err);
-  }
-});
-
-const rejectLeaveRequest = asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const { remarks } = req.body;
-
-  const leaveRequest = await getRoutedLeaveRequestOr404(id, req.user.id);
-  if (leaveRequest.status !== "PENDING") {
-    throw ApiError.badRequest("This request has already been actioned.");
-  }
-
-  const updated = await prisma.leaveRequest.update({
-    where: { id },
-    data: {
-      status: "REJECTED",
-      approvedById: req.user.id,
-      rejectedAt: new Date(),
-      managerRemarks: remarks,
-    },
-  });
-
-  new ApiResponse(200, "Leave request rejected.", { leaveRequest: updated }).send(res);
-
-  // Sent after the response so the manager doesn't wait on the email round-trip.
-  try {
-    await sendLeaveDecisionEmail({
-      to: leaveRequest.user.email,
-      employeeFirstName: leaveRequest.user.firstName,
-      leaveName: leaveRequest.leavePolicy.leaveName,
-      startDate: leaveRequest.startDate,
-      endDate: leaveRequest.endDate,
-      totalDays: leaveRequest.totalDays,
-      status: "REJECTED",
-      managerName: `${req.user.firstName} ${req.user.lastName}`,
+    const updated = await leaveDecisionService.applyDecision({
+      leaveRequest,
+      actor: req.user,
+      decision,
       remarks,
     });
-  } catch (err) {
-    console.error("Failed to send leave rejected email:", err);
-  }
 
-  try {
-    await notificationService.notify({
-      userId: leaveRequest.user.id,
-      type: notificationService.NOTIFICATION_TYPES.LEAVE_DECIDED,
-      title: "Leave request rejected",
-      message: `Your ${leaveRequest.leavePolicy.leaveName} request (${formatDateShort(
-        leaveRequest.startDate
-      )} - ${formatDateShort(leaveRequest.endDate)}) was rejected by ${req.user.firstName} ${req.user.lastName}.`,
-    });
-  } catch (err) {
-    console.error("Failed to create leave rejected notification:", err);
-  }
-});
+    new ApiResponse(
+      200,
+      decision === "APPROVED" ? "Leave request approved." : "Leave request rejected.",
+      { leaveRequest: updated }
+    ).send(res);
+
+    await leaveDecisionService.sendDecisionSideEffects({ leaveRequest, actor: req.user, decision, remarks });
+  });
+
+const approveLeaveRequest = decideLeaveRequest("APPROVED");
+const rejectLeaveRequest = decideLeaveRequest("REJECTED");
 
 const getTeamCalendar = asyncHandler(async (req, res) => {
   const year = Number(req.query.year) || new Date().getFullYear();

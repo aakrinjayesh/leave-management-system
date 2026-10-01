@@ -9,6 +9,9 @@ export const createUser = (payload) => unwrap(axiosClient.post("/admin/users", p
 export const updateUserManager = (id, managerId) =>
   unwrap(axiosClient.patch(`/admin/users/${id}/manager`, { managerId }));
 
+export const updateEmploymentType = (id, employmentType) =>
+  unwrap(axiosClient.patch(`/admin/users/${id}/employment-type`, { employmentType }));
+
 export const setAdminAccess = (id, grant) => unwrap(axiosClient.patch(`/admin/users/${id}/admin-access`, { grant }));
 
 export const reactivateUser = (id) => unwrap(axiosClient.patch(`/admin/users/${id}/reactivate`));
@@ -46,7 +49,41 @@ export const exportPayrollTimesheet = (date) =>
 export const downloadTimesheetSubmissionAttachment = (submissionId) =>
   axiosClient.get(`/admin/timesheet-submissions/${submissionId}/attachment`, { responseType: "blob" });
 
+// --- Log a timesheet on any employee's behalf ---
+
+export const getTimesheetLogPeriod = (userId, projectId, date) =>
+  unwrap(
+    axiosClient.get(`/admin/users/${userId}/timesheet/log-period`, {
+      params: { ...(projectId ? { projectId } : {}), ...(date ? { date } : {}) },
+    })
+  );
+
+export const uploadTimesheetLogAttachment = (userId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return unwrap(axiosClient.post(`/admin/users/${userId}/timesheet/log-attachment`, formData));
+};
+
+export const logTimesheetForEmployee = (userId, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/timesheet/log`, payload));
+
+export const getEmployeeTimesheetSummary = () => unwrap(axiosClient.get("/admin/timesheet-summary"));
+
+export const approveTimesheetSubmission = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/timesheets/${id}/approve`, remarks ? { remarks } : {}));
+
+export const rejectTimesheetSubmission = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/timesheets/${id}/reject`, { remarks }));
+
+export const getCompanyCalendar = (year, month) =>
+  unwrap(axiosClient.get("/admin/calendar", { params: { year, month } }));
+
 export const getProjectAssignmentReport = () => unwrap(axiosClient.get("/admin/reports/project-assignment"));
+
+// Consolidated payroll register. scope: "employees" | "contract",
+// month: "YYYY-MM", mode: "monthly" | "cumulative".
+export const getPayrollReport = (scope, month, mode) =>
+  unwrap(axiosClient.get("/admin/reports/payroll", { params: { scope, month, mode } }));
 
 export const getProjectHistory = (id) => unwrap(axiosClient.get(`/admin/users/${id}/project-history`));
 
@@ -95,11 +132,22 @@ export const reactivateHoliday = (id) => unwrap(axiosClient.patch(`/admin/holida
 
 export const getUserLeaveDetail = (id) => unwrap(axiosClient.get(`/admin/users/${id}/leaves`));
 
+export const logLeaveForEmployee = (id, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${id}/leaves`, payload));
+
 export const getUserCalendar = (id, year, month) =>
   unwrap(axiosClient.get(`/admin/users/${id}/calendar`, { params: { year, month } }));
 
 export const downloadLeaveAttachment = (requestId) =>
   axiosClient.get(`/admin/leave-requests/${requestId}/attachment`, { responseType: "blob" }).then((res) => res.data);
+
+export const getEmployeeLeaveSummary = () => unwrap(axiosClient.get("/admin/leave-summary"));
+
+export const approveLeaveRequest = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/leave-requests/${id}/approve`, remarks ? { remarks } : {}));
+
+export const rejectLeaveRequest = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/leave-requests/${id}/reject`, { remarks }));
 
 export const getUserDetails = (id) => unwrap(axiosClient.get(`/admin/users/${id}/details`));
 
@@ -111,6 +159,10 @@ export const getSalaryStructureHistory = (userId) =>
 export const recordSalaryStructure = (userId, payload) =>
   unwrap(axiosClient.post(`/admin/users/${userId}/salary-structure-history`, payload));
 
+// In-place correction of the latest structure entry - no new history row.
+export const updateLatestSalaryStructure = (userId, payload) =>
+  unwrap(axiosClient.patch(`/admin/users/${userId}/salary-structure-history/latest`, payload));
+
 export const previewPayslip = (userId, year, month, tds, annualBonusPay) =>
   unwrap(axiosClient.get(`/admin/users/${userId}/payslips/preview`, { params: { year, month, tds, annualBonusPay } }));
 
@@ -118,8 +170,34 @@ export const generatePayslip = (userId, payload) => unwrap(axiosClient.post(`/ad
 
 export const listPayslips = (userId) => unwrap(axiosClient.get(`/admin/users/${userId}/payslips`));
 
+export const emailPayslip = (userId, payslipId) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/payslips/${payslipId}/email`));
+
 export const downloadPayslipPdf = (payslipId) =>
   axiosClient.get(`/admin/payslips/${payslipId}/pdf`, { responseType: "blob" });
+
+// ---------- Contract-hire payment (employmentType = CONTRACT only) ----------
+
+export const getContractPaymentStructureHistory = (userId) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/contract-payment-structure-history`));
+
+export const recordContractPaymentStructure = (userId, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/contract-payment-structure-history`, payload));
+
+export const updateLatestContractPaymentStructure = (userId, payload) =>
+  unwrap(axiosClient.patch(`/admin/users/${userId}/contract-payment-structure-history/latest`, payload));
+
+export const previewContractPayment = (userId, year, month) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/contract-payments/preview`, { params: { year, month } }));
+
+export const generateContractPayment = (userId, payload) =>
+  unwrap(axiosClient.post(`/admin/users/${userId}/contract-payments`, payload));
+
+export const listContractPayments = (userId) =>
+  unwrap(axiosClient.get(`/admin/users/${userId}/contract-payments`));
+
+export const downloadContractPaymentPdf = (paymentId) =>
+  axiosClient.get(`/admin/contract-payments/${paymentId}/pdf`, { responseType: "blob" });
 
 export const getCompanySettings = () => unwrap(axiosClient.get("/admin/company-settings"));
 
@@ -155,6 +233,16 @@ export const deleteUserDocument = (userId, type) =>
 export const downloadUserDocument = (userId, type) =>
   axiosClient.get(`/admin/users/${userId}/documents/${type}`, { responseType: "blob" }).then((res) => res.data);
 
+// ---------- Project client documents (GST/PAN/MSME/SOW/agreement) ----------
+// Generic - no project id needed, so the same call works while filling in a
+// brand-new project's form (not saved yet) or editing an existing one.
+// Returns the file's permanent S3 URL to store on the project record.
+export const uploadProjectDocument = (type, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return unwrap(axiosClient.post(`/admin/projects/documents/${type}`, formData));
+};
+
 // ---------- Custom fields ----------
 
 export const listCustomFields = (userId) => unwrap(axiosClient.get(`/admin/users/${userId}/custom-fields`));
@@ -188,6 +276,34 @@ export const acceptResignation = (id) => unwrap(axiosClient.patch(`/admin/resign
 
 export const rejectResignation = (id) => unwrap(axiosClient.patch(`/admin/resignations/${id}/reject`));
 
+// ---------- Invoices ----------
+
+export const listInvoices = () => unwrap(axiosClient.get("/admin/invoices"));
+
+export const createInvoice = (payload) => unwrap(axiosClient.post("/admin/invoices", payload));
+
+// Renders the invoice PDF from whatever's currently in the form, without
+// saving anything - lets admin check the watermarked PDF before committing.
+export const previewInvoicePdf = (payload) =>
+  axiosClient.post("/admin/invoices/preview", payload, { responseType: "blob" });
+
+// Downloads the saved document - a .pdf or .docx depending on the format
+// admin picked when they saved it.
+export const downloadInvoiceDocument = (invoiceId) =>
+  axiosClient.get(`/admin/invoices/${invoiceId}/document`, { responseType: "blob" });
+
+export const deleteInvoice = (invoiceId) => unwrap(axiosClient.delete(`/admin/invoices/${invoiceId}`));
+
+// Authorized-signatory signature - a single company-wide image reused on
+// every generated invoice PDF, not per-invoice data.
+export const uploadInvoiceSignature = (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return unwrap(axiosClient.post("/admin/invoices/signature", formData));
+};
+
+export const removeInvoiceSignature = () => unwrap(axiosClient.delete("/admin/invoices/signature"));
+
 export const listWfhRequests = (status) =>
   unwrap(axiosClient.get("/admin/wfh-requests", { params: status ? { status } : {} }));
 
@@ -195,3 +311,6 @@ export const approveWfhRequest = (id) => unwrap(axiosClient.patch(`/admin/wfh-re
 
 export const rejectWfhRequest = (id, remarks) =>
   unwrap(axiosClient.patch(`/admin/wfh-requests/${id}/reject`, { remarks }));
+
+export const revokeWfhRequest = (id, remarks) =>
+  unwrap(axiosClient.patch(`/admin/wfh-requests/${id}/revoke`, remarks ? { remarks } : {}));

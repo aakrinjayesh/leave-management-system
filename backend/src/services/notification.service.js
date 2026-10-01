@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const notificationStream = require("./notificationStream.service");
 
 // Plain strings, not a Prisma enum (matches how the Notification model
 // itself stores `type` as a String) - keeps this the single source of truth
@@ -25,15 +26,57 @@ const NOTIFICATION_TYPES = {
   TIMESHEET_MONTH_END_REMINDER: "TIMESHEET_MONTH_END_REMINDER",
   WFH_SUBMITTED: "WFH_SUBMITTED",
   WFH_DECIDED: "WFH_DECIDED",
+  PROFILE_CHANGE_REQUESTED: "PROFILE_CHANGE_REQUESTED",
+  PROFILE_CHANGE_DECIDED: "PROFILE_CHANGE_DECIDED",
+  REIMBURSEMENT_SUBMITTED: "REIMBURSEMENT_SUBMITTED",
+  REIMBURSEMENT_DECIDED: "REIMBURSEMENT_DECIDED",
+  REIMBURSEMENT_CANCELLED: "REIMBURSEMENT_CANCELLED",
 };
 
-const notify = ({ userId, type, title, message }) => prisma.notification.create({ data: { userId, type, title, message } });
+// Wakes up any open SSE connection(s) that recipient has (see
+// notificationStream.service.js) right after the row(s) are safely written -
+// fire-and-forget, never throws, never blocks/affects the notification
+// itself even if every connection write fails.
+const notify = async ({ userId, type, title, message, link = null }) => {
+  const notification = await prisma.notification.create({ data: { userId, type, title, message, link } });
+  notificationStream.pushToUser(userId);
+  return notification;
+};
 
 // Fans the same notification out to many recipients at once (e.g. a
 // company-wide broadcast) - skips the query entirely for an empty list.
-const notifyMany = (userIds, { type, title, message }) => {
+const notifyMany = async (userIds, { type, title, message, link = null }) => {
   if (!userIds.length) return Promise.resolve();
-  return prisma.notification.createMany({ data: userIds.map((userId) => ({ userId, type, title, message })) });
+  const result = await prisma.notification.createMany({
+    data: userIds.map((userId) => ({ userId, type, title, message, link })),
+  });
+  for (const userId of userIds) {
+    notificationStream.pushToUser(userId);
+  }
+  return result;
+};
+
+// Every active admin, plus every active account that currently has at least
+// one direct report (i.e. is a "manager" - derived, not a userType). Full
+// rows, so callers can email them. Used for company-wide-but-not-everyone
+// email notices (currently: project changes) where mailing the whole company
+// would be too noisy but approvers still need to hear about it. Leave
+// policy/holiday changes used to be scoped this way too, but now mail
+// everyone (see adminLeave.controller.js's notifyAllOfPolicyChange).
+const getAdminAndManagerRecipients = async () => {
+  const managerIdRows = await prisma.user.findMany({
+    where: { managerId: { not: null } },
+    select: { managerId: true },
+    distinct: ["managerId"],
+  });
+  const managerIds = managerIdRows.map((r) => r.managerId);
+
+  return prisma.user.findMany({
+    where: {
+      status: "ACTIVE",
+      OR: [{ userType: "ADMIN" }, { id: { in: managerIds } }],
+    },
+  });
 };
 
 const listForUser = (userId, limit = 30) =>
@@ -47,4 +90,13 @@ const markAsRead = (userId, id) =>
 const markAllAsRead = (userId) =>
   prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true, readAt: new Date() } });
 
-module.exports = { NOTIFICATION_TYPES, notify, notifyMany, listForUser, countUnread, markAsRead, markAllAsRead };
+module.exports = {
+  NOTIFICATION_TYPES,
+  notify,
+  notifyMany,
+  getAdminAndManagerRecipients,
+  listForUser,
+  countUnread,
+  markAsRead,
+  markAllAsRead,
+};

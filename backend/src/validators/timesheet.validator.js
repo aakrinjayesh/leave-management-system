@@ -11,11 +11,35 @@ const saveEntrySchema = z.object({
 
 const submitWeekSchema = z.object({
   weekStartDate: z.coerce.date({ message: "Please choose a valid week." }),
-  attachmentOriginalName: z.string().min(1, "Please upload this week's Excel sheet before submitting."),
-  attachmentStoredName: z.string().min(1, "Please upload this week's Excel sheet before submitting."),
+  // The Excel sheet is only mandatory for CLIENT projects - that "is it
+  // required?" check lives in the submitWeek controller, where the project's
+  // type is known. Here the fields are just optional-but-non-empty-if-present.
+  attachmentOriginalName: z.string().min(1).optional(),
+  attachmentStoredName: z.string().min(1).optional(),
   // projectAssigned isn't taken from the client - it's derived from the
   // chosen project's own admin-set type (see submitWeek controller).
   projectId: z.coerce.number().int().positive({ message: "Please choose which project this timesheet is for." }),
+});
+
+// Manager/admin logging a whole period's day-by-day hours on an employee's
+// behalf, then submitting it auto-approved. `days` carries every date in the
+// grid (0-hour days included so drafts can be cleared).
+const logTimesheetSchema = z.object({
+  projectId: z.coerce.number().int().positive({ message: "Please choose which project this timesheet is for." }),
+  weekStartDate: z.coerce.date({ message: "Please choose a valid period." }),
+  days: z
+    .array(
+      z.object({
+        date: z.coerce.date({ message: "Please choose a valid date." }),
+        hoursWorked: z.coerce.number().min(0).max(24, "Hours can't exceed 24 in a day."),
+        description: z.string().trim().max(500).optional(),
+      })
+    )
+    .min(1, "Please enter hours for at least one day."),
+  // Only mandatory for CLIENT projects - enforced in timesheetLog.service.js
+  // where the project type is known.
+  attachmentOriginalName: z.string().min(1).optional(),
+  attachmentStoredName: z.string().min(1).optional(),
 });
 
 const approveTimesheetSchema = z.object({
@@ -29,6 +53,7 @@ const rejectTimesheetSchema = z.object({
 module.exports = {
   saveEntrySchema,
   submitWeekSchema,
+  logTimesheetSchema,
   approveTimesheetSchema,
   rejectTimesheetSchema,
 };

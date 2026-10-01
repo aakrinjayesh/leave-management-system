@@ -7,6 +7,7 @@ import Alert from "../../components/common/Alert";
 import * as managerLeaveApi from "../../api/managerLeave.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate } from "../../utils/formatDate";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 
 export default function TeamResignationsPage() {
   const [resignations, setResignations] = useState(null);
@@ -19,6 +20,8 @@ export default function TeamResignationsPage() {
       .catch((err) => setError(getErrorMessage(err)));
   }, []);
 
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("requestId", resignations);
+
   return (
     <DashboardLayout title="Resignations">
       <div className="page-header">
@@ -29,6 +32,7 @@ export default function TeamResignationsPage() {
       </div>
 
       <Alert type="error">{error}</Alert>
+      {notFound && <Alert type="error">Couldn't find that resignation.</Alert>}
 
       <div className="card">
         <div className="card-section">
@@ -57,7 +61,11 @@ export default function TeamResignationsPage() {
                 </thead>
                 <tbody>
                   {resignations.map((resignation) => (
-                    <tr key={resignation.id}>
+                    <tr
+                      key={resignation.id}
+                      ref={rowRef(resignation)}
+                      className={isHighlighted(resignation) ? "row-highlighted" : ""}
+                    >
                       <td className="table-cell-primary">
                         {resignation.user.firstName} {resignation.user.lastName}
                       </td>

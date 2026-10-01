@@ -1,16 +1,78 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Download, ListChecks } from "lucide-react";
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Download, ListChecks, X } from "lucide-react";
 import Spinner from "../common/Spinner";
 import Alert from "../common/Alert";
-import { formatDate, formatDateRange } from "../../utils/formatDate";
+import StatusBadge from "../common/StatusBadge";
+import Modal from "../common/Modal";
+import TextArea from "../common/TextArea";
+import Button from "../common/Button";
+import { formatDateRange } from "../../utils/formatDate";
 import { formatHoursMinutes } from "../../utils/formatDuration";
 import { downloadBlobAsFile, getFilenameFromResponse } from "../../utils/openBlob";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 import { formatProjectAssigned } from "../../utils/formatProjectAssigned";
+import LogTimesheetModal from "./LogTimesheetModal";
 import "../../styles/dashboardShared.css";
 
+function RejectModal({ submission, onClose, onRejected, reject }) {
+  const [remarks, setRemarks] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!remarks.trim()) {
+      setError("Please explain why this timesheet is being rejected.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await reject(submission.id, remarks.trim());
+      onRejected();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal title="Reject this timesheet" onClose={onClose}>
+      <Alert type="error">{error}</Alert>
+      <form onSubmit={handleSubmit} noValidate>
+        <TextArea
+          label="Reason for rejection"
+          placeholder="Let them know why this timesheet can't be approved"
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+        />
+        <div className="modal-actions">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" isLoading={isSubmitting}>
+            Reject timesheet
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
+const fmtDays = (n) => (Number.isInteger(n) ? String(n) : Number(n).toFixed(1));
+
+// "Mon, 7 Sep 2026" - weekday helps when scanning a week's entries.
+const ENTRY_DATE_FMT = new Intl.DateTimeFormat("en-IN", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const formatEntryDate = (date) => ENTRY_DATE_FMT.format(new Date(date));
 
 const VIEWS = [
   { label: "Day", value: "day" },
@@ -24,7 +86,14 @@ const VIEWS = [
 // `exportTimesheet(view, dateString, projectId) => Promise<AxiosResponse>` (optional),
 // and `downloadAttachment(submissionId) => Promise<AxiosResponse>` (optional)
 // for the Excel sheet the employee attached to a given week's submission.
-export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, downloadAttachment, onDataLoad }) {
+export default function TimesheetDetailView({
+  fetchTimesheet,
+  exportTimesheet,
+  downloadAttachment,
+  decisionApi,
+  logApi,
+  onDataLoad,
+}) {
   // A caller can deep-link straight to a specific week/day via ?date=... in
   // the URL (e.g. from a WFH request row) - defaults to today when absent.
   const [searchParams] = useSearchParams();
@@ -37,6 +106,15 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
   const [error, setError] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [actioningId, setActioningId] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [isLogOpen, setIsLogOpen] = useState(false);
+
+  // ?submissionId=... (paired with ?date= above) - an email button lands on
+  // the right week via ?date= already; this highlights the exact submission
+  // row within it.
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("submissionId", data?.submissions);
 
   useEffect(() => {
     fetchTimesheet(view, anchorDate, projectId).then((res) => {
@@ -45,7 +123,20 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
       if (onDataLoad) onDataLoad(res.employee);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, anchorDate, projectId]);
+  }, [view, anchorDate, projectId, reloadKey]);
+
+  const handleApprove = async (submission) => {
+    setError("");
+    setActioningId(submission.id);
+    try {
+      await decisionApi.approve(submission.id);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't approve this timesheet."));
+    } finally {
+      setActioningId(null);
+    }
+  };
 
   const shiftAnchor = (direction) => {
     const date = new Date(anchorDate);
@@ -103,6 +194,20 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
   return (
     <>
       <Alert type="error">{error}</Alert>
+      {notFound && (
+        <Alert type="error">
+          Couldn't find that submission in this week - try Previous/Next to browse nearby weeks.
+        </Alert>
+      )}
+
+      {logApi && data.employee && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <Button className="page-header-btn" onClick={() => setIsLogOpen(true)}>
+            <CalendarPlus size={16} />
+            Log timesheet
+          </Button>
+        </div>
+      )}
 
       {data.projects && data.projects.length > 1 && (
         <div className="tabs" style={{ marginBottom: 16 }}>
@@ -140,6 +245,12 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
             </button>
             <span className="card-section-title" style={{ marginBottom: 0 }}>
               {formatDateRange(data.rangeStart, data.rangeEnd)} — {formatHoursMinutes(data.totalHours)}
+              {data.dayCounts && (
+                <span className="table-cell-secondary">
+                  {" "}
+                  · {fmtDays(data.dayCounts.workedDays)} / {fmtDays(data.dayCounts.workingDays)} working days
+                </span>
+              )}
             </span>
             <button type="button" className="link-btn" onClick={() => shiftAnchor(1)}>
               Next <ChevronRight size={14} style={{ verticalAlign: "-2px" }} />
@@ -182,7 +293,9 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
                 <tbody>
                   {data.entries.map((entry) => (
                     <tr key={entry.id}>
-                      <td className="table-cell-primary">{formatDate(entry.date)}</td>
+                      <td className="table-cell-primary" style={{ whiteSpace: "nowrap" }}>
+                        {formatEntryDate(entry.date)}
+                      </td>
                       <td>{formatHoursMinutes(entry.hoursWorked)}</td>
                       <td className="table-cell-secondary">{entry.description}</td>
                     </tr>
@@ -194,7 +307,7 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
         </div>
       </div>
 
-      {downloadAttachment && data.submissions?.length > 0 && (
+      {(downloadAttachment || decisionApi) && data.submissions?.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
           <div className="card-section">
             <span className="card-section-title">Weekly submissions</span>
@@ -204,33 +317,74 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
                 <thead>
                   <tr>
                     <th>Week</th>
+                    <th>Hours</th>
                     <th>Project Type</th>
                     <th>Project Name</th>
+                    {decisionApi && <th>Status</th>}
                     <th>Excel sheet</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.submissions.map((submission) => (
-                    <tr key={submission.id}>
+                    <tr
+                      key={submission.id}
+                      ref={rowRef(submission)}
+                      className={isHighlighted(submission) ? "row-highlighted" : ""}
+                    >
                       <td className="table-cell-primary">
                         {formatDateRange(submission.weekStartDate, submission.weekEndDate)}
+                        {submission.createdByManager && (
+                          <span className="logged-by-manager-tag">
+                            {submission.createdByAdmin ? "Logged by admin" : "Logged by manager"}
+                          </span>
+                        )}
                       </td>
+                      <td>{formatHoursMinutes(submission.totalHours)}</td>
                       <td className="table-cell-secondary">{formatProjectAssigned(submission.projectAssigned)}</td>
                       <td className="table-cell-secondary">{submission.project?.name || "—"}</td>
+                      {decisionApi && (
+                        <td>
+                          <StatusBadge status={submission.status} />
+                        </td>
+                      )}
                       <td className="table-cell-secondary">{submission.attachmentOriginalName || "—"}</td>
                       <td>
-                        {submission.attachmentOriginalName && (
-                          <button
-                            type="button"
-                            className="link-btn"
-                            disabled={downloadingId === submission.id}
-                            onClick={() => handleDownloadAttachment(submission)}
-                          >
-                            <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                            {downloadingId === submission.id ? "Downloading…" : "Download"}
-                          </button>
-                        )}
+                        <div className="row-actions">
+                          {submission.attachmentOriginalName && downloadAttachment && (
+                            <button
+                              type="button"
+                              className="link-btn"
+                              disabled={downloadingId === submission.id}
+                              onClick={() => handleDownloadAttachment(submission)}
+                            >
+                              <Download size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                              {downloadingId === submission.id ? "Downloading…" : "Download"}
+                            </button>
+                          )}
+                          {decisionApi && submission.status === "PENDING" && (
+                            <>
+                              <button
+                                type="button"
+                                className="row-action-btn approve"
+                                disabled={actioningId === submission.id}
+                                onClick={() => handleApprove(submission)}
+                              >
+                                <Check size={14} />
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="row-action-btn reject"
+                                disabled={actioningId === submission.id}
+                                onClick={() => setRejectTarget(submission)}
+                              >
+                                <X size={14} />
+                                Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -239,6 +393,30 @@ export default function TimesheetDetailView({ fetchTimesheet, exportTimesheet, d
             </div>
           </div>
         </div>
+      )}
+
+      {rejectTarget && (
+        <RejectModal
+          submission={rejectTarget}
+          reject={decisionApi.reject}
+          onClose={() => setRejectTarget(null)}
+          onRejected={() => {
+            setRejectTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {isLogOpen && logApi && data.employee && (
+        <LogTimesheetModal
+          employee={data.employee}
+          api={logApi}
+          onClose={() => setIsLogOpen(false)}
+          onSuccess={() => {
+            setIsLogOpen(false);
+            setReloadKey((k) => k + 1);
+          }}
+        />
       )}
     </>
   );

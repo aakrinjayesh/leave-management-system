@@ -90,6 +90,86 @@
   border-top: 3px solid #6b21a8;
 }
 
+/* Two dashboard cards side by side (e.g. Upcoming holidays + Today's
+   attendance) so short cards don't each take a full row. Flex (not grid) so a
+   lone card - when the other one renders nothing - grows to full width. */
+.dashboard-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 20px;
+  align-items: flex-start;
+}
+
+.dashboard-cols > .card {
+  margin-bottom: 0 !important;
+  flex: 1 1 300px;
+}
+
+.dashboard-cols > .card:first-child {
+  flex-grow: 1.6;
+}
+
+/* "You have something to do" strip - only rendered when non-empty. */
+.needs-attention {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 20px;
+  border: 1px solid var(--color-warning-border);
+  border-left: 3px solid #d97706;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  overflow: hidden;
+}
+
+.needs-attention-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+}
+
+.needs-attention-row + .needs-attention-row {
+  border-top: 1px solid var(--color-warning-border);
+}
+
+.needs-attention-icon {
+  color: #b45309;
+  flex-shrink: 0;
+}
+
+.needs-attention-text {
+  flex: 1;
+  font-size: 0.86rem;
+  color: #92400e;
+}
+
+.needs-attention-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #92400e;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.needs-attention-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .needs-attention-row {
+    flex-wrap: wrap;
+  }
+  .needs-attention-link {
+    margin-left: 25px;
+  }
+}
+
 .card-section {
   padding: 22px 24px;
 }
@@ -207,8 +287,94 @@
   border-bottom: none;
 }
 
+/* Deep-linked row - e.g. arriving from an email's "Review this request"
+   button via ?requestId=. A brief pulse draws the eye, then settles into a
+   quiet persistent tint so the row stays easy to re-spot while scrolling. */
+.row-highlighted td {
+  background-color: var(--color-warning-bg);
+  animation: row-highlight-pulse 1.6s ease-out 2;
+}
+
+@keyframes row-highlight-pulse {
+  0% {
+    background-color: var(--color-warning-border);
+  }
+  100% {
+    background-color: var(--color-warning-bg);
+  }
+}
+
 .data-table td .field {
   margin-bottom: 0;
+}
+
+/* Small coloured status dot shown inline before a name (e.g. the accounts
+   table) instead of a dedicated Status column. */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: 1px;
+  flex-shrink: 0;
+  background-color: var(--color-gray-400);
+}
+
+.status-dot.is-active {
+  background-color: #22c55e;
+}
+
+.status-dot.is-pending {
+  background-color: #f97316;
+}
+
+.status-dot.is-inactive {
+  background-color: #ef4444;
+}
+
+/* Small count badge for a table cell (e.g. pending-request count) - only
+   drawn when the count is non-zero, so it draws the eye. */
+.count-pill {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  background-color: var(--color-gray-100);
+  color: var(--text-primary);
+}
+
+.count-pill.is-pending {
+  background-color: #ffedd5;
+  color: #9a3412;
+}
+
+/* One-line count/summary sitting just above a data table. */
+.table-caption {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Freezes the first column so it stays visible while the rest of a wide
+   table scrolls horizontally. The cell needs its own opaque background
+   (otherwise scrolled content shows through) plus a divider so the seam
+   reads clearly. */
+.data-table.sticky-first-col th:first-child,
+.data-table.sticky-first-col td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: var(--color-white);
+  border-right: 1px solid var(--border-color);
+}
+
+.data-table.sticky-first-col thead th:first-child {
+  z-index: 2;
+  background-color: var(--color-gray-50);
 }
 
 .data-table tbody tr.is-clickable {
@@ -218,6 +384,15 @@
 
 .data-table tbody tr.is-clickable:hover {
   background-color: var(--color-gray-50);
+}
+
+/* Timesheet grid: a day that can't take hours (weekend / holiday / on leave). */
+.data-table tbody tr.is-disabled-row {
+  background-color: var(--color-gray-50);
+}
+.data-table tbody tr.is-disabled-row .table-cell-primary {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .table-cell-primary {
@@ -612,6 +787,151 @@
   background-color: var(--color-white);
 }
 
+/* --- "Manage project members" full-panel modal --------------------------- */
+
+.pm-modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Tab strip with the member search pinned to its right edge. */
+.pm-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.pm-tabs-search {
+  margin-left: auto;
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+
+.pm-tabs-search .field {
+  margin-bottom: 0;
+}
+
+.pm-modal-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.pm-modal-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  margin: 6px 0;
+}
+
+/* ProjectMembersField's root is a .field; stretch it and let its inner list
+   take all the remaining height and scroll. */
+.pm-modal-list > .field {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.pm-modal-list .member-list {
+  flex: 1;
+  max-height: none;
+}
+
+.pm-modal-footer {
+  flex-shrink: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.pm-detail {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: var(--color-gray-50);
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+.pm-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.pm-detail-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.pm-detail-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pm-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.pm-detail-grid dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+}
+
+.pm-detail-grid dd {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.pm-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.pm-badge.is-client {
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.pm-badge.is-internal {
+  background-color: var(--color-gray-100);
+  color: var(--text-secondary);
+}
+
+.pm-badge.is-active {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.pm-badge.is-inactive {
+  background-color: var(--color-gray-100);
+  color: var(--text-secondary);
+}
+
 /* Section labels splitting the list into "already assigned" vs "everyone
    else" - .member-list's own border-radius + overflow-y:auto clips these
    to match its rounded corners wherever one lands at the very top. */
@@ -630,7 +950,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border-color);
   transition: background-color var(--transition-fast);
 }
@@ -641,6 +961,42 @@
 
 .member-row:hover {
   background-color: var(--color-gray-50);
+}
+
+/* Timesheets tab - the whole row navigates to that employee's timesheet. */
+.member-row.is-clickable-row {
+  cursor: pointer;
+}
+
+.member-row.is-clickable-row:hover {
+  background-color: var(--color-primary-50);
+}
+
+.member-list-note {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* "Members (N selected)" label on the left, a search box on the right. */
+.member-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.member-search {
+  flex: 1;
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.member-search .field {
+  margin-bottom: 0;
 }
 
 .member-row.is-checked {
@@ -661,11 +1017,12 @@
   min-width: 0;
 }
 
+/* Line 1: name + (when checked) the start/end date fields, inline. */
 .member-row-line {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 4px 16px;
 }
 
 .member-row-name {
@@ -675,68 +1032,43 @@
   white-space: nowrap;
 }
 
+/* Line 2: "Currently working on ..." - muted, below the name. */
+.member-row-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
 .member-row-label {
-  font-size: 0.76rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.66rem;
+  letter-spacing: 0.03em;
 }
 
-.member-row-empty {
-  font-size: 0.76rem;
-  color: var(--text-secondary);
-}
-
-.member-project-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.member-project-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: var(--radius-full);
-  background-color: var(--color-primary-50);
-  color: var(--color-primary-700);
-  white-space: nowrap;
-}
-
-.member-project-chip-date {
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-/* Shown only on a checked row - lets admin set/backdate this person's own
-   start date on THIS project (and optionally an end date), separate from
-   the "Currently working on" chips above which are about their OTHER
-   projects. */
 .member-row-dates {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--border-color);
+  gap: 6px 12px;
 }
 
 .member-row-date-field {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 0.72rem;
-  font-weight: 600;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   color: var(--text-secondary);
 }
 
 .member-row-date-field input[type="date"] {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-primary);
-  padding: 5px 8px;
+  padding: 3px 6px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background-color: var(--color-white);
@@ -782,4 +1114,669 @@
   background-color: var(--color-primary-50, var(--color-gray-100));
   border-radius: var(--radius-full);
   white-space: nowrap;
+}
+
+/* --- "Introduce yourself" dashboard card -------------------------------- */
+
+.intro-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background-color: var(--color-gray-100);
+  border-radius: var(--radius-full);
+}
+
+.intro-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.intro-item {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  background-color: var(--color-white);
+}
+
+.intro-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.intro-item-label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.intro-item-answer {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.intro-item-empty {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.intro-item-editor {
+  margin-top: 10px;
+}
+
+.intro-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* --- Employee dashboard: upcoming holidays card ----------------------- */
+
+.holiday-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.holiday-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  line-height: 1.3;
+}
+
+.holiday-chip-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.holiday-chip-date {
+  font-size: 0.74rem;
+  opacity: 0.85;
+}
+
+/* Rotating soft colour palette - just for visual separation between chips. */
+.holiday-chip--0 { background: #fef3c7; color: #92400e; }
+.holiday-chip--1 { background: #d1fae5; color: #065f46; }
+.holiday-chip--2 { background: #dbeafe; color: #1e40af; }
+.holiday-chip--3 { background: #fce7f3; color: #9d174d; }
+.holiday-chip--4 { background: #ede9fe; color: #5b21b6; }
+
+/* --- Admin: pending profile-change request review card ----------------- */
+
+.pcr-request + .pcr-request {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color);
+}
+
+.pcr-request-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pcr-request-section {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pcr-reject-box {
+  margin-top: 10px;
+}
+
+/* ===================================================================== */
+/* Attendance                                                            */
+/* ===================================================================== */
+
+/* Status palette - one accent per derived state, reused by chips, grid cells
+   and legend swatches. */
+.att-chip,
+.att-cell,
+.att-legend-swatch {
+  --att-fg: var(--color-gray-600);
+  --att-bg: var(--color-gray-100);
+  --att-bd: var(--color-gray-200);
+}
+/* Bold, saturated - these are the states worth noticing. */
+.is-present.att-chip, .is-present.att-cell, .is-present.att-legend-swatch { --att-fg: #047857; --att-bg: #d1fae5; --att-bd: #34d399; }
+.is-half.att-chip, .is-half.att-cell, .is-half.att-legend-swatch { --att-fg: #b45309; --att-bg: #fef3c7; --att-bd: #fbbf24; }
+.is-wfh.att-chip, .is-wfh.att-cell, .is-wfh.att-legend-swatch { --att-fg: #6d28d9; --att-bg: #ede9fe; --att-bd: #a78bfa; }
+.is-leave.att-chip, .is-leave.att-cell, .is-leave.att-legend-swatch { --att-fg: #1d4ed8; --att-bg: #dbeafe; --att-bd: #60a5fa; }
+.is-holiday.att-chip, .is-holiday.att-cell, .is-holiday.att-legend-swatch { --att-fg: #0e7490; --att-bg: #cffafe; --att-bd: #22d3ee; }
+/* Muted - "missing" states, deliberately quiet so a low-attendance month
+   doesn't look like an emergency. */
+.is-absent.att-chip, .is-absent.att-cell, .is-absent.att-legend-swatch { --att-fg: #f87171; --att-bg: #fef2f2; --att-bd: #fee2e2; }
+.is-notmarked.att-chip, .is-notmarked.att-cell, .is-notmarked.att-legend-swatch { --att-fg: #94a3b8; --att-bg: var(--color-gray-50); --att-bd: var(--color-gray-200); }
+.att-cell.is-weekend { --att-bg: var(--color-gray-100); --att-bd: transparent; }
+.att-cell.is-nottracked { --att-bg: transparent; --att-bd: transparent; }
+.att-cell.is-future  { --att-bg: var(--color-white); --att-bd: var(--color-gray-100); }
+
+.att-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--att-fg);
+  background: var(--att-bg);
+  border: 1px solid var(--att-bd);
+  white-space: nowrap;
+}
+.att-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---- Employee: today card, one per project ---- */
+.att-today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.att-today-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+.att-today-card-project {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.att-today-card-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.att-today-card .btn { margin-top: 2px; }
+
+/* ---- Summary tiles ---- */
+.att-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.att-summary-tile {
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+.att-summary-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.att-summary-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* ---- Today board (manager / admin) ---- */
+.att-board-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--color-gray-50);
+  font-size: 0.85rem;
+}
+.att-board-summary b { color: var(--text-primary); }
+
+/* ---- Month grid ---- */
+.att-grid-wrap { overflow-x: auto; }
+.att-grid {
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-size: 0.75rem;
+}
+.att-grid th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 4px 2px;
+  text-align: center;
+  white-space: nowrap;
+}
+.att-grid th.att-grid-namecol,
+.att-grid td.att-grid-namecol {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface-card);
+  text-align: left;
+  min-width: 190px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border-color);
+}
+.att-grid-emp { font-weight: 600; color: var(--text-primary); }
+.att-grid-proj { font-size: 0.72rem; color: var(--text-secondary); }
+.att-grid-daynum { font-variant-numeric: tabular-nums; }
+.att-grid-daynum.is-today { color: var(--color-primary-600); font-weight: 700; }
+
+.att-cell {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  text-align: center;
+  vertical-align: middle;
+  font-weight: 700;
+  color: var(--att-fg);
+  background: var(--att-bg);
+  border: 1px solid var(--att-bd);
+}
+.att-cell.is-clickable { cursor: pointer; }
+.att-cell.is-clickable:hover { outline: 2px solid var(--color-primary-400); outline-offset: 1px; }
+/* Blank "not tracked" cells are invisible until you realise they're editable. */
+.att-cell.is-nottracked.is-clickable { border: 1px dashed var(--color-gray-300); }
+
+.att-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 14px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.att-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.att-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--att-bg);
+  border: 1px solid var(--att-bd);
+}
+
+/* ---- Employee: mark-attendance table (last N days) ---- */
+.att-mark-table td { vertical-align: middle; }
+.att-mark-date { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.att-mark-project { color: var(--text-secondary); }
+
+.att-toggle { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.att-toggle-btn {
+  padding: 5px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: var(--color-white);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.att-toggle-btn:hover:not(:disabled) { border-color: var(--color-primary-400); color: var(--text-primary); }
+.att-toggle-btn:disabled { opacity: 0.55; cursor: default; }
+.att-toggle-btn.is-on.is-present { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+.att-toggle-btn.is-on.is-half { background: #fffbeb; border-color: #fcd34d; color: #b45309; }
+.att-mark-hint { font-size: 0.75rem; color: #b91c1c; }
+
+/* Roster grid: dim weekend day-number headers, and a "worked / working" tally
+   column pinned on the right. */
+.att-grid th.att-grid-daynum-th.is-weekend-col { color: var(--color-gray-300); }
+.att-grid th.att-grid-worked,
+.att-grid td.att-grid-worked {
+  position: sticky;
+  right: 0;
+  background: var(--surface-card);
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+.att-grid-worked-value { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.att-grid-worked-of { color: var(--text-secondary); }
+.att-summary-of { font-size: 1rem; font-weight: 500; color: var(--text-secondary); }
+
+/* ---- Employee: clickable month calendar ---- */
+.att-cal { width: 100%; border-spacing: 4px; }
+.att-cal th { padding-bottom: 4px; }
+.att-cal-cell {
+  width: 100%;
+  min-width: 40px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 8px;
+  font: inherit;
+  color: var(--att-fg);
+  background: var(--att-bg);
+  border: 1px solid var(--att-bd);
+  cursor: default;
+}
+.att-cal-cell:disabled { opacity: 1; }
+.att-cal-cell.is-clickable { cursor: pointer; border-style: dashed; border-color: var(--color-primary-400); }
+.att-cal-cell.is-clickable.is-present,
+.att-cal-cell.is-clickable.is-half { border-style: solid; }
+.att-cal-cell.is-clickable:hover { background: var(--color-primary-50); }
+.att-cal-mark { font-size: 0.72rem; font-weight: 700; }
+
+/* ---- Employee: mark modal ---- */
+.att-modal-projects { display: flex; flex-direction: column; gap: 14px; margin-bottom: 8px; }
+.att-modal-project { display: flex; flex-direction: column; gap: 6px; }
+.att-modal-project-name { font-weight: 600; color: var(--text-primary); }
+.att-toggle-btn.is-on.is-absent { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+
+/* Manage Accounts table: freeze the first TWO columns (employee code + name)
+   so both stay visible while the wide action columns scroll. */
+.acct-code-col { width: 140px; min-width: 140px; }
+
+.data-table.sticky-first-two th:first-child,
+.data-table.sticky-first-two td:first-child,
+.data-table.sticky-first-two th:nth-child(2),
+.data-table.sticky-first-two td:nth-child(2) {
+  position: sticky;
+  z-index: 1;
+  background-color: var(--color-white);
+}
+.data-table.sticky-first-two th:first-child,
+.data-table.sticky-first-two td:first-child { left: 0; }
+.data-table.sticky-first-two th:nth-child(2),
+.data-table.sticky-first-two td:nth-child(2) {
+  left: 140px;
+  border-right: 1px solid var(--border-color);
+}
+.data-table.sticky-first-two thead th:first-child,
+.data-table.sticky-first-two thead th:nth-child(2) {
+  z-index: 2;
+  background-color: var(--color-gray-50);
+}
+
+/* Payroll Report: a single tidy toolbar (Month / View / Search / Export). */
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 14px;
+  margin-bottom: 14px;
+}
+.report-toolbar .field {
+  margin-bottom: 0;
+}
+.report-toolbar .report-toolbar-field {
+  width: 190px;
+}
+.report-toolbar .report-toolbar-search {
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+.report-toolbar .report-toolbar-export {
+  margin-left: auto;
+}
+.report-toolbar select.field-input,
+.report-toolbar .field-input {
+  height: 40px;
+}
+@media (max-width: 720px) {
+  .report-toolbar .report-toolbar-field,
+  .report-toolbar .report-toolbar-search {
+    width: 100%;
+    max-width: none;
+    flex-basis: 100%;
+  }
+  .report-toolbar .report-toolbar-export {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* Manage Accounts: compact, centred name search above the table. */
+/* Caption on the left, search on the right, one row (All Leave Requests /
+   All Timesheets). Falls to two rows on narrow screens. */
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 14px;
+}
+.list-toolbar > .table-caption {
+  margin: 0;
+}
+.list-toolbar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 320px;
+}
+.list-toolbar-search .field {
+  margin-bottom: 0;
+  flex: 1;
+}
+.list-toolbar-search .field-input {
+  padding: 6px 12px 6px 32px;
+  font-size: 0.85rem;
+  border-radius: var(--radius-full);
+}
+.list-toolbar-search .field-icon {
+  left: 11px;
+}
+@media (max-width: 560px) {
+  .list-toolbar-search {
+    flex-basis: 100%;
+  }
+}
+
+.acct-search {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.acct-search .field {
+  margin-bottom: 0;
+  flex: 0 1 320px;
+}
+.acct-search .field-input {
+  padding: 6px 12px 6px 32px;
+  font-size: 0.85rem;
+  border-radius: var(--radius-full);
+}
+.acct-search .field-icon {
+  left: 11px;
+}
+.acct-search-count {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Compact button (e.g. Manage Accounts "Add account"). */
+.btn.btn-sm {
+  padding: 7px 14px;
+  font-size: 0.85rem;
+}
+
+/* Slimmer stat cards - Manage Accounts opts in via .stats-compact. */
+.stat-card-grid.stats-compact { margin-bottom: 18px; }
+.stat-card-grid.stats-compact .stat-card { padding: 12px 16px; gap: 12px; }
+.stat-card-grid.stats-compact .stat-card-icon { width: 36px; height: 36px; }
+.stat-card-grid.stats-compact .stat-card-value { font-size: 1.25rem; }
+.stat-card-grid.stats-compact .stat-card-label { font-size: 0.8rem; }
+
+/* "My Workspace" self-service tiles on the admin dashboard. */
+.workspace-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.workspace-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--surface-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.workspace-tile:hover {
+  border-color: var(--color-primary-400);
+  background: var(--color-primary-50);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+
+.workspace-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workspace-tile-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.workspace-tile-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+/* "View" action alongside "Remove" on an uploaded timesheet Excel sheet. */
+.attachment-uploaded-row .attachment-row-view {
+  margin-left: auto;
+  color: var(--color-primary-600);
+}
+.attachment-uploaded-row .attachment-row-view + .link-btn {
+  margin-left: 14px;
+}
+
+/* Reimbursement claims table: keep the description to one line - full text is
+   in the detail modal opened by clicking the row. */
+.claim-desc-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 42ch;
+}
+
+/* Small square icon button used next to a page-header title (e.g. opening the
+   company calendar from the Attendance page) - same visual language as the
+   dashboard's back-arrow button. */
+.page-header-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--color-gray-600);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.page-header-icon-btn:hover {
+  background-color: var(--color-gray-100);
+  color: var(--text-primary);
+}
+
+/* Body wrapper for the company-calendar "full" modal - takes the remaining
+   flex space below the pinned header/subtitle and scrolls on its own if the
+   grid doesn't fit, same pattern as .pm-modal-body. Content is capped so an
+   ultra-wide viewport doesn't stretch the 7-column grid into oversized cells.
+*/
+.calendar-modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.calendar-modal-body > * {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Bigger day cells only inside the company-calendar "full" modal (higher
+   specificity than the shared .calendar-cell rule) - the other pages that
+   reuse the Calendar component (My/Team Calendar, employee leave detail)
+   keep their normal, more compact size. */
+.calendar-modal-body .calendar-cell {
+  min-height: 120px;
+}
+
+/* Groups a text field (GST/PAN number) with its own optional document upload
+   so they read as one field instead of two unrelated grid cells - and gives
+   the upload-only doc trio ("Other documents") the same visual container. */
+.client-doc-group {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: var(--color-white);
+  padding: 14px 16px 4px;
+  margin-bottom: 18px;
+}
+
+.client-doc-group-title {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-primary-600);
+  margin-bottom: 4px;
 }

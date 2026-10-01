@@ -4,6 +4,7 @@ const validate = require("../middlewares/validate.middleware");
 const {
   createUserSchema,
   updateManagerSchema,
+  updateEmploymentTypeSchema,
   setAdminAccessSchema,
   createLeavePolicySchema,
   updateLeavePolicySchema,
@@ -11,6 +12,8 @@ const {
   updateHolidaySchema,
   updateUserDetailsSchema,
   generatePayslipSchema,
+  contractPaymentStructureSchema,
+  generateContractPaymentSchema,
   updateCompanySettingsSchema,
   customFieldSchema,
   recordSalaryStructureSchema,
@@ -22,8 +25,16 @@ const {
   setProjectMembersSchema,
   createOfferLetterSchema,
   previewOfferLetterSchema,
+  createInvoiceSchema,
 } = require("../validators/admin.validator");
-const { rejectWfhRequestSchema } = require("../validators/wfh.validator");
+const { rejectWfhRequestSchema, revokeWfhRequestSchema } = require("../validators/wfh.validator");
+const { approveLeaveSchema, rejectLeaveSchema, createLeaveForEmployeeSchema } = require("../validators/leave.validator");
+const {
+  approveTimesheetSchema,
+  rejectTimesheetSchema,
+  logTimesheetSchema,
+} = require("../validators/timesheet.validator");
+const { uploadSingleTimesheetAttachment } = require("../config/timesheetAttachmentUpload");
 const controller = require("../controllers/admin.controller");
 const leaveController = require("../controllers/adminLeave.controller");
 const payrollController = require("../controllers/adminPayroll.controller");
@@ -31,10 +42,21 @@ const employeeDocsController = require("../controllers/adminEmployeeDocs.control
 const exitController = require("../controllers/adminExit.controller");
 const taxController = require("../controllers/adminTax.controller");
 const reportController = require("../controllers/adminReport.controller");
+const invoiceController = require("../controllers/adminInvoice.controller");
 const offerLetterController = require("../controllers/adminOfferLetter.controller");
 const resignationController = require("../controllers/adminResignation.controller");
 const wfhController = require("../controllers/adminWfh.controller");
+const contractPaymentController = require("../controllers/adminContractPayment.controller");
+const reimbursementController = require("../controllers/adminReimbursement.controller");
 const { uploadSingleEmployeeDocument } = require("../config/employeeDocumentUpload");
+const { uploadReimbursementAttachments } = require("../config/reimbursementAttachmentUpload");
+const { uploadSingleProjectDocument } = require("../config/projectDocumentUpload");
+const { uploadSingleCompanySignature } = require("../config/companySignatureUpload");
+const {
+  logReimbursementForEmployeeSchema,
+  approveReimbursementSchema,
+  rejectReimbursementSchema,
+} = require("../validators/reimbursement.validator");
 const { USER_TYPE } = require("../utils/constants");
 
 const router = express.Router();
@@ -44,6 +66,11 @@ router.use(authenticate, authorize(USER_TYPE.ADMIN));
 router.get("/users", controller.listUsers);
 router.post("/users", validate(createUserSchema), controller.createUser);
 router.patch("/users/:id/manager", validate(updateManagerSchema), controller.updateUserManager);
+router.patch(
+  "/users/:id/employment-type",
+  validate(updateEmploymentTypeSchema),
+  controller.updateEmploymentType
+);
 router.patch("/users/:id/admin-access", validate(setAdminAccessSchema), controller.setAdminAccess);
 router.patch("/users/:id/reactivate", controller.reactivateUser);
 router.post("/users/:id/exit", validate(recordExitSchema), exitController.recordExit);
@@ -60,20 +87,54 @@ router.get("/offer-letters/:id/pdf", offerLetterController.downloadOfferLetterPd
 router.delete("/offer-letters/:id", offerLetterController.deleteOfferLetter);
 router.get("/users/:id/timesheet", controller.getUserTimesheet);
 router.get("/users/:id/timesheet/export", controller.exportUserTimesheet);
+router.get("/users/:id/timesheet/log-period", controller.getTimesheetLogPeriod);
+router.post(
+  "/users/:id/timesheet/log-attachment",
+  uploadSingleTimesheetAttachment,
+  controller.uploadTimesheetLogAttachment
+);
+router.post("/users/:id/timesheet/log", validate(logTimesheetSchema), controller.logTimesheetForEmployee);
+router.get("/timesheet-summary", controller.listEmployeeTimesheetSummary);
 router.get("/timesheets/export", controller.exportPayrollTimesheet);
+router.patch("/timesheets/:id/approve", validate(approveTimesheetSchema), controller.approveTimesheetSubmission);
+router.patch("/timesheets/:id/reject", validate(rejectTimesheetSchema), controller.rejectTimesheetSubmission);
 router.get("/timesheet-submissions/:id/attachment", controller.getTimesheetSubmissionAttachment);
+router.get("/reports/payroll", reportController.getPayrollReport);
 router.get("/reports/project-assignment", reportController.getProjectAssignmentReport);
 router.get("/users/:id/project-history", reportController.getProjectHistory);
 router.get("/reports/timesheet-submissions", reportController.getWeekTimesheetSubmissions);
 router.get("/projects", reportController.listProjects);
 router.post("/projects", validate(createProjectSchema), reportController.createProject);
+router.post(
+  "/projects/documents/:type",
+  uploadSingleProjectDocument,
+  reportController.uploadProjectDocument
+);
 router.patch("/projects/:id", validate(renameProjectSchema), reportController.renameProject);
 router.patch("/projects/:id/members", validate(setProjectMembersSchema), reportController.setProjectMembers);
 router.get("/projects/:id/recent-members", reportController.getProjectRecentMembers);
 router.patch("/projects/:id/deactivate", reportController.deactivateProject);
 router.patch("/projects/:id/reactivate", reportController.reactivateProject);
+router.get("/invoices", invoiceController.listInvoices);
+router.post("/invoices", validate(createInvoiceSchema), invoiceController.createInvoice);
+router.post("/invoices/preview", validate(createInvoiceSchema), invoiceController.previewInvoicePdf);
+// Registered before the "/invoices/:id" routes below - otherwise Express
+// would match DELETE /invoices/signature as :id = "signature" instead.
+router.post("/invoices/signature", uploadSingleCompanySignature, invoiceController.uploadSignature);
+router.delete("/invoices/signature", invoiceController.removeSignature);
+router.get("/invoices/:id/document", invoiceController.downloadInvoiceDocument);
+router.delete("/invoices/:id", invoiceController.deleteInvoice);
 router.get("/users/:id/leaves", controller.getUserLeaveDetail);
+router.post(
+  "/users/:id/leaves",
+  validate(createLeaveForEmployeeSchema),
+  leaveController.createLeaveForEmployee
+);
 router.get("/users/:id/calendar", controller.getUserCalendar);
+router.get("/calendar", controller.getCompanyCalendar);
+router.get("/leave-summary", leaveController.listEmployeeLeaveSummary);
+router.patch("/leave-requests/:id/approve", validate(approveLeaveSchema), leaveController.approveLeaveRequest);
+router.patch("/leave-requests/:id/reject", validate(rejectLeaveSchema), leaveController.rejectLeaveRequest);
 router.get("/leave-requests/:id/attachment", controller.getUserLeaveAttachment);
 router.get("/users/:id/details", controller.getUserDetails);
 router.patch("/users/:id/details", validate(updateUserDetailsSchema), controller.updateUserDetails);
@@ -98,10 +159,38 @@ router.post(
   validate(recordSalaryStructureSchema),
   payrollController.recordSalaryStructure
 );
+router.patch(
+  "/users/:id/salary-structure-history/latest",
+  validate(recordSalaryStructureSchema),
+  payrollController.updateLatestSalaryStructure
+);
 router.get("/users/:id/payslips/preview", payrollController.previewPayslip);
 router.post("/users/:id/payslips", validate(generatePayslipSchema), payrollController.generatePayslip);
 router.get("/users/:id/payslips", payrollController.listPayslips);
+router.post("/users/:id/payslips/:payslipId/email", payrollController.emailPayslip);
 router.get("/payslips/:id/pdf", payrollController.downloadPayslipPdf);
+
+// Contract-hire payment (employmentType = CONTRACT) - fully separate from the
+// employee salary structure / payslips above.
+router.get("/users/:id/contract-payment-structure-history", contractPaymentController.getStructureHistory);
+router.post(
+  "/users/:id/contract-payment-structure-history",
+  validate(contractPaymentStructureSchema),
+  contractPaymentController.recordStructure
+);
+router.patch(
+  "/users/:id/contract-payment-structure-history/latest",
+  validate(contractPaymentStructureSchema),
+  contractPaymentController.updateLatestStructure
+);
+router.get("/users/:id/contract-payments/preview", contractPaymentController.previewPayment);
+router.post(
+  "/users/:id/contract-payments",
+  validate(generateContractPaymentSchema),
+  contractPaymentController.generatePayment
+);
+router.get("/users/:id/contract-payments", contractPaymentController.listPayments);
+router.get("/contract-payments/:id/pdf", contractPaymentController.downloadPaymentPdf);
 
 router.get("/users/:id/tax-declaration", taxController.getTaxDeclaration);
 router.put("/users/:id/tax-declaration", validate(taxDeclarationSchema), taxController.upsertTaxDeclaration);
@@ -149,5 +238,25 @@ router.patch("/resignations/:id/reject", resignationController.rejectResignation
 router.get("/wfh-requests", wfhController.listWfhRequests);
 router.patch("/wfh-requests/:id/approve", wfhController.approveWfhRequest);
 router.patch("/wfh-requests/:id/reject", validate(rejectWfhRequestSchema), wfhController.rejectWfhRequest);
+router.patch("/wfh-requests/:id/revoke", validate(revokeWfhRequestSchema), wfhController.revokeWfhRequest);
+
+router.get("/reimbursements", reimbursementController.listAll);
+router.post(
+  "/users/:id/reimbursements",
+  uploadReimbursementAttachments,
+  validate(logReimbursementForEmployeeSchema),
+  reimbursementController.logForUser
+);
+router.patch(
+  "/reimbursements/:id/approve",
+  validate(approveReimbursementSchema),
+  reimbursementController.approve
+);
+router.patch(
+  "/reimbursements/:id/reject",
+  validate(rejectReimbursementSchema),
+  reimbursementController.reject
+);
+router.get("/reimbursements/:id/attachments/:attachmentId", reimbursementController.getAttachment);
 
 module.exports = router;

@@ -31,7 +31,10 @@ export const getNotificationDestination = (type, user) => {
       return "/profile";
     case "LEAVE_POLICY_CHANGED":
       if (isAdmin) return "/admin/manage-leaves";
-      return isManager ? "/manager/calendar" : "/employee/calendar";
+      // Neither employees nor managers have a standalone calendar tab
+      // anymore - it now opens from a button on their Attendance page (see
+      // MyCalendarModal / TeamCalendarModal).
+      return isManager ? "/manager/attendance" : "/attendance";
     case "PROJECT_UPDATED":
       return isAdmin ? "/admin/reports" : "/timesheet";
     case "ACCOUNT_APPROVAL_REQUESTED":
@@ -40,11 +43,24 @@ export const getNotificationDestination = (type, user) => {
       return "/profile";
     case "PROFILE_UPDATED":
       return isAdmin ? "/admin/dashboard" : null;
+    // A specific employee's details page is in notification.link; this is just
+    // the fallback if that's ever missing.
+    case "PROFILE_CHANGE_REQUESTED":
+      return isAdmin ? "/admin/dashboard" : null;
+    case "PROFILE_CHANGE_DECIDED":
+      return "/profile";
     case "WFH_SUBMITTED":
       if (isAdmin) return "/admin/wfh-requests";
       return isManager ? "/manager/wfh-requests" : null;
     case "WFH_DECIDED":
       return isManager ? "/manager/wfh-requests" : "/wfh";
+    case "REIMBURSEMENT_SUBMITTED":
+    case "REIMBURSEMENT_CANCELLED":
+      if (isAdmin) return "/admin/reimbursements";
+      return isManager ? "/manager/reimbursements" : null;
+    // Always goes to the claimant - their own claims list, open to every role.
+    case "REIMBURSEMENT_DECIDED":
+      return "/reimbursements";
     default:
       return null;
   }

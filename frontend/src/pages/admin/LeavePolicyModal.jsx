@@ -10,6 +10,7 @@ import { getErrorMessage } from "../../utils/getErrorMessage";
 const toForm = (policy) => ({
   leaveName: policy?.leaveName ?? "",
   allocatedLeaves: policy?.allocatedLeaves ?? 12,
+  monthlyAccrualDays: policy?.monthlyAccrualDays ?? "",
   maxLeavesPerRequest: policy?.maxLeavesPerRequest ?? 5,
   isUnlimited: policy?.isUnlimited ?? false,
   isUnpaid: policy?.isUnpaid ?? false,
@@ -34,9 +35,20 @@ export default function LeavePolicyModal({ policy, onClose, onSuccess }) {
       return;
     }
 
+    const monthlyAccrualDays =
+      form.isUnlimited || String(form.monthlyAccrualDays).trim() === ""
+        ? null
+        : Number(form.monthlyAccrualDays);
+
+    if (monthlyAccrualDays !== null && (Number.isNaN(monthlyAccrualDays) || monthlyAccrualDays < 0)) {
+      setError("Monthly accrual must be 0 or more (or left blank).");
+      return;
+    }
+
     const payload = {
       leaveName: form.leaveName.trim(),
       allocatedLeaves: Number(form.allocatedLeaves),
+      monthlyAccrualDays,
       maxLeavesPerRequest: Number(form.maxLeavesPerRequest),
       isUnlimited: form.isUnlimited,
       isUnpaid: form.isUnpaid,
@@ -84,6 +96,22 @@ export default function LeavePolicyModal({ policy, onClose, onSuccess }) {
           />
         </div>
 
+        <TextInput
+          label="Accrues per month (days)"
+          type="number"
+          min="0"
+          step="0.5"
+          placeholder="Leave blank to grant the full amount up front"
+          value={form.monthlyAccrualDays}
+          onChange={handleChange("monthlyAccrualDays")}
+          disabled={form.isUnlimited}
+        />
+        <p className="helper-text" style={{ marginTop: 0 }}>
+          Blank = employees get all "days per year" at the start of the year.
+          Set e.g. <strong>1</strong> to credit 1 day each month, building up
+          over the year (this is what shows the monthly balance history).
+        </p>
+
         <label className="checkbox-row">
           <input type="checkbox" checked={form.isUnlimited} onChange={handleCheck("isUnlimited")} />
           Unlimited (no yearly cap)
@@ -106,8 +134,8 @@ export default function LeavePolicyModal({ policy, onClose, onSuccess }) {
         />
 
         <p className="helper-text">
-          Changing the yearly allocation only affects balances not yet created (new employees, or next year) -
-          it won't change what employees have already been allocated and used this year.
+          Changing the yearly allocation updates every current employee's balance for this year too
+          (their already-used days are kept, remaining is recalculated).
         </p>
 
         <div className="modal-actions">

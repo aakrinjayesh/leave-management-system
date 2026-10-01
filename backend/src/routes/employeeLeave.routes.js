@@ -8,10 +8,11 @@ const { uploadSingleLeaveAttachment } = require("../config/upload");
 
 const router = express.Router();
 
-// These are "my own leave" routes - usable by employees and by Manager-tier
-// accounts (Team Lead / HR / Manager), since they can also apply for leave up
-// the hierarchy. Admin is excluded - it's the top of the chain, not a requester.
-router.use(authenticate, authorize(USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER));
+// These are "my own leave" routes - usable by every account type. Employees and
+// Manager-tier accounts apply up the hierarchy; Admin can also apply for their
+// own leave (routed to their assigned manager if they have one, and always
+// actionable by another admin - see applyLeave / adminLeave.controller).
+router.use(authenticate, authorize(USER_TYPE.EMPLOYEE, USER_TYPE.MANAGER, USER_TYPE.ADMIN));
 
 router.get("/summary", controller.getDashboardSummary);
 router.get("/balances", controller.getMyBalances);

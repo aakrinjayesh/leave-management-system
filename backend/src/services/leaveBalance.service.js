@@ -114,6 +114,36 @@ const applyUsage = (balanceId, deltaDays) =>
     },
   });
 
+// After a policy is edited (allocation, or accrual turned on/off/changed),
+// bring every current-fiscal-year balance row in line with it:
+//  - non-accrual policy: allocatedLeaves = policy.allocatedLeaves
+//  - accrual policy:     allocatedLeaves = "accrued so far" for that employee
+// usedLeaves is always kept as-is; remaining is recomputed as
+// (new allocation - used). Rows whose numbers don't actually change are
+// skipped. Unlimited policies have no balance to track, so they're left alone.
+const reconcileBalancesToPolicy = async (leavePolicyId) => {
+  const policy = await prisma.leavePolicy.findUnique({ where: { id: leavePolicyId } });
+  if (!policy || policy.isUnlimited) return;
+
+  const year = await companySettingsService.getCurrentFiscalYear();
+  const rows = await prisma.leaveBalance.findMany({ where: { leavePolicyId, year } });
+
+  for (const row of rows) {
+    const newAllocated =
+      policy.monthlyAccrualDays == null
+        ? policy.allocatedLeaves
+        : await computeAccruedAllocation(policy, row.userId, year);
+    const newRemaining = newAllocated - row.usedLeaves;
+
+    if (newAllocated === row.allocatedLeaves && newRemaining === row.remainingLeaves) continue;
+
+    await prisma.leaveBalance.update({
+      where: { id: row.id },
+      data: { allocatedLeaves: newAllocated, remainingLeaves: newRemaining },
+    });
+  }
+};
+
 // Splits a requested leave range into 1 or 2 pieces based on available
 // balance. If the whole request fits, returns it unchanged under the
 // original policy. If it doesn't, whatever's covered by the remaining
@@ -236,6 +266,7 @@ const getAllLedgersForUser = async (userId, fiscalYear) => {
 module.exports = {
   getOrCreateBalance,
   applyUsage,
+  reconcileBalancesToPolicy,
   listBalancesForUser,
   getAccruedMonthsCount,
   splitForOverage,

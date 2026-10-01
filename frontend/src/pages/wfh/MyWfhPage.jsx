@@ -11,6 +11,7 @@ import * as wfhApi from "../../api/employeeWfh.api";
 import * as timesheetApi from "../../api/employeeTimesheet.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { formatDate, formatDateRange } from "../../utils/formatDate";
+import { useHighlightFromQuery } from "../../hooks/useHighlightFromQuery";
 import "../../styles/dashboardShared.css";
 
 const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
@@ -40,6 +41,8 @@ export default function MyWfhPage() {
   useEffect(() => {
     loadRequests();
   }, []);
+
+  const { rowRef, isHighlighted, notFound } = useHighlightFromQuery("requestId", requests);
 
   const hasPending = requests?.some((r) => r.status === "PENDING");
 
@@ -104,6 +107,7 @@ export default function MyWfhPage() {
 
       <Alert type="error">{error}</Alert>
       <Alert type="success">{successMessage}</Alert>
+      {notFound && <Alert type="error">Couldn't find that WFH request.</Alert>}
 
       {!projects || !requests ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
@@ -203,7 +207,7 @@ export default function MyWfhPage() {
                     </thead>
                     <tbody>
                       {requests.map((request) => (
-                        <tr key={request.id}>
+                        <tr key={request.id} ref={rowRef(request)} className={isHighlighted(request) ? "row-highlighted" : ""}>
                           <td className="table-cell-secondary">Admin</td>
                           <td className="table-cell-primary">{formatDateRange(request.startDate, request.endDate)}</td>
                           <td className="table-cell-secondary">{request.reason}</td>

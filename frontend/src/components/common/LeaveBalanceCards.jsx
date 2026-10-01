@@ -4,9 +4,15 @@ import { formatLeaveDays } from "../../utils/formatLeaveDays";
 // also where a manager lands for their own leave, since their "Dashboard"
 // nav link goes to the team overview instead, which never shows this).
 export default function LeaveBalanceCards({ balances }) {
+  // Unlimited types (Unpaid / Loss of Pay) always sit at the end - they have
+  // no real balance to track, so they're the least interesting card.
+  const ordered = [...balances].sort(
+    (a, b) => (a.isUnlimited ? 1 : 0) - (b.isUnlimited ? 1 : 0),
+  );
+
   return (
     <div className="balance-card-grid">
-      {balances.map((balance) => {
+      {ordered.map((balance) => {
         const usedPct = balance.isUnlimited
           ? 0
           : Math.min(100, Math.round((balance.usedLeaves / (balance.allocatedLeaves || 1)) * 100));

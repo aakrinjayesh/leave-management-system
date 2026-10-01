@@ -14,12 +14,29 @@ const todayDateInputValue = () => new Date().toISOString().slice(0, 10);
 const formatLetterDate = (value) =>
   value ? new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "an unspecified date";
 
-const buildDefaultLetterText = (employee, exitDate) =>
+const buildDefaultEmployeeLetterText = (employee, exitDate) =>
   `This is to certify that ${employee.firstName} ${employee.lastName}, who was working with Aakrin Consulting Services Private Limited as ${
     employee.designation || "an employee"
   }, has been relieved from their duties effective ${formatLetterDate(exitDate)}. We appreciate their contribution during their tenure with us from ${formatLetterDate(
     employee.joiningDate
   )} and wish them success in their future endeavors.`;
+
+const buildDefaultInternLetterText = (employee, exitDate) =>
+  `This is to certify that ${employee.firstName} ${employee.lastName} was engaged with Aakrin Consulting Services Private Limited as an Intern${
+    employee.designation ? ` (${employee.designation})` : ""
+  } from ${formatLetterDate(employee.joiningDate)} to ${formatLetterDate(
+    exitDate
+  )}. ${employee.firstName} has successfully completed the internship and is relieved from all responsibilities effective ${formatLetterDate(
+    exitDate
+  )}. During the internship, their conduct and performance were found to be satisfactory. We acknowledge their contribution during this period and wish them the very best in their future endeavors.`;
+
+// Interns get an internship-specific default; everyone else (regular
+// employees, contract hires) gets the standard relieving-letter wording.
+// Admin can freely edit either one in the textarea before confirming.
+const buildDefaultLetterText = (employee, exitDate) =>
+  employee.employmentType === "INTERN"
+    ? buildDefaultInternLetterText(employee, exitDate)
+    : buildDefaultEmployeeLetterText(employee, exitDate);
 
 // Replaces the plain "deactivate" action - records a permanent exit event
 // (with an editable relieving letter) and marks the account INACTIVE.
@@ -119,7 +136,11 @@ export default function ExitModal({ user, onClose, onSuccess }) {
           />
 
           <TextArea
-            label="Relieving letter text"
+            label={
+              employee.employmentType === "INTERN"
+                ? "Internship relieving letter text"
+                : "Relieving letter text"
+            }
             rows={7}
             value={letterText}
             onChange={(e) => {

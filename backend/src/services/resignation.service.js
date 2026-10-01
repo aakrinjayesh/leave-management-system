@@ -92,7 +92,7 @@ const getPendingOr404 = async (resignationId) => {
 };
 
 // The employee's proposedLastWorkingDate is a notice date, not their literal
-// final day - accepting adds a full noticePeriodDays (30 by default) on top
+// final day - accepting adds a full noticePeriodDays (90 by default) on top
 // of it to get the CONFIRMED lastWorkingDate. Nothing counts down until this
 // runs; before that, only the proposed date is shown, with no active notice
 // period.

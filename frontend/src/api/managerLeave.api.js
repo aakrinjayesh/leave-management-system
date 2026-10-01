@@ -29,3 +29,9 @@ export const getTeamCalendar = (year, month) =>
 export const getTeamResignations = () => unwrap(axiosClient.get("/manager/resignations"));
 
 export const getTeamWfhRequests = () => unwrap(axiosClient.get("/manager/wfh-requests"));
+
+export const approveTeamWfhRequest = (id) =>
+  unwrap(axiosClient.patch(`/manager/wfh-requests/${id}/approve`));
+
+export const rejectTeamWfhRequest = (id, remarks) =>
+  unwrap(axiosClient.patch(`/manager/wfh-requests/${id}/reject`, { remarks }));

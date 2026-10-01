@@ -290,6 +290,41 @@ const recordSalaryStructure = async (userId, data, recordedById) => {
   return getSalaryStructureHistory(userId);
 };
 
+// Fixes the most recent salary structure entry in place - for correcting a
+// mistake in the current structure without creating a new revision. Unlike
+// recordSalaryStructure it never inserts a row: the same entry keeps its id
+// and just gets the new values. If the employee has no entry yet, it falls
+// back to creating the first one. User.salaryCtc is re-synced to whichever
+// entry is the most recent afterwards.
+const updateLatestSalaryStructure = async (userId, data, recordedById) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw ApiError.notFound("Account not found.");
+  }
+
+  const latest = await prisma.salaryStructureHistory.findFirst({
+    where: { userId },
+    orderBy: { effectiveFrom: "desc" },
+  });
+
+  if (!latest) {
+    return recordSalaryStructure(userId, data, recordedById);
+  }
+
+  await prisma.salaryStructureHistory.update({
+    where: { id: latest.id },
+    data: { recordedById, ...data },
+  });
+
+  const newLatest = await prisma.salaryStructureHistory.findFirst({
+    where: { userId },
+    orderBy: { effectiveFrom: "desc" },
+  });
+  await prisma.user.update({ where: { id: userId }, data: { salaryCtc: newLatest.ctc } });
+
+  return getSalaryStructureHistory(userId);
+};
+
 const getSalaryStructureHistory = (userId) =>
   prisma.salaryStructureHistory.findMany({
     where: { userId },
@@ -329,5 +364,6 @@ module.exports = {
   addToYtdTotals,
   getEffectiveSalaryConfig,
   recordSalaryStructure,
+  updateLatestSalaryStructure,
   getSalaryStructureHistory,
 };

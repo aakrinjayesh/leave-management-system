@@ -3,19 +3,55 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const notificationService = require("../services/notification.service");
+const leaveBalanceService = require("../services/leaveBalance.service");
+const leaveDecisionService = require("../services/leaveDecision.service");
+const companySettingsService = require("../services/companySettings.service");
+const leaveLogService = require("../services/leaveLog.service");
+const holidayImpactService = require("../services/holidayImpact.service");
 const { formatDateShort } = require("../utils/formatDate.util");
+const { sendLeavePolicyChangedEmail } = require("../utils/email.util");
 
-// Notifies every active account - a leave policy change affects the whole
-// company's leave rules, not just the admin who made it.
+// Trailing digits of an employee code are one running sequence across every
+// prefix (mirrors admin.controller's listUsers sort). No code sorts last.
+const employeeCodeSeq = (code) => {
+  if (!code) return Number.POSITIVE_INFINITY;
+  const match = code.match(/(\d+)$/);
+  return match ? parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+};
+
+const byEmployeeCode = (a, b) => {
+  const sa = employeeCodeSeq(a.employeeCode);
+  const sb = employeeCodeSeq(b.employeeCode);
+  if (sa !== sb) return sa - sb;
+  return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+};
+
+// Notifies every active account - a leave policy or holiday change affects
+// the whole company's leave rules, not just the admin who made it. Both the
+// in-app notification and the email go to everyone (not just admins +
+// managers) since every employee needs to know their leave rules changed.
 const notifyAllOfPolicyChange = async (message) => {
+  let everyone = [];
   try {
-    const everyone = await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true } });
+    everyone = await prisma.user.findMany({ where: { status: "ACTIVE" } });
     await notificationService.notifyMany(
       everyone.map((u) => u.id),
       { type: notificationService.NOTIFICATION_TYPES.LEAVE_POLICY_CHANGED, title: "Leave policy updated", message }
     );
   } catch (err) {
     console.error("Failed to create leave policy changed notification:", err);
+  }
+
+  for (const recipient of everyone) {
+    try {
+      await sendLeavePolicyChangedEmail({
+        to: recipient.email,
+        recipientFirstName: recipient.firstName,
+        message,
+      });
+    } catch (err) {
+      console.error("Failed to send leave policy changed email:", err);
+    }
   }
 };
 
@@ -37,10 +73,10 @@ const buildDateRange = (start, end) => {
 };
 
 // ---------- Leave Policies ----------
-// Editing/creating a policy only ever changes the LeavePolicy row itself.
-// Existing LeaveBalance rows (already created for employees this year) are
-// never touched here, so allocation changes only take effect for balances
-// not yet created (new joiners, or next time a balance is lazily created).
+// Creating a policy only changes the LeavePolicy row. Editing one also
+// propagates an allocation change to employees' current-fiscal-year balances
+// (see updateLeavePolicy -> syncBalancesToPolicyAllocation) so "Sick: 8 -> 12"
+// is reflected everywhere immediately, not just for balances created later.
 
 const listLeavePolicies = asyncHandler(async (req, res) => {
   const policies = await prisma.leavePolicy.findMany({ orderBy: { leaveName: "asc" } });
@@ -75,6 +111,16 @@ const updateLeavePolicy = asyncHandler(async (req, res) => {
   }
 
   const policy = await prisma.leavePolicy.update({ where: { id }, data: req.body });
+
+  // Re-sync this year's balance rows whenever the allocation or the accrual
+  // setting (on/off/rate) changes - see reconcileBalancesToPolicy.
+  const allocationChanged =
+    req.body.allocatedLeaves !== undefined && req.body.allocatedLeaves !== existing.allocatedLeaves;
+  const accrualChanged = existing.monthlyAccrualDays !== policy.monthlyAccrualDays;
+  if (allocationChanged || accrualChanged) {
+    await leaveBalanceService.reconcileBalancesToPolicy(policy.id);
+  }
+
   new ApiResponse(200, "Leave type updated.", { policy }).send(res);
 
   await notifyAllOfPolicyChange(`The ${policy.leaveName} leave policy has been updated.`);
@@ -208,6 +254,9 @@ const createHoliday = asyncHandler(async (req, res) => {
       ? `A new holiday has been added: ${holidayName} (${formatDateShort(holidayDate)} - ${formatDateShort(endDate)}).`
       : `A new holiday has been added: ${holidayName} on ${formatDateShort(holidayDate)}.`
   );
+
+  // Fix up any approved leave / WFH that now lands on a holiday.
+  await holidayImpactService.reconcileApprovedTimeOffForHolidays(dates);
 });
 
 const updateHoliday = asyncHandler(async (req, res) => {
@@ -291,6 +340,10 @@ const updateHoliday = asyncHandler(async (req, res) => {
         )}).`
       : `The ${holiday.holidayName} holiday has been updated (now ${formatDateShort(holiday.holidayDate)}).`
   );
+
+  await holidayImpactService.reconcileApprovedTimeOffForHolidays(
+    [holiday, ...newHolidays].map((h) => startOfUtcDay(h.holidayDate))
+  );
 });
 
 const deactivateHoliday = asyncHandler(async (req, res) => {
@@ -329,9 +382,144 @@ const reactivateHoliday = asyncHandler(async (req, res) => {
   await notifyAllOfPolicyChange(
     `The ${holiday.holidayName} holiday on ${formatDateShort(holiday.holidayDate)} has been restored.`
   );
+
+  await holidayImpactService.reconcileApprovedTimeOffForHolidays([startOfUtcDay(holiday.holidayDate)]);
+});
+
+// ---------- All leave requests (admin-wide) ----------
+// One row per account (including other admins, who can also apply for their
+// own leave - but never the admin viewing the page, since nobody approves
+// their own request), with their request counts by status and this year's
+// leave balance totals. The admin acts on individual requests from the
+// per-employee leave detail page.
+
+const listEmployeeLeaveSummary = asyncHandler(async (req, res) => {
+  const fiscalYear = await companySettingsService.getCurrentFiscalYear();
+
+  // Full yearly entitlement, used as the "remaining" figure for an employee
+  // who has no balance rows yet - so the column shows their real allocation
+  // instead of a misleading 0. Mirrors managerLeave.listEmployees.
+  const activePolicies = await prisma.leavePolicy.findMany({
+    where: { isActive: true, isUnlimited: false },
+    select: { allocatedLeaves: true },
+  });
+  const fullEntitlement = activePolicies.reduce((sum, p) => sum + p.allocatedLeaves, 0);
+
+  const employees = await prisma.user.findMany({
+    where: { id: { not: req.user.id } },
+    include: {
+      leaveBalances: { where: { year: fiscalYear } },
+      leaveRequests: { select: { status: true } },
+    },
+  });
+
+  const result = employees.map((employee) => {
+    const hasBalances = employee.leaveBalances.length > 0;
+    const totalUsed = employee.leaveBalances.reduce((sum, b) => sum + b.usedLeaves, 0);
+    const totalRemaining = hasBalances
+      ? employee.leaveBalances.reduce((sum, b) => sum + b.remainingLeaves, 0)
+      : fullEntitlement;
+
+    const counts = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
+    for (const request of employee.leaveRequests) {
+      counts[request.status] = (counts[request.status] || 0) + 1;
+    }
+
+    return {
+      id: employee.id,
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      email: employee.email,
+      employeeCode: employee.employeeCode,
+      status: employee.status,
+      pendingCount: counts.PENDING,
+      approvedCount: counts.APPROVED,
+      rejectedCount: counts.REJECTED,
+      totalRequests: employee.leaveRequests.length,
+      totalUsed,
+      totalRemaining,
+    };
+  });
+
+  result.sort(byEmployeeCode);
+
+  new ApiResponse(200, "OK", { employees: result }).send(res);
+});
+
+const decideLeaveRequest = (decision) =>
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { remarks } = req.body;
+
+    const leaveRequest = await prisma.leaveRequest.findUnique({
+      where: { id },
+      include: { leavePolicy: true, user: true },
+    });
+    if (!leaveRequest) {
+      throw ApiError.notFound("Leave request not found.");
+    }
+    if (leaveRequest.userId === req.user.id) {
+      throw ApiError.badRequest("You can't action your own leave request - another admin or your manager needs to.");
+    }
+
+    const updated = await leaveDecisionService.applyDecision({
+      leaveRequest,
+      actor: req.user,
+      decision,
+      remarks,
+    });
+
+    new ApiResponse(
+      200,
+      decision === "APPROVED" ? "Leave request approved." : "Leave request rejected.",
+      { leaveRequest: updated }
+    ).send(res);
+
+    await leaveDecisionService.sendDecisionSideEffects({ leaveRequest, actor: req.user, decision, remarks });
+  });
+
+const approveLeaveRequest = decideLeaveRequest("APPROVED");
+const rejectLeaveRequest = decideLeaveRequest("REJECTED");
+
+// Admin logs leave on any employee's behalf (auto-approved), regardless of
+// who their manager is - covers the case where the manager is away. Same
+// booking flow the manager uses, just without the "direct report" check.
+const createLeaveForEmployee = asyncHandler(async (req, res) => {
+  const employeeId = Number(req.params.id);
+  const { leavePolicyId, startDate, endDate, isHalfDay, reason } = req.body;
+
+  const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+  if (!employee || employee.id === req.user.id) {
+    throw ApiError.notFound("Employee not found.");
+  }
+
+  const { leaveRequests, wasSplit, leavePolicy } = await leaveLogService.logLeaveForEmployee({
+    employee,
+    actor: req.user,
+    leavePolicyId,
+    startDate,
+    endDate,
+    isHalfDay,
+    reason,
+    loggedByAdmin: true,
+  });
+
+  new ApiResponse(
+    201,
+    wasSplit
+      ? `Leave logged and approved - only part of it was covered by ${employee.firstName}'s ${leavePolicy.leaveName} balance, so the rest was booked as Unpaid Leave.`
+      : "Leave logged and approved.",
+    { leaveRequests }
+  ).send(res);
+
+  await leaveLogService.sendLoggedLeaveEmails({ leaveRequests, employee, actor: req.user });
 });
 
 module.exports = {
+  listEmployeeLeaveSummary,
+  createLeaveForEmployee,
+  approveLeaveRequest,
+  rejectLeaveRequest,
   listLeavePolicies,
   createLeavePolicy,
   updateLeavePolicy,

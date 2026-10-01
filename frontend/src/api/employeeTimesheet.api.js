@@ -4,6 +4,8 @@ const unwrap = (promise) => promise.then((res) => res.data.data);
 
 export const listMyProjects = () => unwrap(axiosClient.get("/employee/timesheet/projects"));
 
+export const getMyTimesheetStatus = () => unwrap(axiosClient.get("/employee/timesheet/status"));
+
 export const getMyEntries = (weekStart, projectId) =>
   unwrap(
     axiosClient.get("/employee/timesheet/entries", {

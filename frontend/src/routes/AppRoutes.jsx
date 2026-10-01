@@ -16,12 +16,10 @@ import ManagerDashboard from "../pages/dashboard/ManagerDashboard";
 import AdminDashboard from "../pages/dashboard/AdminDashboard";
 
 import MyLeaveRequestsPage from "../pages/employee/MyLeaveRequestsPage";
-import LeaveCalendarPage from "../pages/employee/LeaveCalendarPage";
 
 import EmployeesListPage from "../pages/manager/EmployeesListPage";
 import EmployeeDetailPage from "../pages/manager/EmployeeDetailPage";
 import TeamLeaveRequestsPage from "../pages/manager/TeamLeaveRequestsPage";
-import TeamCalendarPage from "../pages/manager/TeamCalendarPage";
 import TeamTimesheetsPage from "../pages/manager/TeamTimesheetsPage";
 import ManagerEmployeeTimesheetPage from "../pages/manager/EmployeeTimesheetPage";
 import TeamResignationsPage from "../pages/manager/TeamResignationsPage";
@@ -32,15 +30,25 @@ import EmployeeLeaveDetailPage from "../pages/admin/EmployeeLeaveDetailPage";
 import EmployeeDetailsPage from "../pages/admin/EmployeeDetailsPage";
 import OfferLetterPage from "../pages/admin/OfferLetterPage";
 import ManageLeavesPage from "../pages/admin/ManageLeavesPage";
+import AllLeaveRequestsPage from "../pages/admin/AllLeaveRequestsPage";
+import AllTimesheetsPage from "../pages/admin/AllTimesheetsPage";
 import PayslipsPage from "../pages/admin/PayslipsPage";
 import EmployeePayslipsPage from "../pages/admin/EmployeePayslipsPage";
 import ReportPage from "../pages/admin/ReportPage";
+import PayrollReportPage from "../pages/admin/PayrollReportPage";
+import InvoicesPage from "../pages/admin/InvoicesPage";
 import ResignationsPage from "../pages/admin/ResignationsPage";
 import WfhRequestsPage from "../pages/admin/WfhRequestsPage";
 
 import ProfilePage from "../pages/profile/ProfilePage";
 import MyTimesheetPage from "../pages/timesheet/MyTimesheetPage";
 import MyWfhPage from "../pages/wfh/MyWfhPage";
+import MyAttendancePage from "../pages/attendance/MyAttendancePage";
+import TeamAttendancePage from "../pages/manager/TeamAttendancePage";
+import AllAttendancePage from "../pages/admin/AllAttendancePage";
+import MyReimbursementsPage from "../pages/reimbursement/MyReimbursementsPage";
+import TeamReimbursementsPage from "../pages/manager/TeamReimbursementsPage";
+import AllReimbursementsPage from "../pages/admin/AllReimbursementsPage";
 
 const isNotAdmin = (user) => user.userType !== "ADMIN";
 const isManager = (user) => user.isManager;
@@ -73,14 +81,21 @@ export default function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      {/* "My own leave" pages - available to everyone except Admin (Admin
-          sits at the top of the chain and doesn't apply for leave itself). */}
+      {/* The employee landing dashboard is the one page here that's not for
+          Admin (Admin has its own dashboards). */}
       <Route element={<ProtectedRoute check={isNotAdmin} />}>
         <Route path="/employee/dashboard" element={<EmployeeDashboard />} />
+      </Route>
+
+      {/* "My own" self-service pages - available to every account type. Admin
+          reaches these from the "My Workspace" card on their dashboard rather
+          than the sidebar. */}
+      <Route element={<ProtectedRoute />}>
         <Route path="/employee/leave-requests" element={<MyLeaveRequestsPage />} />
-        <Route path="/employee/calendar" element={<LeaveCalendarPage />} />
         <Route path="/timesheet" element={<MyTimesheetPage />} />
         <Route path="/wfh" element={<MyWfhPage />} />
+        <Route path="/attendance" element={<MyAttendancePage />} />
+        <Route path="/reimbursements" element={<MyReimbursementsPage />} />
       </Route>
 
       {/* Profile - available to every authenticated account, Admin included
@@ -94,19 +109,25 @@ export default function AppRoutes() {
           included, can end up here if someone reports to them. */}
       <Route element={<ProtectedRoute check={isManager} />}>
         <Route path="/manager/dashboard" element={<ManagerDashboard />} />
+        <Route path="/manager/attendance" element={<TeamAttendancePage />} />
         <Route path="/manager/employees" element={<EmployeesListPage />} />
         <Route path="/manager/employees/:id" element={<EmployeeDetailPage />} />
         <Route path="/manager/leave-requests" element={<TeamLeaveRequestsPage />} />
-        <Route path="/manager/calendar" element={<TeamCalendarPage />} />
         <Route path="/manager/timesheets" element={<TeamTimesheetsPage />} />
         <Route path="/manager/timesheets/employees/:id" element={<ManagerEmployeeTimesheetPage />} />
         <Route path="/manager/resignations" element={<TeamResignationsPage />} />
         <Route path="/manager/wfh-requests" element={<TeamWfhPage />} />
+        <Route path="/manager/reimbursements" element={<TeamReimbursementsPage />} />
       </Route>
 
       <Route element={<ProtectedRoute check={isAdmin} />}>
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/reports" element={<ReportPage />} />
+        <Route path="/admin/invoices" element={<InvoicesPage />} />
+        <Route path="/admin/report" element={<PayrollReportPage />} />
+        <Route path="/admin/leave-requests" element={<AllLeaveRequestsPage />} />
+        <Route path="/admin/timesheets" element={<AllTimesheetsPage />} />
+        <Route path="/admin/attendance" element={<AllAttendancePage />} />
         <Route path="/admin/manage-leaves" element={<ManageLeavesPage />} />
         <Route path="/admin/users/:id/timesheet" element={<AdminEmployeeTimesheetPage />} />
         <Route path="/admin/users/:id/leaves" element={<EmployeeLeaveDetailPage />} />
@@ -116,6 +137,7 @@ export default function AppRoutes() {
         <Route path="/admin/users/:id/payslips" element={<EmployeePayslipsPage />} />
         <Route path="/admin/resignations" element={<ResignationsPage />} />
         <Route path="/admin/wfh-requests" element={<WfhRequestsPage />} />
+        <Route path="/admin/reimbursements" element={<AllReimbursementsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

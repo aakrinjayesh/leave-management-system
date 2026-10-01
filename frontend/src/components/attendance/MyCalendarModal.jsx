@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import DashboardLayout from "../../components/layout/DashboardLayout";
-import Calendar from "../../components/common/Calendar";
-import Spinner from "../../components/common/Spinner";
+import Modal from "../common/Modal";
+import Calendar from "../common/Calendar";
+import Spinner from "../common/Spinner";
 import { useMonthNavigation } from "../../hooks/useMonthNavigation";
 import * as employeeLeaveApi from "../../api/employeeLeave.api";
-import "../../styles/dashboardShared.css";
 
-export default function LeaveCalendarPage() {
+// Same calendar that used to live on its own "My Calendar" tab (your own
+// leave + WFH, plus company holidays/weekends) - now reached from a button
+// on the Attendance page instead of a separate sidebar item. Same pattern as
+// CompanyCalendarModal for admin's All Attendance page.
+export default function MyCalendarModal({ onClose }) {
   const { year, month, goToPrevMonth, goToNextMonth } = useMonthNavigation();
   const [calendarData, setCalendarData] = useState(null);
 
@@ -28,13 +31,10 @@ export default function LeaveCalendarPage() {
   }));
 
   return (
-    <DashboardLayout title="Calendar">
-      <div className="page-header">
-        <div>
-          <h1>Calendar</h1>
-          <p>Company holidays, weekends, and your own leave at a glance. Read-only.</p>
-        </div>
-      </div>
+    <Modal title="My calendar" onClose={onClose} wide>
+      <p className="card-section-subtitle" style={{ marginTop: 0 }}>
+        Company holidays, weekends, and your own leave at a glance. Read-only.
+      </p>
 
       {!calendarData ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
@@ -52,6 +52,6 @@ export default function LeaveCalendarPage() {
           onNextMonth={goToNextMonth}
         />
       )}
-    </DashboardLayout>
+    </Modal>
   );
 }

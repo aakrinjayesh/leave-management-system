@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   Clock,
-  Download,
   Eye,
   FileDown,
   IdCard,
@@ -15,11 +14,12 @@ import {
   UserPlus,
   Users,
   UserCog,
+  Search,
 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
-import StatusBadge from "../../components/common/StatusBadge";
 import Button from "../../components/common/Button";
+import TextInput from "../../components/common/TextInput";
 import Alert from "../../components/common/Alert";
 import Spinner from "../../components/common/Spinner";
 import AddUserModal from "../admin/AddUserModal";
@@ -30,11 +30,31 @@ import BirthdayCelebrationGate from "../../components/common/BirthdayCelebration
 import { useAuth } from "../../context/AuthContext";
 import * as adminApi from "../../api/admin.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
-import { downloadBlobAsFile, getFilenameFromResponse, openBlobInNewTab } from "../../utils/openBlob";
+import { downloadBlobAsFile, openBlobInNewTab } from "../../utils/openBlob";
 import { formatDate } from "../../utils/formatDate";
 import "../../styles/dashboardShared.css";
 
-const currentMonthValue = () => new Date().toISOString().slice(0, 7);
+// Payroll month / export hidden for now - restore alongside the JSX below.
+// const currentMonthValue = () => new Date().toISOString().slice(0, 7);
+
+// Account status is shown as a small coloured dot before the name (green =
+// active, orange = pending activation, red = inactive/exited) instead of a
+// whole column - the accounts table is already very wide.
+const STATUS_DOT_CLASS = {
+  ACTIVE: "is-active",
+  PENDING: "is-pending",
+  INACTIVE: "is-inactive",
+  REJECTED: "is-inactive",
+};
+
+const STATUS_LABEL = {
+  ACTIVE: "Active",
+  PENDING: "Pending activation",
+  INACTIVE: "Inactive",
+  REJECTED: "Rejected",
+};
+
+const EMPLOYMENT_TYPE_LABELS = { EMPLOYEE: "Employee", INTERN: "Intern", CONTRACT: "Hire to contract" };
 
 export default function AdminDashboard() {
   const { user: currentUser } = useAuth();
@@ -47,9 +67,11 @@ export default function AdminDashboard() {
   const [exitingUser, setExitingUser] = useState(null);
   const [adminAccessTarget, setAdminAccessTarget] = useState(null);
   const [actioningId, setActioningId] = useState(null);
-  const [payrollMonth, setPayrollMonth] = useState(currentMonthValue());
-  const [isExportingPayroll, setIsExportingPayroll] = useState(false);
+  const [typeSavingId, setTypeSavingId] = useState(null);
+  // const [payrollMonth, setPayrollMonth] = useState(currentMonthValue());
+  // const [isExportingPayroll, setIsExportingPayroll] = useState(false);
   const [uploadingId, setUploadingId] = useState(null);
+  const [search, setSearch] = useState("");
   const uploadTargetIdRef = useRef(null);
   const documentFileInputRef = useRef(null);
 
@@ -84,6 +106,24 @@ export default function AdminDashboard() {
       setError(getErrorMessage(err, "Couldn't reactivate this account."));
     } finally {
       setActioningId(null);
+    }
+  };
+
+  const handleEmploymentTypeChange = async (targetUser, employmentType) => {
+    if (employmentType === (targetUser.employmentType || "EMPLOYEE")) return;
+    setError("");
+    setSuccess("");
+    setTypeSavingId(targetUser.id);
+    try {
+      await adminApi.updateEmploymentType(targetUser.id, employmentType);
+      setSuccess(
+        `${targetUser.firstName} ${targetUser.lastName} is now ${EMPLOYMENT_TYPE_LABELS[employmentType]}.`,
+      );
+      await loadUsers();
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't change the employment type."));
+    } finally {
+      setTypeSavingId(null);
     }
   };
 
@@ -159,18 +199,25 @@ export default function AdminDashboard() {
   const employeeCount = users?.filter((u) => u.userType === "EMPLOYEE").length ?? 0;
   const managerTierCount = users?.filter((u) => u.userType === "MANAGER").length ?? 0;
 
-  const handleExportPayroll = async () => {
-    setError("");
-    setIsExportingPayroll(true);
-    try {
-      const response = await adminApi.exportPayrollTimesheet(`${payrollMonth}-01`);
-      downloadBlobAsFile(response.data, getFilenameFromResponse(response, `payroll-timesheet-${payrollMonth}.csv`));
-    } catch (err) {
-      setError(getErrorMessage(err, "Couldn't export payroll timesheet."));
-    } finally {
-      setIsExportingPayroll(false);
-    }
-  };
+  // Client-side name filter for the accounts table - clearing it shows everyone again.
+  const nameQuery = search.trim().toLowerCase();
+  const visibleUsers = nameQuery
+    ? (users ?? []).filter((u) => `${u.firstName} ${u.lastName}`.toLowerCase().includes(nameQuery))
+    : (users ?? []);
+
+  // Payroll export hidden for now - restore alongside the JSX below.
+  // const handleExportPayroll = async () => {
+  //   setError("");
+  //   setIsExportingPayroll(true);
+  //   try {
+  //     const response = await adminApi.exportPayrollTimesheet(`${payrollMonth}-01`);
+  //     downloadBlobAsFile(response.data, getFilenameFromResponse(response, `payroll-timesheet-${payrollMonth}.csv`));
+  //   } catch (err) {
+  //     setError(getErrorMessage(err, "Couldn't export payroll timesheet."));
+  //   } finally {
+  //     setIsExportingPayroll(false);
+  //   }
+  // };
 
   return (
     <DashboardLayout title="Manage Accounts">
@@ -181,6 +228,7 @@ export default function AdminDashboard() {
           <p>Manage every account in the system and their reporting line.</p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+          {/* Payroll month + Export payroll hidden for now - will be brought back later
           <div className="field" style={{ marginBottom: 0 }}>
             <label className="field-label" htmlFor="payroll-month">
               Payroll month
@@ -199,7 +247,8 @@ export default function AdminDashboard() {
             <Download size={16} />
             Export payroll
           </Button>
-          <Button onClick={() => setIsAddOpen(true)} className="page-header-btn">
+          */}
+          <Button onClick={() => setIsAddOpen(true)} className="page-header-btn btn-sm">
             <UserPlus size={16} />
             Add account
           </Button>
@@ -207,10 +256,10 @@ export default function AdminDashboard() {
       </div>
 
       {users && (
-        <div className="stat-card-grid">
-          <StatCard icon={<Users size={20} />} label="Total accounts" value={users.length} />
-          <StatCard icon={<Users size={20} />} label="Employees" value={employeeCount} />
-          <StatCard icon={<Users size={20} />} label="Manager-tier accounts" value={managerTierCount} />
+        <div className="stat-card-grid stats-compact">
+          <StatCard icon={<Users size={18} />} label="Total accounts" value={users.length} />
+          <StatCard icon={<Users size={18} />} label="Employees" value={employeeCount} />
+          <StatCard icon={<Users size={18} />} label="Manager-tier accounts" value={managerTierCount} />
         </div>
       )}
 
@@ -224,30 +273,57 @@ export default function AdminDashboard() {
               <Spinner size={26} />
             </div>
           ) : (
-            <div className="data-table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Manager</th>
-                    <th>Status</th>
-                    <th>Exit date</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr key={user.id}>
-                      <td className="table-cell-primary">
-                        {user.firstName} {user.lastName}
-                      </td>
-                      <td className="table-cell-secondary">{user.email}</td>
-                      <td className="table-cell-secondary">{managerNameById(user.managerId)}</td>
-                      <td>
-                        <StatusBadge status={user.status} />
-                      </td>
-                      <td className="table-cell-secondary">{user.exitDate ? formatDate(user.exitDate) : "—"}</td>
+            <>
+              <div className="acct-search">
+                <TextInput
+                  icon={<Search size={15} />}
+                  placeholder="Search by name"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                {nameQuery && (
+                  <span className="acct-search-count">
+                    {visibleUsers.length} of {users.length}
+                  </span>
+                )}
+              </div>
+
+              <div className="data-table-wrap">
+                <table className="data-table sticky-first-two">
+                  <thead>
+                    <tr>
+                      <th className="acct-code-col">Employee code</th>
+                      <th>Name</th>
+                      {/* Email column hidden for now - will be brought back later */}
+                      <th>Manager</th>
+                      <th></th>
+                      <th>Exit date</th>
+                      <th>Type</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleUsers.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          style={{ textAlign: "center", padding: "28px 0", color: "var(--text-secondary)" }}
+                        >
+                          No accounts match &ldquo;{search.trim()}&rdquo;.
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleUsers.map((user) => (
+                        <tr key={user.id}>
+                          <td className="acct-code-col table-cell-secondary">{user.employeeCode || "—"}</td>
+                          <td className="table-cell-primary">
+                            <span
+                              className={`status-dot ${STATUS_DOT_CLASS[user.status] || ""}`}
+                              title={STATUS_LABEL[user.status] || user.status}
+                            />
+                            {user.firstName} {user.lastName}
+                          </td>
+                          {/* Email column hidden for now - will be brought back later */}
+                          <td className="table-cell-secondary">{managerNameById(user.managerId)}</td>
                       <td>
                         <div className="row-actions">
                           <button
@@ -354,11 +430,32 @@ export default function AdminDashboard() {
                             ))}
                         </div>
                       </td>
+                      <td className="table-cell-secondary">
+                        {user.exitDate ? formatDate(user.exitDate) : "—"}
+                      </td>
+                      <td>
+                        {user.employmentType === "CONTRACT" ? (
+                          <span className="table-cell-secondary">Hire to contract</span>
+                        ) : (
+                          <select
+                            className="field-input"
+                            style={{ height: 30, fontSize: "0.82rem", padding: "0 6px", width: 110 }}
+                            value={user.employmentType || "EMPLOYEE"}
+                            disabled={typeSavingId === user.id}
+                            onChange={(e) => handleEmploymentTypeChange(user, e.target.value)}
+                          >
+                            <option value="EMPLOYEE">Employee</option>
+                            <option value="INTERN">Intern</option>
+                          </select>
+                        )}
+                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>

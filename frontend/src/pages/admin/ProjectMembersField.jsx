@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Search } from "lucide-react";
+import TextInput from "../../components/common/TextInput";
 import * as adminApi from "../../api/admin.api";
 import { formatDate } from "../../utils/formatDate";
 
@@ -7,11 +9,12 @@ const todayValue = () => toDateInputValue(new Date());
 
 // Checkbox list of who's available to assign to a project - shared between
 // "Create project" and "Edit project" since both manage the exact same field
-// (Project.assignedEmployees). An employee can be on several projects at
-// once, so this always shows every non-admin employee - no exclusivity
-// filtering. PENDING employees (admin-created accounts that haven't been
-// activated yet) are included so admin can line up their project up front;
-// they're tagged with a "Pending" badge so it's clear they can't log in yet.
+// (Project.assignedEmployees). An account can be on several projects at
+// once, so this always shows every active/pending account - no exclusivity
+// filtering, and admins are included (they log their own timesheet / mark
+// attendance and so need to be assignable too). PENDING accounts
+// (admin-created, not activated yet) are included so admin can line up their
+// project up front; they're tagged with a "Pending" badge.
 //
 // `members` is the canonical selection: [{ userId, startDate, endDate }].
 // Checking someone defaults their startDate to today (admin can backdate it
@@ -23,9 +26,22 @@ const todayValue = () => toDateInputValue(new Date());
 // otherwise go stale if an account is added/deactivated elsewhere while it's
 // open - refreshKey lets the parent force a refetch by passing something
 // that changes on every project-list reload (e.g. the projects array itself).
-export default function ProjectMembersField({ members, onChange, recentHint, refreshKey }) {
+export default function ProjectMembersField({
+  members,
+  onChange,
+  recentHint,
+  refreshKey,
+  // Optional: when the parent renders its own search box (e.g. up in the tab
+  // row), it passes the value + setter and this component hides its internal one.
+  search: searchProp,
+  onSearchChange,
+}) {
   const [employees, setEmployees] = useState(null);
   const [projectsByEmployeeId, setProjectsByEmployeeId] = useState({});
+  const [localSearch, setLocalSearch] = useState("");
+  const controlledSearch = typeof onSearchChange === "function";
+  const search = controlledSearch ? searchProp || "" : localSearch;
+  const setSearch = controlledSearch ? onSearchChange : setLocalSearch;
   // Captured once, on mount only - who's already assigned when this field
   // first shows up (e.g. Edit project's existing members). Sorting/grouping
   // against this frozen snapshot instead of the live `members` means
@@ -34,10 +50,10 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
 
   useEffect(() => {
     adminApi.listUsers().then((data) => {
+      // Admins are included - they can be assigned to a project like anyone
+      // else (needed for them to log their own timesheet / mark attendance).
       setEmployees(
-        data.users.filter(
-          (u) => (u.status === "ACTIVE" || u.status === "PENDING") && u.userType !== "ADMIN",
-        ),
+        data.users.filter((u) => u.status === "ACTIVE" || u.status === "PENDING"),
       );
     });
 
@@ -85,9 +101,35 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
       })
     : null;
 
+  const query = search.trim().toLowerCase();
+  const visibleEmployees = sortedEmployees
+    ? query
+      ? sortedEmployees.filter(
+          (e) =>
+            `${e.firstName} ${e.lastName}`.toLowerCase().includes(query) ||
+            (e.email || "").toLowerCase().includes(query) ||
+            (e.employeeCode || "").toLowerCase().includes(query),
+        )
+      : sortedEmployees
+    : null;
+
   return (
     <div className="field">
-      <label className="field-label">Members {members.length > 0 ? `(${members.length} selected)` : ""}</label>
+      <div className="member-field-header">
+        <label className="field-label" style={{ marginBottom: 0 }}>
+          Members {members.length > 0 ? `(${members.length} selected)` : ""}
+        </label>
+        {!controlledSearch && employees && employees.length > 0 && (
+          <div className="member-search">
+            <TextInput
+              icon={<Search size={15} />}
+              placeholder="Search name, employee ID or email"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        )}
+      </div>
 
       {recentHint && recentHint.length > 0 && (
         <p className="helper-text" style={{ marginTop: 0, marginBottom: 8 }}>
@@ -100,9 +142,13 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
         <p className="helper-text">Loading employees…</p>
       ) : employees.length === 0 ? (
         <p className="helper-text">No employees to assign yet.</p>
+      ) : visibleEmployees.length === 0 ? (
+        <div className="member-list">
+          <p className="member-list-note">No employees match “{search.trim()}”.</p>
+        </div>
       ) : (
         <div className="member-list">
-          {sortedEmployees.map((employee, index) => {
+          {visibleEmployees.map((employee, index) => {
             const currentProjects = projectsByEmployeeId[employee.id] || [];
             const member = memberById(employee.id);
             const isChecked = Boolean(member);
@@ -111,7 +157,7 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
             const isFirstMember = index === 0 && initialMemberIds.has(employee.id);
             const isFirstNonMember =
               !initialMemberIds.has(employee.id) &&
-              (index === 0 || initialMemberIds.has(sortedEmployees[index - 1].id));
+              (index === 0 || initialMemberIds.has(visibleEmployees[index - 1].id));
 
             return (
               <div key={employee.id}>
@@ -126,43 +172,40 @@ export default function ProjectMembersField({ members, onChange, recentHint, ref
                       <span className="member-row-name">
                         {employee.firstName} {employee.lastName}
                       </span>
-                      {currentProjects.length > 0 ? (
-                        <>
-                          <span className="member-row-label">Currently working on:</span>
-                          <span className="member-project-chips">
-                            {currentProjects.map((p, i) => (
-                              <span key={i} className="member-project-chip">
-                                {p.projectName}
-                                <span className="member-project-chip-date">· since {formatDate(p.projectSince)}</span>
-                              </span>
-                            ))}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="member-row-empty">Not currently on a project</span>
+                      {isChecked && (
+                        <span className="member-row-dates">
+                          <label className="member-row-date-field">
+                            <span>Start</span>
+                            <input
+                              type="date"
+                              value={member.startDate}
+                              onChange={(e) => updateMemberDate(employee.id, "startDate", e.target.value)}
+                            />
+                          </label>
+                          <label className="member-row-date-field">
+                            <span>End (optional)</span>
+                            <input
+                              type="date"
+                              value={member.endDate || ""}
+                              onChange={(e) => updateMemberDate(employee.id, "endDate", e.target.value)}
+                            />
+                          </label>
+                        </span>
                       )}
                     </span>
 
-                    {isChecked && (
-                      <span className="member-row-dates">
-                        <label className="member-row-date-field">
-                          <span>Start date</span>
-                          <input
-                            type="date"
-                            value={member.startDate}
-                            onChange={(e) => updateMemberDate(employee.id, "startDate", e.target.value)}
-                          />
-                        </label>
-                        <label className="member-row-date-field">
-                          <span>End date (optional)</span>
-                          <input
-                            type="date"
-                            value={member.endDate || ""}
-                            onChange={(e) => updateMemberDate(employee.id, "endDate", e.target.value)}
-                          />
-                        </label>
-                      </span>
-                    )}
+                    <span className="member-row-sub">
+                      {currentProjects.length > 0 ? (
+                        <>
+                          <span className="member-row-label">Currently working on:</span>{" "}
+                          {currentProjects
+                            .map((p) => `${p.projectName} (since ${formatDate(p.projectSince)})`)
+                            .join(", ")}
+                        </>
+                      ) : (
+                        "Not currently on another project"
+                      )}
+                    </span>
                   </span>
                 </div>
               </div>

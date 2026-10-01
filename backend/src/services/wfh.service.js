@@ -1,5 +1,42 @@
 const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
+const {
+  getWeekendPolicies,
+  getHolidaysInRange,
+  isWeekendDate,
+  eachDate,
+  toDateKey,
+} = require("./leaveCalendar.service");
+const { formatDateShort } = require("../utils/formatDate.util");
+
+// Approved leave and approved WFH must never cover the same day - you can't
+// be both on leave and working from home. Checked when a WFH request is
+// submitted AND again when it's approved (leave may have been approved in
+// between).
+const findOverlappingApprovedLeave = (userId, startDate, endDate) =>
+  prisma.leaveRequest.findFirst({
+    where: { userId, status: "APPROVED", startDate: { lte: endDate }, endDate: { gte: startDate } },
+    include: { leavePolicy: { select: { leaveName: true } } },
+  });
+
+const leaveOverlapText = (leave) =>
+  `approved ${leave.leavePolicy.leaveName} (${formatDateShort(leave.startDate)} - ${formatDateShort(
+    leave.endDate
+  )}) that overlaps these dates`;
+
+// A WFH request whose whole range is weekends / company holidays has nothing
+// to work from home on.
+const assertHasWorkingDay = async (startDate, endDate) => {
+  const [weekendPolicies, holidays] = await Promise.all([
+    getWeekendPolicies(),
+    getHolidaysInRange(startDate, endDate),
+  ]);
+  const holidaySet = new Set(holidays.map((h) => toDateKey(h.holidayDate)));
+  for (const d of eachDate(startDate, endDate)) {
+    if (!isWeekendDate(d, weekendPolicies) && !holidaySet.has(toDateKey(d))) return;
+  }
+  throw ApiError.badRequest("These dates are all weekends or company holidays - there's nothing to work from home on.");
+};
 
 // Nests the employee's CURRENT project memberships onto every WFH request
 // row - not stored on the request itself (see the WfhRequest model comment
@@ -43,6 +80,13 @@ const submitWfhRequest = async (userId, { startDate, endDate, reason }) => {
   });
   if (overlappingApproved) {
     throw ApiError.badRequest("You already have an approved WFH request that overlaps these dates.");
+  }
+
+  await assertHasWorkingDay(startDate, endDate);
+
+  const overlappingLeave = await findOverlappingApprovedLeave(userId, startDate, endDate);
+  if (overlappingLeave) {
+    throw ApiError.badRequest(`You have ${leaveOverlapText(overlappingLeave)}.`);
   }
 
   return prisma.wfhRequest.create({
@@ -107,8 +151,56 @@ const getPendingOr404 = async (id) => {
   return request;
 };
 
+// Manager path: a manager can approve/reject a WFH request only from someone
+// who currently reports to them. Same effect as the admin decision, just
+// ownership-scoped and recorded against the manager.
+const decideWfhRequestByManager = async (id, managerId, decision, remarks) => {
+  const request = await getPendingOr404(id);
+  if (request.user.managerId !== managerId) {
+    throw ApiError.notFound("WFH request not found.");
+  }
+
+  if (decision === "APPROVED") {
+    const overlappingLeave = await findOverlappingApprovedLeave(
+      request.userId,
+      request.startDate,
+      request.endDate
+    );
+    if (overlappingLeave) {
+      throw ApiError.badRequest(
+        `Can't approve - ${request.user.firstName} has ${leaveOverlapText(overlappingLeave)}.`
+      );
+    }
+    return prisma.wfhRequest.update({
+      where: { id },
+      data: { status: "APPROVED", decidedById: managerId, decidedAt: new Date() },
+      include: { user: USER_SUMMARY_SELECT, ...DECIDED_BY_SELECT },
+    });
+  }
+
+  return prisma.wfhRequest.update({
+    where: { id },
+    data: { status: "REJECTED", decidedById: managerId, decidedAt: new Date(), adminRemarks: remarks },
+    include: { user: USER_SUMMARY_SELECT, ...DECIDED_BY_SELECT },
+  });
+};
+
 const approveWfhRequest = async (id, adminId) => {
-  await getPendingOr404(id);
+  const request = await getPendingOr404(id);
+  if (request.userId === adminId) {
+    throw ApiError.badRequest("You can't action your own WFH request - another admin or your manager needs to.");
+  }
+
+  const overlappingLeave = await findOverlappingApprovedLeave(
+    request.userId,
+    request.startDate,
+    request.endDate
+  );
+  if (overlappingLeave) {
+    throw ApiError.badRequest(
+      `Can't approve - ${request.user.firstName} has ${leaveOverlapText(overlappingLeave)}.`
+    );
+  }
 
   return prisma.wfhRequest.update({
     where: { id },
@@ -118,11 +210,40 @@ const approveWfhRequest = async (id, adminId) => {
 };
 
 const rejectWfhRequest = async (id, adminId, remarks) => {
-  await getPendingOr404(id);
+  const request = await getPendingOr404(id);
+  if (request.userId === adminId) {
+    throw ApiError.badRequest("You can't action your own WFH request - another admin or your manager needs to.");
+  }
 
   return prisma.wfhRequest.update({
     where: { id },
     data: { status: "REJECTED", decidedById: adminId, decidedAt: new Date(), adminRemarks: remarks },
+    include: { user: USER_SUMMARY_SELECT, ...DECIDED_BY_SELECT },
+  });
+};
+
+// Admin revokes a WFH request that was already approved (e.g. the employee is
+// now going on leave those days, or plans changed). Sets it to CANCELLED.
+const revokeApprovedWfhRequest = async (id, adminId, remarks) => {
+  const request = await prisma.wfhRequest.findUnique({
+    where: { id },
+    include: { user: USER_SUMMARY_SELECT, ...DECIDED_BY_SELECT },
+  });
+  if (!request) {
+    throw ApiError.notFound("WFH request not found.");
+  }
+  if (request.status !== "APPROVED") {
+    throw ApiError.badRequest("Only an approved WFH request can be revoked.");
+  }
+
+  return prisma.wfhRequest.update({
+    where: { id },
+    data: {
+      status: "CANCELLED",
+      decidedById: adminId,
+      decidedAt: new Date(),
+      adminRemarks: remarks || "Approval revoked by admin.",
+    },
     include: { user: USER_SUMMARY_SELECT, ...DECIDED_BY_SELECT },
   });
 };
@@ -133,6 +254,8 @@ module.exports = {
   withdrawWfhRequest,
   listForManager,
   listForAdmin,
+  decideWfhRequestByManager,
   approveWfhRequest,
   rejectWfhRequest,
+  revokeApprovedWfhRequest,
 };

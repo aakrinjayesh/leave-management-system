@@ -126,7 +126,7 @@ export default function ApplyLeaveModal({ onClose, onSuccess }) {
 
       {isLoadingOptions ? (
         <p className="helper-text">Loading form options…</p>
-      ) : !user?.managerId ? (
+      ) : !user?.managerId && user?.userType !== "ADMIN" ? (
         <>
           <Alert type="error">
             You haven't set a manager yet. Please set one in your profile before applying for leave.
@@ -149,7 +149,17 @@ export default function ApplyLeaveModal({ onClose, onSuccess }) {
       ) : (
         <form onSubmit={handleSubmit} noValidate>
           <p className="helper-text" style={{ marginTop: 0 }}>
-            This request will be sent to <strong>{user.manager?.firstName} {user.manager?.lastName}</strong> for approval.
+            {user.manager?.firstName ? (
+              <>
+                This request will be sent to{" "}
+                <strong>
+                  {user.manager.firstName} {user.manager.lastName}
+                </strong>{" "}
+                for approval.
+              </>
+            ) : (
+              <>This request will be reviewed by an admin.</>
+            )}
           </p>
 
           <FormSelect label="Leave type" value={form.leavePolicyId} onChange={handleChange("leavePolicyId")}>

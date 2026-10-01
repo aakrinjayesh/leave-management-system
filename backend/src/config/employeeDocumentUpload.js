@@ -16,11 +16,20 @@ const ALLOWED_MIME_TYPES = [
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
+// Document types that must be a PDF - no images. Keyed off the :type route
+// param (POST /users/:id/documents/:type).
+const PDF_ONLY_TYPES = new Set(["aadhar"]);
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
+  if (PDF_ONLY_TYPES.has(req.params?.type)) {
+    if (file.mimetype !== "application/pdf") {
+      return cb(new Error("The Aadhaar card must be a PDF file."));
+    }
+    return cb(null, true);
+  }
   if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
     return cb(new Error("Only PDF, Word, JPEG, or PNG files are allowed."));
   }
