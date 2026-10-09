@@ -2,6 +2,7 @@ const ApiResponse = require("../utils/ApiResponse");
 const ApiError = require("../utils/ApiError");
 const asyncHandler = require("../utils/asyncHandler");
 const attendanceService = require("../services/attendance.service");
+const notificationStreamService = require("../services/notificationStream.service");
 
 const parseYearMonth = (req) => {
   const now = new Date();
@@ -24,6 +25,9 @@ const markAttendance = asyncHandler(async (req, res) => {
   const status = req.body.status || "PRESENT";
 
   const result = await attendanceService.markAttendance(req.user.id, projectId, date, status);
+  // Lets any open attendance roster re-fetch right away (replaces its old
+  // 30s poll).
+  notificationStreamService.broadcast("attendance");
 
   const message =
     status === "ABSENT" ? "Attendance cleared." : status === "HALF_DAY" ? "Marked half day." : "Marked present.";
@@ -74,6 +78,7 @@ const correctAttendance = asyncHandler(async (req, res) => {
     action,
     note,
   });
+  notificationStreamService.broadcast("attendance");
 
   new ApiResponse(200, "Attendance updated.", result).send(res);
 });

@@ -38,4 +38,20 @@ const pushToUser = (userId) => {
   }
 };
 
-module.exports = { addConnection, removeConnection, pushToUser };
+// Named wake-up event sent to every open connection (e.g. "attendance" after
+// someone marks or an admin corrects a day). No DB work here - only clients
+// that currently show the affected data listen for it and re-fetch; the rest
+// ignore it.
+const broadcast = (eventName) => {
+  for (const [userId, set] of connectionsByUserId) {
+    for (const res of set) {
+      try {
+        res.write(`event: ${eventName}\ndata: refresh\n\n`);
+      } catch (err) {
+        console.error(`Failed to broadcast SSE "${eventName}" to user ${userId}:`, err);
+      }
+    }
+  }
+};
+
+module.exports = { addConnection, removeConnection, pushToUser, broadcast };

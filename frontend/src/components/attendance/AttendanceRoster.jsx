@@ -7,7 +7,10 @@ import Button from "../common/Button";
 import TextInput from "../common/TextInput";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import { statusMeta } from "../../utils/attendanceStatus";
+import { subscribeLiveEvents } from "../../api/liveEvents";
 import "../../styles/dashboardShared.css";
+
+const LIVE_REFRESH_DEBOUNCE_MS = 2000;
 
 const MONTH_LABEL = (year, month) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-IN", { month: "long", year: "numeric" });
@@ -127,11 +130,22 @@ export default function AttendanceRoster({
       .catch((err) => setError(getErrorMessage(err)));
   }, [fetchData, year, month]);
 
-  // Live-ish refresh of the today board, current month only.
+  // Live refresh of the today board, current month only - the backend
+  // broadcasts an "attendance" event whenever someone marks or an admin
+  // corrects a day, instead of this page polling. A short debounce folds a
+  // burst of check-ins (e.g. everyone at 9am) into a single re-fetch.
   useEffect(() => {
     if (!isCurrentMonth(year, month)) return undefined;
-    const id = setInterval(() => refresh({ quiet: true }), 30000);
-    return () => clearInterval(id);
+    let debounceId = null;
+    const scheduleRefresh = () => {
+      clearTimeout(debounceId);
+      debounceId = setTimeout(() => refresh({ quiet: true }), LIVE_REFRESH_DEBOUNCE_MS);
+    };
+    const unsubscribe = subscribeLiveEvents({ attendance: scheduleRefresh }, scheduleRefresh);
+    return () => {
+      clearTimeout(debounceId);
+      unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month]);
 

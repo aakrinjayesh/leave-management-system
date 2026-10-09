@@ -2,15 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck } from "lucide-react";
 import * as notificationApi from "../../api/notification.api";
+import { subscribeLiveEvents } from "../../api/liveEvents";
 import { useAuth } from "../../context/AuthContext";
 import { getNotificationDestination } from "../../utils/notificationLinks";
 import "./NotificationBell.css";
-
-// Safety net only - the live SSE connection below normally keeps the badge
-// current within moments of a notification being created. This just
-// re-syncs occasionally in case that connection ever dies silently without
-// the browser noticing (a dropped network path, etc).
-const FALLBACK_POLL_INTERVAL_MS = 120000;
 
 // Short "5m ago" / "3h ago" style label, falling back to a plain date once
 // it's more than a day old - keeps the panel scannable without needing a
@@ -49,26 +44,19 @@ export default function NotificationBell() {
 
   useEffect(() => {
     refreshUnreadCount();
-    const fallbackInterval = setInterval(refreshUnreadCount, FALLBACK_POLL_INTERVAL_MS);
 
     // The server pushes a lightweight "something changed" signal the moment
     // any notification is created for this user (see notify()/notifyMany()
     // in the backend) - just re-fetch on receiving it rather than trying to
     // parse notification data out of the push itself, so the client always
     // ends up with complete, correct data straight from the REST endpoints.
-    const source = new EventSource(notificationApi.getNotificationStreamUrl(), { withCredentials: true });
-    source.onmessage = () => {
+    // No polling timer: anything missed while the stream was down is caught
+    // by the re-sync (stream reconnect / returning to the tab).
+    const refreshAll = () => {
       refreshUnreadCount();
       if (isOpenRef.current) refreshList();
     };
-    // EventSource reconnects on its own after an error; the fallback poll
-    // above is what keeps the badge honest in the meantime.
-    source.onerror = () => {};
-
-    return () => {
-      clearInterval(fallbackInterval);
-      source.close();
-    };
+    return subscribeLiveEvents({ message: refreshAll }, refreshAll);
   }, []);
 
   useEffect(() => {
