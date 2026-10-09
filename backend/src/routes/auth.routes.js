@@ -2,7 +2,9 @@ const express = require("express");
 const validate = require("../middlewares/validate.middleware");
 const { authenticate } = require("../middlewares/auth.middleware");
 const { authLimiter, otpVerifyLimiter } = require("../middlewares/rateLimiter.middleware");
+const { authenticateViaRefreshCookie } = require("../middlewares/sseAuth.middleware");
 const controller = require("../controllers/auth.controller");
+const notificationController = require("../controllers/notification.controller");
 const {
   loginSchema,
   loginOtpSendSchema,
@@ -43,5 +45,11 @@ router.post("/reset-password", validate(resetPasswordSchema), controller.resetPa
 router.post("/refresh-token", controller.refreshToken);
 router.post("/logout", controller.logout);
 router.get("/me", authenticate, controller.getMe);
+
+// Lives under /auth (not /notifications) because the refresh-token cookie is
+// scoped to path /api/auth - EventSource can't send the Bearer header, so
+// this route authenticates off that cookie, which the browser only sends
+// to URLs under its path (see sseAuth.middleware.js).
+router.get("/notification-stream", authenticateViaRefreshCookie, notificationController.streamNotifications);
 
 module.exports = router;

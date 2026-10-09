@@ -4,8 +4,9 @@ const unwrap = (promise) => promise.then((res) => res.data.data);
 
 // EventSource needs a plain URL (not an axios call) - reuses whatever base
 // path axiosClient resolved to (respects VITE_API_URL, defaults to "/api"),
-// so this stays correct in both dev (Vite proxy) and prod.
-export const getNotificationStreamUrl = () => `${axiosClient.defaults.baseURL}/notifications/stream`;
+// so this stays correct in both dev (Vite proxy) and prod. Under /auth
+// because the refresh-token cookie it authenticates with is scoped there.
+export const getNotificationStreamUrl = () => `${axiosClient.defaults.baseURL}/auth/notification-stream`;
 
 export const listMyNotifications = () => unwrap(axiosClient.get("/notifications"));
 
