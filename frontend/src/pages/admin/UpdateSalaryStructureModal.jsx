@@ -17,12 +17,14 @@ const STRUCTURE_FIELDS = [
   "ltaPercentOfBasic",
   "guaranteedAllowancePercentOfBasic",
   "conveyanceMonthly",
-  "pfMonthlyAmount",
   "professionalTax",
   "professionalTaxThreshold",
 ];
 
 const BLANK_FORM = { ctc: "", effectiveFrom: "", ...Object.fromEntries(STRUCTURE_FIELDS.map((f) => [f, ""])) };
+
+// PF isn't entered per employee - it's computed on each payslip.
+const PF_RULE_LABEL = "12% of Basic, capped at ₹25,000";
 
 const isoToMonth = (value) => (value ? new Date(value).toISOString().slice(0, 7) : "");
 
@@ -174,13 +176,7 @@ export default function UpdateSalaryStructureModal({ userId, mode = "update", on
               value={form.conveyanceMonthly}
               onChange={handleChange("conveyanceMonthly")}
             />
-            <TextInput
-              label="PF (₹/month, fixed)"
-              type="number"
-              min="0"
-              value={form.pfMonthlyAmount}
-              onChange={handleChange("pfMonthlyAmount")}
-            />
+            <TextInput label="PF (automatic)" value={PF_RULE_LABEL} disabled readOnly />
           </div>
 
           <div className="form-two-col">
@@ -238,7 +234,7 @@ export default function UpdateSalaryStructureModal({ userId, mode = "update", on
                     <td className="table-cell-secondary">{entry.ltaPercentOfBasic}%</td>
                     <td className="table-cell-secondary">{entry.guaranteedAllowancePercentOfBasic}%</td>
                     <td className="table-cell-secondary">{money(entry.conveyanceMonthly)}</td>
-                    <td className="table-cell-secondary">{money(entry.pfMonthlyAmount)}</td>
+                    <td className="table-cell-secondary">{PF_RULE_LABEL}</td>
                     <td className="table-cell-secondary">{money(entry.professionalTax)}</td>
                     <td className="table-cell-secondary">{money(entry.professionalTaxThreshold)}</td>
                     <td className="table-cell-secondary">

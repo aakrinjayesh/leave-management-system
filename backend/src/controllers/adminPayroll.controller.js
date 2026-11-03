@@ -90,7 +90,6 @@ const recordSalaryStructure = asyncHandler(async (req, res) => {
     ltaPercentOfBasic,
     guaranteedAllowancePercentOfBasic,
     conveyanceMonthly,
-    pfMonthlyAmount,
     professionalTax,
     professionalTaxThreshold,
   } = req.body;
@@ -105,7 +104,6 @@ const recordSalaryStructure = asyncHandler(async (req, res) => {
       ltaPercentOfBasic,
       guaranteedAllowancePercentOfBasic,
       conveyanceMonthly,
-      pfMonthlyAmount,
       professionalTax,
       professionalTaxThreshold,
     },
@@ -159,7 +157,6 @@ const updateLatestSalaryStructure = asyncHandler(async (req, res) => {
     ltaPercentOfBasic,
     guaranteedAllowancePercentOfBasic,
     conveyanceMonthly,
-    pfMonthlyAmount,
     professionalTax,
     professionalTaxThreshold,
   } = req.body;
@@ -174,7 +171,6 @@ const updateLatestSalaryStructure = asyncHandler(async (req, res) => {
       ltaPercentOfBasic,
       guaranteedAllowancePercentOfBasic,
       conveyanceMonthly,
-      pfMonthlyAmount,
       professionalTax,
       professionalTaxThreshold,
     },

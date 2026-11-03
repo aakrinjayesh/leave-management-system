@@ -37,22 +37,39 @@ const FALLBACK_STRUCTURE = {
   professionalTaxThreshold: 25000,
 };
 
+// Wage-based PF applies to payslips from October 2026 onward; earlier months
+// keep the flat pfMonthlyAmount so regenerating them never changes old figures.
+const PF_WAGE_RULE_FROM = { year: 2026, month: 10 };
+const PF_RATE = 0.12;
+const PF_WAGE_CEILING = 25000;
+// pfMonthlyAmount is no longer admin-editable, but the column is still
+// required - new entries get the old flat amount, which only matters if the
+// entry is backdated to a month before PF_WAGE_RULE_FROM.
+const LEGACY_PF_MONTHLY_AMOUNT = 1800;
+
+const usesWageBasedPf = (year, month) => year * 12 + month >= PF_WAGE_RULE_FROM.year * 12 + PF_WAGE_RULE_FROM.month;
+
+// 12% of the given Basic, rounded to the rupee (as EPFO filings expect), with
+// the PF wage capped at the ₹25,000 ceiling.
+const computeWageBasedPf = (basic) => Math.round(Math.max(Math.min(basic, PF_WAGE_CEILING), 0) * PF_RATE);
+
 // Derives the monthly earnings breakdown from annual CTC using the
 // admin-configured percentages. Special Allowance absorbs whatever's left so
 // (basic + hra + lta + conveyance + guaranteedAllowance + specialAllowance +
-// pfEmployer) always equals CTC / 12. PF is a flat amount - same for every
-// employee, regardless of their actual Basic (matches the common practice of
-// capping PF at the EPFO statutory wage ceiling). Professional Tax only
-// applies once gross monthly pay reaches the configured threshold.
-const computeSalaryBreakdown = (ctc, config) => {
+// pfEmployer) always equals CTC / 12 - employer PF sits inside CTC. PF here is
+// the full-month figure (wage-based or legacy flat, per useWageBasedPf);
+// computePayslip recomputes it on earned Basic once LOP is known.
+// Professional Tax only applies once gross monthly pay reaches the configured
+// threshold.
+const computeSalaryBreakdown = (ctc, config, useWageBasedPf) => {
   const monthlyCtc = ctc / 12;
   const basic = monthlyCtc * (config.basicPercentOfCtc / 100);
   const hra = basic * (config.hraPercentOfBasic / 100);
   const lta = basic * (config.ltaPercentOfBasic / 100);
   const guaranteedAllowance = basic * (config.guaranteedAllowancePercentOfBasic / 100);
   const conveyance = config.conveyanceMonthly;
-  const pfEmployee = config.pfMonthlyAmount;
-  const pfEmployer = config.pfMonthlyAmount;
+  const pfEmployee = useWageBasedPf ? computeWageBasedPf(basic) : config.pfMonthlyAmount;
+  const pfEmployer = pfEmployee;
   const specialAllowance = monthlyCtc - (basic + hra + lta + guaranteedAllowance + conveyance + pfEmployer);
 
   if (specialAllowance < 0) {
@@ -213,7 +230,8 @@ const computePayslip = async (user, year, month, { tds = 0, annualBonusPay = 0 }
     }
   }
 
-  const breakdown = computeSalaryBreakdown(effectiveConfig.ctc, effectiveConfig);
+  const wageBasedPf = usesWageBasedPf(year, month);
+  const breakdown = computeSalaryBreakdown(effectiveConfig.ctc, effectiveConfig, wageBasedPf);
   const earningsExcludingBonus =
     breakdown.basic + breakdown.hra + breakdown.lta + breakdown.conveyance + breakdown.guaranteedAllowance + breakdown.specialAllowance;
 
@@ -230,6 +248,15 @@ const computePayslip = async (user, year, month, { tds = 0, annualBonusPay = 0 }
   const lopDays = leaveLopDays + preJoiningDays;
   const lopAmount = standardDays > 0 ? (earningsExcludingBonus / standardDays) * lopDays : 0;
   const daysWorked = standardDays - lopDays;
+
+  // Wage-based PF is on the Basic actually earned this month, so LOP and
+  // pre-joining days reduce it the same way they reduce pay. Employer PF
+  // matches the employee share.
+  if (wageBasedPf) {
+    const earnedBasic = standardDays > 0 ? breakdown.basic - (breakdown.basic / standardDays) * lopDays : breakdown.basic;
+    breakdown.pfEmployee = computeWageBasedPf(earnedBasic);
+    breakdown.pfEmployer = breakdown.pfEmployee;
+  }
 
   const grossPay = earningsExcludingBonus + annualBonusPay;
   const grossDeductions = breakdown.pfEmployee + breakdown.professionalTax + tds + lopAmount;
@@ -275,7 +302,7 @@ const recordSalaryStructure = async (userId, data, recordedById) => {
   }
 
   const created = await prisma.salaryStructureHistory.create({
-    data: { userId, recordedById, ...data },
+    data: { userId, recordedById, pfMonthlyAmount: LEGACY_PF_MONTHLY_AMOUNT, ...data },
   });
 
   const latest = await prisma.salaryStructureHistory.findFirst({

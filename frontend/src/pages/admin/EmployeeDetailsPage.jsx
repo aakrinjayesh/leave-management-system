@@ -795,7 +795,7 @@ function EmployeeDetailsContent({ id }) {
                 </div>
                 <div>
                   <div className="profile-detail-label">Provident Fund</div>
-                  <div className="profile-detail-value">{money(latestStructure.pfMonthlyAmount)}/month</div>
+                  <div className="profile-detail-value">12% of Basic (capped at ₹25,000)</div>
                 </div>
                 <div>
                   <div className="profile-detail-label">Professional Tax</div>
@@ -858,7 +858,7 @@ function EmployeeDetailsContent({ id }) {
                   </div>
                   <div>
                     <div className="profile-detail-label">Provident Fund</div>
-                    <div className="profile-detail-value">{money(entry.pfMonthlyAmount)}/month</div>
+                    <div className="profile-detail-value">12% of Basic (capped at ₹25,000)</div>
                   </div>
                   <div>
                     <div className="profile-detail-label">Professional Tax</div>

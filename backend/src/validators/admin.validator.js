@@ -192,7 +192,6 @@ const recordSalaryStructureSchema = z.object({
   ltaPercentOfBasic: z.coerce.number().min(0).max(200),
   guaranteedAllowancePercentOfBasic: z.coerce.number().min(0).max(200),
   conveyanceMonthly: z.coerce.number().min(0),
-  pfMonthlyAmount: z.coerce.number().min(0),
   professionalTax: z.coerce.number().min(0),
   professionalTaxThreshold: z.coerce.number().min(0),
 });
