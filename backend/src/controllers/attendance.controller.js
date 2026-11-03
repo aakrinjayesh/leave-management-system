@@ -16,21 +16,19 @@ const parseYearMonth = (req) => {
 
 // -------------------------------- employee --------------------------------
 
+// One mark per day, applied to every project the employee is on - any
+// projectId sent by older clients is ignored.
 const markAttendance = asyncHandler(async (req, res) => {
-  const projectId = Number(req.body.projectId);
-  if (!projectId) {
-    throw ApiError.badRequest("Please choose a project.");
-  }
   const date = req.body.date ? String(req.body.date).slice(0, 10) : null;
   const status = req.body.status || "PRESENT";
 
-  const result = await attendanceService.markAttendance(req.user.id, projectId, date, status);
+  const result = await attendanceService.markAttendance(req.user.id, date, status);
   // Lets any open attendance roster re-fetch right away (replaces its old
   // 30s poll).
   notificationStreamService.broadcast("attendance");
 
   const message =
-    status === "ABSENT" ? "Attendance cleared." : status === "HALF_DAY" ? "Marked half day." : "Marked present.";
+    status === "CLEAR" || status === "ABSENT" ? "Attendance cleared." : status === "HALF_DAY" ? "Marked half day." : "Marked present.";
   new ApiResponse(200, message, result).send(res);
 });
 
@@ -56,7 +54,7 @@ const getCompanyAttendance = asyncHandler(async (req, res) => {
   const { year, month } = parseYearMonth(req);
   const data = await attendanceService.getRosterAttendance({
     // Everyone assigned to a project, admins included - they mark their own
-    // per-project attendance now too.
+    // attendance now too.
     userWhere: {},
     year,
     month,
@@ -65,15 +63,14 @@ const getCompanyAttendance = asyncHandler(async (req, res) => {
 });
 
 const correctAttendance = asyncHandler(async (req, res) => {
-  const { userId, projectId, date, action, note } = req.body;
-  if (!userId || !projectId || !date || !["PRESENT", "HALF_DAY", "ABSENT"].includes(action)) {
-    throw ApiError.badRequest("userId, projectId, date and a valid action are required.");
+  const { userId, date, action, note } = req.body;
+  if (!userId || !date || !action) {
+    throw ApiError.badRequest("userId, date and a valid action are required.");
   }
 
   const result = await attendanceService.correctAttendance({
     adminId: req.user.id,
     userId: Number(userId),
-    projectId: Number(projectId),
     dateKey: String(date).slice(0, 10),
     action,
     note,

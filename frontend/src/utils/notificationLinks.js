@@ -12,7 +12,8 @@ export const getNotificationDestination = (type, user) => {
     case "LEAVE_CANCELLED":
       return isManager ? "/manager/leave-requests" : null;
     case "LEAVE_DECIDED":
-      return "/employee/leave-requests";
+      // Only admins have a My Leave Requests page to open.
+      return isAdmin ? "/employee/leave-requests" : null;
     case "TIMESHEET_SUBMITTED":
       if (isManager) return "/manager/timesheets";
       return isAdmin ? "/admin/reports" : null;

@@ -9,7 +9,7 @@ import "../../styles/dashboardShared.css";
 
 // Quick "mark me present today" widget for the dashboard - saves going to the
 // Attendance tab and finding today. Opens the same MarkAttendanceModal the
-// Attendance page uses (per-project Present / Half day / Absent).
+// Attendance page uses (one Present / Half day mark for the day).
 export default function TodayAttendanceCard() {
   const now = new Date();
   const [data, setData] = useState(null);
@@ -36,10 +36,7 @@ export default function TodayAttendanceCard() {
   // them mark it, so don't show a button either.
   if (data && (!today || !today.markable)) return null;
 
-  const perProject = today?.perProject || [];
-  const markedCount = perProject.filter((p) => p.status === "PRESENT" || p.status === "HALF_DAY").length;
-  const total = perProject.length;
-  const allMarked = total > 0 && markedCount === total;
+  const allMarked = today?.overall === "PRESENT" || today?.overall === "HALF_DAY";
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -66,11 +63,7 @@ export default function TodayAttendanceCard() {
           </p>
         ) : (
           <>
-            <p className="card-section-subtitle">
-              {markedCount > 0
-                ? `${markedCount} of ${total} project${total === 1 ? "" : "s"} marked for today.`
-                : "You haven't marked yourself present today."}
-            </p>
+            <p className="card-section-subtitle">You haven&apos;t marked yourself present today.</p>
             <Button className="page-header-btn" onClick={() => setOpen(true)}>
               <CalendarCheck size={16} />
               Mark today&apos;s attendance

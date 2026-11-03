@@ -15,7 +15,7 @@ const LIVE_REFRESH_DEBOUNCE_MS = 2000;
 const MONTH_LABEL = (year, month) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-IN", { month: "long", year: "numeric" });
 
-const LEGEND = ["PRESENT", "HALF_DAY", "WFH", "ON_LEAVE", "ABSENT", "NOT_MARKED", "HOLIDAY"];
+const LEGEND = ["PRESENT", "HALF_DAY", "WFH", "ON_LEAVE", "NOT_MARKED", "HOLIDAY"];
 
 const isCurrentMonth = (year, month) => {
   const now = new Date();
@@ -33,7 +33,6 @@ function CorrectModal({ target, onClose, onDone, correctFn }) {
     try {
       await correctFn({
         userId: target.userId,
-        projectId: target.projectId,
         date: target.date,
         action,
         note: note.trim() || undefined,
@@ -56,7 +55,8 @@ function CorrectModal({ target, onClose, onDone, correctFn }) {
     <Modal title="Correct attendance" onClose={onClose}>
       <Alert type="error">{error}</Alert>
       <p className="card-section-subtitle">
-        <b>{target.employeeName}</b> · {target.projectName}
+        <b>{target.employeeName}</b>
+        {target.projectNames.length > 0 && <> · {target.projectNames.join(", ")}</>}
         <br />
         {dateLabel}
       </p>
@@ -75,8 +75,8 @@ function CorrectModal({ target, onClose, onDone, correctFn }) {
         <Button type="button" variant="secondary" onClick={() => submit("HALF_DAY")} isLoading={busyAction === "HALF_DAY"}>
           Half day
         </Button>
-        <Button type="button" variant="secondary" onClick={() => submit("ABSENT")} isLoading={busyAction === "ABSENT"}>
-          Absent
+        <Button type="button" variant="secondary" onClick={() => submit("CLEAR")} isLoading={busyAction === "CLEAR"}>
+          Clear (not marked)
         </Button>
       </div>
     </Modal>
@@ -84,8 +84,9 @@ function CorrectModal({ target, onClose, onDone, correctFn }) {
 }
 
 // Shared today-board + monthly grid for the manager ("Team") and admin
-// ("All") attendance pages. Rows are one per (employee, project). Admin passes
-// `canCorrect` + `correctFn` to enable click-to-edit cells.
+// ("All") attendance pages. One row per employee - attendance is marked once
+// a day across all their projects. Admin passes `canCorrect` + `correctFn` to
+// enable click-to-edit cells.
 export default function AttendanceRoster({
   title,
   subtitle,
@@ -207,13 +208,8 @@ export default function AttendanceRoster({
               <span>
                 <b>{s.notMarked}</b> not marked yet
               </span>
-              {s.absent > 0 && (
-                <span>
-                  <b>{s.absent}</b> absent
-                </span>
-              )}
               <span style={{ marginLeft: "auto", color: "var(--text-secondary)" }}>
-                {data.rows.length} employee-project rows · auto-refreshes
+                {data.rows.length} employee{data.rows.length === 1 ? "" : "s"} · auto-refreshes
               </span>
             </div>
           )}
@@ -241,7 +237,7 @@ export default function AttendanceRoster({
                 />
                 {nameQuery && (
                   <span className="acct-search-count">
-                    {visibleRows.length} of {data.rows.length} rows
+                    {visibleRows.length} of {data.rows.length} employees
                   </span>
                 )}
               </div>
@@ -250,7 +246,7 @@ export default function AttendanceRoster({
                 <table className="att-grid">
                   <thead>
                     <tr>
-                      <th className="att-grid-namecol">Employee · Project</th>
+                      <th className="att-grid-namecol">Employee · Projects</th>
                       {dayKeys.map((key) => {
                         const d = Number(key.slice(8, 10));
                         return (
@@ -278,10 +274,10 @@ export default function AttendanceRoster({
                       </tr>
                     )}
                     {visibleRows.map((row) => (
-                      <tr key={`${row.userId}-${row.projectId}`}>
+                      <tr key={row.userId}>
                         <td className="att-grid-namecol">
                           <div className="att-grid-emp">{row.employeeName}</div>
-                          <div className="att-grid-proj">{row.projectName}</div>
+                          <div className="att-grid-proj">{row.projectNames.join(", ")}</div>
                         </td>
                         {row.days.map((cell) => {
                           const meta = statusMeta(cell.status);
@@ -299,9 +295,8 @@ export default function AttendanceRoster({
                                     ? () =>
                                         setCorrectTarget({
                                           userId: row.userId,
-                                          projectId: row.projectId,
                                           employeeName: row.employeeName,
-                                          projectName: row.projectName,
+                                          projectNames: row.projectNames,
                                           date: cell.date,
                                         })
                                     : undefined

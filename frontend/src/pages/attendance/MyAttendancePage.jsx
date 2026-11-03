@@ -15,7 +15,7 @@ const MONTH_LABEL = (year, month) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-IN", { month: "long", year: "numeric" });
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const LEGEND = ["PRESENT", "HALF_DAY", "WFH", "ON_LEAVE", "ABSENT", "HOLIDAY"];
+const LEGEND = ["PRESENT", "HALF_DAY", "WFH", "ON_LEAVE", "NOT_MARKED", "HOLIDAY"];
 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -137,7 +137,7 @@ export default function MyAttendancePage() {
       <div className="page-header">
         <div>
           <h1>Attendance</h1>
-          <p>Click a day in the calendar to mark yourself present, half day, or absent.</p>
+          <p>Click a day in the calendar to mark yourself present or half day. Days you haven't marked show as "-" - if you were away, ask your manager or admin to record it as leave.</p>
         </div>
         <button
           type="button"
@@ -176,8 +176,8 @@ export default function MyAttendancePage() {
                 <div className="att-summary-label">Half day</div>
               </div>
               <div className="att-summary-tile">
-                <div className="att-summary-value">{data.summary.absent}</div>
-                <div className="att-summary-label">Absent</div>
+                <div className="att-summary-value">{data.summary.notMarked}</div>
+                <div className="att-summary-label">Not marked</div>
               </div>
               <div className="att-summary-tile">
                 <div className="att-summary-value">{data.summary.leave}</div>

@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Search } from "lucide-react";
+import { Download, FileArchive, FileText, Search } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
 import StatusBadge from "../../components/common/StatusBadge";
 import TextInput from "../../components/common/TextInput";
+import Button from "../../components/common/Button";
+import RunPayrollModal from "./RunPayrollModal";
+import ExportPayrollModal from "./ExportPayrollModal";
 import * as adminApi from "../../api/admin.api";
 import "../../styles/dashboardShared.css";
 
@@ -22,6 +25,8 @@ export default function PayslipsPage() {
   const [users, setUsers] = useState(null);
   const [typeFilter, setTypeFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [isRunOpen, setIsRunOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
   // Admins are on the salaried payslip model too - they appear here like any
   // other employee. (Contract hires are filtered out by the type filter below.)
@@ -49,7 +54,17 @@ export default function PayslipsPage() {
       <div className="page-header">
         <div>
           <h1>Payslips</h1>
-          <p>Generate and download a monthly payslip for any employee.</p>
+          <p>Generate and download a monthly payslip for any employee, or run payroll for everyone at once.</p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Button type="button" variant="secondary" className="page-header-btn" onClick={() => setIsExportOpen(true)}>
+            <Download size={16} />
+            Export Payroll
+          </Button>
+          <Button type="button" className="page-header-btn" onClick={() => setIsRunOpen(true)}>
+            <FileArchive size={16} />
+            Run Payroll
+          </Button>
         </div>
       </div>
 
@@ -141,6 +156,9 @@ export default function PayslipsPage() {
           )}
         </div>
       </div>
+
+      {isRunOpen && <RunPayrollModal onClose={() => setIsRunOpen(false)} />}
+      {isExportOpen && <ExportPayrollModal onClose={() => setIsExportOpen(false)} />}
     </DashboardLayout>
   );
 }

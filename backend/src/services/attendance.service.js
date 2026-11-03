@@ -4,9 +4,15 @@ const companySettingsService = require("./companySettings.service");
 const leaveCalendarService = require("./leaveCalendar.service");
 
 // ---------------------------------------------------------------------------
-// Attendance is a self-reported, per-project daily log. An employee on N
-// projects has N mark controls each day: "Present" or "Half day". There's no
+// Attendance is a self-reported daily log: one "Present" / "Half day" mark per
+// day, no matter how many projects the employee is on. Rows are still stored
+// per (employee, project, day) - a mark is written to every project they're
+// assigned to, and reads merge them back into one status per day. There's no
 // approval step and no late/on-time judgement.
+//
+// A working day with no mark is "Not marked" (shown as "-"), never "Absent" -
+// a real absence is applied as leave. Run Payroll refuses to start while any
+// employee still has a not-marked day in that month (see findUnmarkedEmployees).
 //
 // The employee can mark or change any working day from the tracking start
 // (see TRACKING_START) or their joining date, whichever is later, right up to
@@ -31,7 +37,6 @@ const STATUS = {
   WFH: "WFH",
   PRESENT: "PRESENT",
   HALF_DAY: "HALF_DAY",
-  ABSENT: "ABSENT",
   NOT_MARKED: "NOT_MARKED",
   NOT_TRACKED: "NOT_TRACKED",
   FUTURE: "FUTURE",
@@ -101,16 +106,25 @@ const resolveStatus = ({ dayKey, todayKey, floorKey, weekendSet, holidaySet, lea
   // Plain working day with no data before the floor - blank, admin-backfillable.
   if (floorKey && dayKey < floorKey) return STATUS.NOT_TRACKED;
   if (dayKey > todayKey) return STATUS.FUTURE;
-  if (dayKey === todayKey) return STATUS.NOT_MARKED;
-  return STATUS.ABSENT;
+  return STATUS.NOT_MARKED;
+};
+
+// Merges one day's per-project statuses into the single status shown for that
+// day - any project marked present wins, then half day. Unmarked statuses
+// (weekend, leave, not marked, ...) don't depend on the project, so they're
+// all the same and any one of them stands for the day.
+const mergeProjectStatuses = (statuses) => {
+  if (statuses.includes(STATUS.PRESENT)) return STATUS.PRESENT;
+  if (statuses.includes(STATUS.HALF_DAY)) return STATUS.HALF_DAY;
+  return statuses[0];
 };
 
 const tallyStatuses = (statuses) => {
-  const counts = { present: 0, halfDay: 0, absent: 0, leave: 0, wfh: 0 };
+  const counts = { present: 0, halfDay: 0, notMarked: 0, leave: 0, wfh: 0 };
   for (const s of statuses) {
     if (s === STATUS.PRESENT) counts.present += 1;
     else if (s === STATUS.HALF_DAY) counts.halfDay += 1;
-    else if (s === STATUS.ABSENT) counts.absent += 1;
+    else if (s === STATUS.NOT_MARKED) counts.notMarked += 1;
     else if (s === STATUS.ON_LEAVE) counts.leave += 1;
     else if (s === STATUS.WFH) counts.wfh += 1;
   }
@@ -159,12 +173,26 @@ const assertRecordableDay = async (userId, dateKey) => {
   if (leaveDays.has(dateKey)) throw ApiError.badRequest("The employee is on approved leave that day.");
 };
 
-// Present / half-day -> upsert; absent -> delete the row.
-const writeDay = async ({ userId, projectId, dateKey, status, isAdmin, adminId, note }) => {
+// "CLEAR" (or the old "ABSENT", still accepted from not-yet-refreshed
+// browsers) removes the day's mark, putting it back to "Not marked".
+const MARK_STATUSES = ["PRESENT", "HALF_DAY", "CLEAR", "ABSENT"];
+const isClear = (status) => status === "CLEAR" || status === "ABSENT";
+
+// Every project the employee is assigned to - a day's mark is written to all
+// of them so attendance stays one-per-day.
+const getMemberProjectIds = async (userId) => {
+  const memberships = await prisma.projectMembership.findMany({ where: { userId }, select: { projectId: true } });
+  return memberships.map((m) => m.projectId);
+};
+
+// Present / half-day -> upsert one row per assigned project; clear -> delete
+// every row for that day (including any left on a project they've since
+// left).
+const writeDay = async ({ userId, projectIds, dateKey, status, isAdmin, adminId, note }) => {
   const date = dateFromKey(dateKey);
 
-  if (status === "ABSENT") {
-    await prisma.attendance.deleteMany({ where: { userId, projectId, date } });
+  if (isClear(status)) {
+    await prisma.attendance.deleteMany({ where: { userId, date } });
     return { cleared: true };
   }
 
@@ -173,27 +201,31 @@ const writeDay = async ({ userId, projectId, dateKey, status, isAdmin, adminId, 
     ? { source: "ADMIN", note: note || null, correctedById: adminId, correctedAt: new Date() }
     : { source: "SELF" };
 
-  const attendance = await prisma.attendance.upsert({
-    where: { userId_projectId_date: { userId, projectId, date } },
-    create: { userId, projectId, date, markedAt: new Date(), isHalfDay, ...base },
-    update: { isHalfDay, markedAt: new Date(), ...base },
-  });
+  const attendance = await prisma.$transaction(
+    projectIds.map((projectId) =>
+      prisma.attendance.upsert({
+        where: { userId_projectId_date: { userId, projectId, date } },
+        create: { userId, projectId, date, markedAt: new Date(), isHalfDay, ...base },
+        update: { isHalfDay, markedAt: new Date(), ...base },
+      })
+    )
+  );
   return { attendance };
 };
 
 // ----------------------- employee: mark / change a day -----------------------
 
-const markAttendance = async (userId, projectId, dateKey, status) => {
-  if (!["PRESENT", "HALF_DAY", "ABSENT"].includes(status)) {
+const markAttendance = async (userId, dateKey, status) => {
+  if (!MARK_STATUSES.includes(status)) {
     throw ApiError.badRequest("Invalid attendance status.");
   }
 
-  const [membership, me] = await Promise.all([
-    prisma.projectMembership.findUnique({ where: { userId_projectId: { userId, projectId } } }),
+  const [projectIds, me] = await Promise.all([
+    getMemberProjectIds(userId),
     prisma.user.findUnique({ where: { id: userId }, select: { joiningDate: true } }),
   ]);
-  if (!membership) {
-    throw ApiError.badRequest("You're not assigned to this project.");
+  if (projectIds.length === 0) {
+    throw ApiError.badRequest("You're not assigned to any project yet.");
   }
 
   const { timezone } = await companySettingsService.getSettings();
@@ -216,7 +248,7 @@ const markAttendance = async (userId, projectId, dateKey, status) => {
   }
 
   await assertRecordableDay(userId, targetKey);
-  return writeDay({ userId, projectId, dateKey: targetKey, status, isAdmin: false });
+  return writeDay({ userId, projectIds, dateKey: targetKey, status, isAdmin: false });
 };
 
 // ------------------------- employee: my attendance -------------------------
@@ -263,7 +295,7 @@ const getMyAttendance = async (userId, year, month) => {
     });
 
     const statuses = perProject.map((p) => p.status);
-    let overall = STATUS.ABSENT;
+    let overall = STATUS.NOT_MARKED;
     if (weekendSet.has(dayKey)) overall = STATUS.WEEKEND;
     else if (holidaySet.has(dayKey)) overall = STATUS.HOLIDAY;
     else if (statuses.includes(STATUS.PRESENT)) overall = STATUS.PRESENT;
@@ -272,7 +304,6 @@ const getMyAttendance = async (userId, year, month) => {
     else if (wfhDays.has(dayKey)) overall = STATUS.WFH;
     else if (notTracked) overall = STATUS.NOT_TRACKED;
     else if (dayKey > todayKey) overall = STATUS.FUTURE;
-    else if (dayKey === todayKey) overall = STATUS.NOT_MARKED;
 
     return {
       date: dayKey,
@@ -343,7 +374,15 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
   const weekendSet = new Set(calendar.weekendDates);
   const holidaySet = new Set(calendar.holidays.map((h) => h.date));
 
-  const userIds = [...new Set(memberships.map((m) => m.userId))];
+  // One roster row per employee - their projects are folded together, since
+  // attendance is marked once per day across all of them.
+  const byUser = new Map();
+  for (const m of memberships) {
+    if (!byUser.has(m.userId)) byUser.set(m.userId, { user: m.user, projects: [] });
+    byUser.get(m.userId).projects.push(m.project);
+  }
+
+  const userIds = [...byUser.keys()];
   const [allMarks, leaveWfhByUser] = await Promise.all([
     prisma.attendance.findMany({ where: { userId: { in: userIds }, date: { gte: start, lte: end } } }),
     Promise.all(userIds.map((id) => approvedDayMaps(id, start, end).then((maps) => [id, maps]))),
@@ -359,26 +398,35 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
   }
 
   const todaySummary = {
-    total: memberships.length,
+    total: byUser.size,
     present: 0,
     halfDay: 0,
     wfh: 0,
     onLeave: 0,
     notMarked: 0,
-    absent: 0,
   };
 
-  const rows = memberships.map((m) => {
-    const { leaveDays, wfhDays } = contextByUser.get(m.userId) || { leaveDays: new Set(), wfhDays: new Set() };
-    const floorKey = trackingFloorKey(m.user.joiningDate);
+  const rows = [...byUser.entries()].map(([userId, { user, projects }]) => {
+    const { leaveDays, wfhDays } = contextByUser.get(userId) || { leaveDays: new Set(), wfhDays: new Set() };
+    const floorKey = trackingFloorKey(user.joiningDate);
 
-    const monthDays = dayKeys.map((dayKey) => {
-      const markRow = markByKey.get(`${m.userId}|${m.projectId}|${dayKey}`);
-      return {
-        date: dayKey,
-        status: resolveStatus({ dayKey, todayKey, floorKey, weekendSet, holidaySet, leaveDays, wfhDays, markRow }),
-      };
-    });
+    const monthDays = dayKeys.map((dayKey) => ({
+      date: dayKey,
+      status: mergeProjectStatuses(
+        projects.map((project) =>
+          resolveStatus({
+            dayKey,
+            todayKey,
+            floorKey,
+            weekendSet,
+            holidaySet,
+            leaveDays,
+            wfhDays,
+            markRow: markByKey.get(`${userId}|${project.id}|${dayKey}`),
+          })
+        )
+      ),
+    }));
 
     const todayCell = monthDays.find((d) => d.date === todayKey);
     const todayStatus = todayCell ? todayCell.status : STATUS.FUTURE;
@@ -387,17 +435,15 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
     else if (todayStatus === STATUS.WFH) todaySummary.wfh += 1;
     else if (todayStatus === STATUS.ON_LEAVE) todaySummary.onLeave += 1;
     else if (todayStatus === STATUS.NOT_MARKED) todaySummary.notMarked += 1;
-    else if (todayStatus === STATUS.ABSENT) todaySummary.absent += 1;
 
     const upToToday = monthDays.filter((d) => d.date <= todayKey);
-    const joinKey = m.user.joiningDate ? toDateKey(m.user.joiningDate) : null;
+    const joinKey = user.joiningDate ? toDateKey(user.joiningDate) : null;
 
     return {
-      userId: m.userId,
-      employeeName: `${m.user.firstName} ${m.user.lastName}`,
-      employeeCode: m.user.employeeCode,
-      projectId: m.projectId,
-      projectName: m.project.name,
+      userId,
+      employeeName: `${user.firstName} ${user.lastName}`,
+      employeeCode: user.employeeCode,
+      projectNames: projects.map((p) => p.name),
       today: { date: todayKey, status: todayStatus },
       days: monthDays,
       counts: tallyStatuses(upToToday.map((d) => d.status)),
@@ -406,7 +452,7 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
   });
 
   // Order rows by employee code (trailing-digit sequence, mirrors the admin
-  // account list), then by project name for a person's multiple rows.
+  // account list), then by name.
   const codeSeq = (code) => {
     if (!code) return Number.POSITIVE_INFINITY;
     const m = String(code).match(/(\d+)$/);
@@ -416,8 +462,7 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
     const sa = codeSeq(a.employeeCode);
     const sb = codeSeq(b.employeeCode);
     if (sa !== sb) return sa - sb;
-    if (a.employeeName !== b.employeeName) return a.employeeName.localeCompare(b.employeeName);
-    return a.projectName.localeCompare(b.projectName);
+    return a.employeeName.localeCompare(b.employeeName);
   });
 
   return {
@@ -433,13 +478,17 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
 
 // --------------------------- admin: correct a day ---------------------------
 
-const correctAttendance = async ({ adminId, userId, projectId, dateKey, action, note }) => {
-  const [membership, employee] = await Promise.all([
-    prisma.projectMembership.findUnique({ where: { userId_projectId: { userId, projectId } } }),
+const correctAttendance = async ({ adminId, userId, dateKey, action, note }) => {
+  if (!MARK_STATUSES.includes(action)) {
+    throw ApiError.badRequest("Invalid attendance status.");
+  }
+
+  const [projectIds, employee] = await Promise.all([
+    getMemberProjectIds(userId),
     prisma.user.findUnique({ where: { id: userId }, select: { joiningDate: true } }),
   ]);
-  if (!membership) {
-    throw ApiError.badRequest("That employee isn't assigned to this project.");
+  if (projectIds.length === 0) {
+    throw ApiError.badRequest("That employee isn't assigned to any project.");
   }
 
   const { timezone } = await companySettingsService.getSettings();
@@ -454,7 +503,26 @@ const correctAttendance = async ({ adminId, userId, projectId, dateKey, action, 
   }
 
   await assertRecordableDay(userId, dateKey);
-  return writeDay({ userId, projectId, dateKey, status: action, isAdmin: true, adminId, note });
+  return writeDay({ userId, projectIds, dateKey, status: action, isAdmin: true, adminId, note });
+};
+
+// ------------------------ payroll: unmarked attendance ------------------------
+
+// Employees (out of `userIds`) who still have at least one "Not marked"
+// working day in the month, up to today - Run Payroll is blocked until this
+// list is empty. Employees not on any project have no attendance to mark and
+// never appear here.
+const findUnmarkedEmployees = async (userIds, year, month) => {
+  if (userIds.length === 0) return [];
+  const { rows } = await getRosterAttendance({ userWhere: { id: { in: userIds } }, year, month });
+  return rows
+    .filter((row) => row.counts.notMarked > 0)
+    .map((row) => ({
+      userId: row.userId,
+      employeeName: row.employeeName,
+      employeeCode: row.employeeCode,
+      notMarkedDays: row.days.filter((d) => d.status === STATUS.NOT_MARKED).map((d) => d.date),
+    }));
 };
 
 module.exports = {
@@ -464,4 +532,5 @@ module.exports = {
   getMyAttendance,
   getRosterAttendance,
   correctAttendance,
+  findUnmarkedEmployees,
 };

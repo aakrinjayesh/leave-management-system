@@ -169,6 +169,9 @@ router.post("/users/:id/payslips", validate(generatePayslipSchema), payrollContr
 router.get("/users/:id/payslips", payrollController.listPayslips);
 router.post("/users/:id/payslips/:payslipId/email", payrollController.emailPayslip);
 router.get("/payslips/:id/pdf", payrollController.downloadPayslipPdf);
+router.get("/payroll/run/check", payrollController.checkPayrollRun);
+router.post("/payroll/run", payrollController.runPayroll);
+router.get("/payroll/export", payrollController.exportPayroll);
 
 // Contract-hire payment (employmentType = CONTRACT) - fully separate from the
 // employee salary structure / payslips above.

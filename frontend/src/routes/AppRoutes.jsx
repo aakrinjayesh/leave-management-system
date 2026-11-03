@@ -89,9 +89,12 @@ export default function AppRoutes() {
 
       {/* "My own" self-service pages - available to every account type. Admin
           reaches these from the "My Workspace" card on their dashboard rather
-          than the sidebar. */}
-      <Route element={<ProtectedRoute />}>
+          than the sidebar. My Leave Requests is admin-only: everyone else's
+          leave is recorded for them by their manager or an admin. */}
+      <Route element={<ProtectedRoute check={isAdmin} />}>
         <Route path="/employee/leave-requests" element={<MyLeaveRequestsPage />} />
+      </Route>
+      <Route element={<ProtectedRoute />}>
         <Route path="/timesheet" element={<MyTimesheetPage />} />
         <Route path="/wfh" element={<MyWfhPage />} />
         <Route path="/attendance" element={<MyAttendancePage />} />

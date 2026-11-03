@@ -3,11 +3,12 @@ const ApiError = require("../utils/ApiError");
 const ApiResponse = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const payrollService = require("../services/payroll.service");
+const payrollRunService = require("../services/payrollRun.service");
 const { streamPayslipPdf } = require("../services/payslipPdf.service");
 const notificationService = require("../services/notification.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
-const { uploadToS3, deleteFromS3 } = require("../utils/s3.util");
+const { uploadToS3 } = require("../utils/s3.util");
 const { sendPayslipEmail, sendSalaryStructureUpdatedEmail } = require("../utils/email.util");
 
 const monthLabel = (year, month) =>
@@ -38,29 +39,48 @@ const generatePayslip = asyncHandler(async (req, res) => {
   const userId = Number(req.params.id);
   const { year, month, tds, annualBonusPay } = req.body;
 
-  const payslip = await payrollService.generatePayslip(userId, year, month, { tds, annualBonusPay }, req.user.id);
+  const { payslip } = await payrollRunService.generateAndStorePayslip(userId, year, month, { tds, annualBonusPay }, req.user.id);
 
-  const employee = await prisma.user.findUnique({ where: { id: userId } });
-  const ytd = await payrollService.getYtdTotals(userId, year, month);
+  new ApiResponse(200, "Payslip generated.", { payslip }).send(res);
+});
 
-  const buffer = await renderPdfToBuffer(streamPayslipPdf, { payslip, employee, ytd });
-  const { url } = await uploadToS3(
-    {
-      buffer,
-      originalname: `payslip-${employee.firstName}-${year}-${String(month).padStart(2, "0")}.pdf`,
-      mimetype: "application/pdf",
-    },
-    "payslips"
-  );
+// ── Company-wide payroll (Run Payroll / Export Payroll) ──────────────────
 
-  // Re-generating the same month overwrites this same row (see the upsert
-  // above) - at this point payslip.pdfUrl still holds the PREVIOUS PDF, since
-  // the upsert doesn't touch it, so remove that one now that its replacement
-  // is safely uploaded.
-  await deleteFromS3(payslip.pdfUrl);
-  const updated = await prisma.payslip.update({ where: { id: payslip.id }, data: { pdfUrl: url } });
+const parsePayrollMonth = (source) => {
+  const year = Number(source.year);
+  const month = Number(source.month);
+  if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw ApiError.badRequest("Please choose a valid month.");
+  }
+  return { year, month };
+};
 
-  new ApiResponse(200, "Payslip generated.", { payslip: updated }).send(res);
+// Pre-flight for Run Payroll - who's included, who has unmarked attendance
+// (blocks the run) and who has no salary set (skipped).
+const checkPayrollRun = asyncHandler(async (req, res) => {
+  const { year, month } = parsePayrollMonth(req.query);
+  const data = await payrollRunService.checkRun(year, month);
+  new ApiResponse(200, "OK", data).send(res);
+});
+
+// Generates every salaried employee's payslip for the month and downloads
+// them as one ZIP (Payroll_MonthYYYY.zip).
+const runPayroll = asyncHandler(async (req, res) => {
+  const { year, month } = parsePayrollMonth(req.body);
+  const { buffer, fileName, generatedCount, skippedCount } = await payrollRunService.runPayroll(year, month, req.user.id);
+
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.setHeader("X-Payroll-Generated", String(generatedCount));
+  res.setHeader("X-Payroll-Skipped", String(skippedCount));
+  res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, X-Payroll-Generated, X-Payroll-Skipped");
+  res.send(buffer);
+});
+
+const exportPayroll = asyncHandler(async (req, res) => {
+  const { year, month } = parsePayrollMonth(req.query);
+  const data = await payrollRunService.getExportRows(year, month);
+  new ApiResponse(200, "OK", data).send(res);
 });
 
 const listPayslips = asyncHandler(async (req, res) => {
@@ -292,6 +312,9 @@ const emailPayslip = asyncHandler(async (req, res) => {
 module.exports = {
   previewPayslip,
   generatePayslip,
+  checkPayrollRun,
+  runPayroll,
+  exportPayroll,
   listPayslips,
   downloadPayslipPdf,
   emailPayslip,

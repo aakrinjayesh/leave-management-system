@@ -176,6 +176,16 @@ export const emailPayslip = (userId, payslipId) =>
 export const downloadPayslipPdf = (payslipId) =>
   axiosClient.get(`/admin/payslips/${payslipId}/pdf`, { responseType: "blob" });
 
+// Company-wide payroll for one month. checkPayrollRun is the pre-flight
+// (unmarked attendance blocks the run); runPayroll returns the ZIP of every
+// payslip as a raw axios response so the caller can read its filename.
+export const checkPayrollRun = (year, month) =>
+  unwrap(axiosClient.get("/admin/payroll/run/check", { params: { year, month } }));
+
+export const runPayroll = (year, month) => axiosClient.post("/admin/payroll/run", { year, month }, { responseType: "blob" });
+
+export const exportPayroll = (year, month) => unwrap(axiosClient.get("/admin/payroll/export", { params: { year, month } }));
+
 // ---------- Contract-hire payment (employmentType = CONTRACT only) ----------
 
 export const getContractPaymentStructureHistory = (userId) =>

@@ -85,12 +85,9 @@ const buildNavItems = (user) => {
     });
   }
 
+  // No "My Leave Requests" for non-admins - their leave is recorded by their
+  // manager or an admin. Admins still reach their own from My Workspace.
   if (!isAdmin) {
-    items.push({
-      to: "/employee/leave-requests",
-      label: "My Leave Requests",
-      icon: ListChecks,
-    });
     items.push({ to: "/timesheet", label: "Timesheet", icon: Clock });
     items.push({ to: "/wfh", label: "WFH", icon: Home });
     items.push({ to: "/attendance", label: "Attendance", icon: CalendarCheck });
