@@ -137,6 +137,10 @@ model User {
     // never double-sends if it happens to run more than once on the same day.
     lastBirthdayEmailYear Int?
 
+    // Same idea as lastBirthdayEmailYear, but for the separate "tomorrow is
+    // X's birthday" advance reminder sent to admins + this person's manager.
+    lastBirthdayReminderYear Int?
+
     // The year the birthday dashboard celebration overlay was last shown, so
     // it fires once per birthday instead of on every dashboard visit that day.
     lastBirthdayCelebratedYear Int?
