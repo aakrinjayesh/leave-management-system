@@ -10,6 +10,7 @@ const sendViaForcehead = async ({ to, subject, html }) => {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "x-api-key": process.env.EMAIL_RELAY_API_KEY,
     },
     body: JSON.stringify({
       EMAIL_HOST: env.EMAIL_HOST,
@@ -109,9 +110,16 @@ const toDateInputValue = (date) => new Date(date).toISOString().slice(0, 10);
 // (read by LoginPage/VerifyOtpPage's post-login redirect). Works whether the
 // recipient is already logged in elsewhere or not: an active session on
 // click just breezes through login and lands on targetPath anyway.
-const buildLoginRedirectUrl = (targetPath) => `${env.CLIENT_URL}/login?redirect=${encodeURIComponent(targetPath)}`;
+const buildLoginRedirectUrl = (targetPath) =>
+  `${env.CLIENT_URL}/login?redirect=${encodeURIComponent(targetPath)}`;
 
-const buildLeaveEmailHtml = ({ heading, intro, detailsRows, footerNote, ctaButton }) => `
+const buildLeaveEmailHtml = ({
+  heading,
+  intro,
+  detailsRows,
+  footerNote,
+  ctaButton,
+}) => `
   <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #1f2937;">
     <h2 style="margin-bottom: 8px;">${heading}</h2>
     <p>${intro}</p>
@@ -173,11 +181,12 @@ const sendLeaveSubmittedEmail = async ({
     ctaButton: leaveRequestId
       ? {
           label: "Review this request",
-          url: buildLoginRedirectUrl(`/manager/leave-requests?requestId=${leaveRequestId}`),
+          url: buildLoginRedirectUrl(
+            `/manager/leave-requests?requestId=${leaveRequestId}`,
+          ),
         }
       : null,
-    footerNote:
-      "Log in to Employee Portal to approve or decline this request.",
+    footerNote: "Log in to Employee Portal to approve or decline this request.",
   });
 
   return sendMail({
@@ -249,7 +258,12 @@ const sendLeaveDecisionEmail = async ({
       ...(remarks ? [["Remarks", remarks]] : []),
     ],
     ctaButton: leaveRequestId
-      ? { label: "View this request", url: buildLoginRedirectUrl(`/employee/leave-requests?requestId=${leaveRequestId}`) }
+      ? {
+          label: "View this request",
+          url: buildLoginRedirectUrl(
+            `/employee/leave-requests?requestId=${leaveRequestId}`,
+          ),
+        }
       : null,
   });
 
@@ -278,7 +292,12 @@ const sendLeaveCancelledEmail = async ({
       ["Dates", `${formatDateShort(startDate)} – ${formatDateShort(endDate)}`],
     ],
     ctaButton: leaveRequestId
-      ? { label: "View in Employee Portal", url: buildLoginRedirectUrl(`/manager/leave-requests?requestId=${leaveRequestId}`) }
+      ? {
+          label: "View in Employee Portal",
+          url: buildLoginRedirectUrl(
+            `/manager/leave-requests?requestId=${leaveRequestId}`,
+          ),
+        }
       : null,
   });
 
@@ -430,7 +449,12 @@ const sendTimesheetSubmittedEmail = async ({
       ],
       ["Total hours", String(totalHours)],
     ],
-    ctaButton: submissionId ? { label: "Review this timesheet", url: buildLoginRedirectUrl(targetPath) } : null,
+    ctaButton: submissionId
+      ? {
+          label: "Review this timesheet",
+          url: buildLoginRedirectUrl(targetPath),
+        }
+      : null,
     footerNote: "Log in to Employee Portal to review it.",
   });
 
@@ -468,7 +492,10 @@ const sendTimesheetDecisionEmail = async ({
       ...(remarks ? [["Remarks", remarks]] : []),
     ],
     ctaButton: submissionId
-      ? { label: "View this timesheet", url: buildLoginRedirectUrl(`/timesheet?submissionId=${submissionId}`) }
+      ? {
+          label: "View this timesheet",
+          url: buildLoginRedirectUrl(`/timesheet?submissionId=${submissionId}`),
+        }
       : null,
   });
 
@@ -505,8 +532,13 @@ const sendResignationSubmittedEmail = async ({
     ],
     ctaButton: resignationId
       ? {
-          label: viewerRole === "ADMIN" ? "Review this resignation" : "View this resignation",
-          url: buildLoginRedirectUrl(resignationPath(viewerRole, resignationId)),
+          label:
+            viewerRole === "ADMIN"
+              ? "Review this resignation"
+              : "View this resignation",
+          url: buildLoginRedirectUrl(
+            resignationPath(viewerRole, resignationId),
+          ),
         }
       : null,
     footerNote: "Log in to Employee Portal to accept or reject it.",
@@ -536,7 +568,10 @@ const sendResignationDecisionEmail = async ({
     detailsRows: isAccepted
       ? [["Confirmed last working day", formatDateShort(lastWorkingDate)]]
       : [],
-    ctaButton: { label: "View your profile", url: buildLoginRedirectUrl("/profile") },
+    ctaButton: {
+      label: "View your profile",
+      url: buildLoginRedirectUrl("/profile"),
+    },
     footerNote: isAccepted
       ? "Please reach out to your manager or admin if you have any questions about your last working day."
       : "You can submit a new resignation at any time if you still wish to.",
@@ -561,7 +596,12 @@ const sendResignationWithdrawnEmail = async ({
     heading: "Resignation withdrawn",
     intro: `Hi ${recipientFirstName || "there"}, ${employeeName} has withdrawn their resignation - no further action needed.`,
     ctaButton: resignationId
-      ? { label: "View in Employee Portal", url: buildLoginRedirectUrl(resignationPath(viewerRole, resignationId)) }
+      ? {
+          label: "View in Employee Portal",
+          url: buildLoginRedirectUrl(
+            resignationPath(viewerRole, resignationId),
+          ),
+        }
       : null,
   });
 
@@ -592,7 +632,9 @@ const sendExitNotificationEmail = async ({
     // single sensible page to send a manager/admin FYI copy to (an admin
     // could go to that employee's own details page, but a manager has no
     // equivalent), so those copies stay button-less rather than guessing.
-    ctaButton: isSelf ? { label: "View your profile", url: buildLoginRedirectUrl("/profile") } : null,
+    ctaButton: isSelf
+      ? { label: "View your profile", url: buildLoginRedirectUrl("/profile") }
+      : null,
   });
 
   return sendMail({
@@ -613,7 +655,10 @@ const sendAdminAccessRemovedEmail = async ({
   const html = buildSimpleEmailHtml({
     heading: "Admin access removed",
     intro: `Hi ${firstName || "there"}, ${removedByName} has removed your admin access. You now have a regular employee account.`,
-    ctaButton: { label: "View your profile", url: buildLoginRedirectUrl("/profile") },
+    ctaButton: {
+      label: "View your profile",
+      url: buildLoginRedirectUrl("/profile"),
+    },
   });
 
   return sendMail({
@@ -624,11 +669,18 @@ const sendAdminAccessRemovedEmail = async ({
   });
 };
 
-const sendAdminAccessGrantedEmail = async ({ to, firstName, grantedByName }) => {
+const sendAdminAccessGrantedEmail = async ({
+  to,
+  firstName,
+  grantedByName,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: "You're now an admin",
     intro: `Hi ${firstName || "there"}, ${grantedByName} has made you an admin. You can now manage accounts, projects, leave policy, reports and payslips.`,
-    ctaButton: { label: "Open Employee Portal", url: buildLoginRedirectUrl("/profile") },
+    ctaButton: {
+      label: "Open Employee Portal",
+      url: buildLoginRedirectUrl("/profile"),
+    },
     footerNote: "Log in to Employee Portal to see the new admin sections.",
   });
 
@@ -643,7 +695,9 @@ const sendAdminAccessGrantedEmail = async ({ to, firstName, grantedByName }) => 
 // ---------- WFH notifications ----------
 
 const wfhPath = (viewerRole, wfhRequestId) =>
-  viewerRole === "MANAGER" ? `/manager/wfh-requests?requestId=${wfhRequestId}` : `/admin/wfh-requests?requestId=${wfhRequestId}`;
+  viewerRole === "MANAGER"
+    ? `/manager/wfh-requests?requestId=${wfhRequestId}`
+    : `/admin/wfh-requests?requestId=${wfhRequestId}`;
 
 const sendWfhSubmittedEmail = async ({
   to,
@@ -663,7 +717,10 @@ const sendWfhSubmittedEmail = async ({
       ["Reason", reason],
     ],
     ctaButton: wfhRequestId
-      ? { label: "Review this request", url: buildLoginRedirectUrl(wfhPath(viewerRole, wfhRequestId)) }
+      ? {
+          label: "Review this request",
+          url: buildLoginRedirectUrl(wfhPath(viewerRole, wfhRequestId)),
+        }
       : null,
     footerNote: "Log in to Employee Portal to approve or reject this request.",
   });
@@ -697,7 +754,12 @@ const sendWfhDecisionEmail = async ({
   wfhRequestId,
   viewerRole,
 }) => {
-  const verb = status === "APPROVED" ? "approved" : status === "REJECTED" ? "rejected" : "revoked";
+  const verb =
+    status === "APPROVED"
+      ? "approved"
+      : status === "REJECTED"
+        ? "rejected"
+        : "revoked";
   const whose = isEmployee ? "Your" : `${employeeName}'s`;
   const html = buildLeaveEmailHtml({
     heading: WFH_DECISION_HEADING[status] || "WFH request updated",
@@ -709,14 +771,20 @@ const sendWfhDecisionEmail = async ({
     ctaButton: wfhRequestId
       ? {
           label: "View this request",
-          url: buildLoginRedirectUrl(isEmployee ? `/wfh?requestId=${wfhRequestId}` : wfhPath(viewerRole, wfhRequestId)),
+          url: buildLoginRedirectUrl(
+            isEmployee
+              ? `/wfh?requestId=${wfhRequestId}`
+              : wfhPath(viewerRole, wfhRequestId),
+          ),
         }
       : null,
   });
 
   return sendMail({
     to,
-    subject: isEmployee ? `Your WFH request was ${verb}` : `${whose} WFH request was ${verb}`,
+    subject: isEmployee
+      ? `Your WFH request was ${verb}`
+      : `${whose} WFH request was ${verb}`,
     html,
     logLabel: `WFH ${status} for ${employeeName} to ${to}`,
   });
@@ -734,10 +802,13 @@ const sendWfhWithdrawnEmail = async ({
   const html = buildSimpleEmailHtml({
     heading: "WFH request withdrawn",
     intro: `Hi ${recipientFirstName || "there"}, ${employeeName} has withdrawn their WFH request for ${formatDateShort(
-      startDate
+      startDate,
     )} – ${formatDateShort(endDate)} - no further action needed.`,
     ctaButton: wfhRequestId
-      ? { label: "View in Employee Portal", url: buildLoginRedirectUrl(wfhPath(viewerRole, wfhRequestId)) }
+      ? {
+          label: "View in Employee Portal",
+          url: buildLoginRedirectUrl(wfhPath(viewerRole, wfhRequestId)),
+        }
       : null,
   });
 
@@ -762,9 +833,17 @@ const sendTimesheetLoggedEmail = async ({
   const html = buildLeaveEmailHtml({
     heading: "Timesheet logged for you",
     intro: `Hi ${employeeFirstName || "there"}, ${actorName} has logged and approved a timesheet on your behalf.`,
-    detailsRows: [["Period", `${formatDateShort(weekStartDate)} – ${formatDateShort(weekEndDate)}`]],
+    detailsRows: [
+      [
+        "Period",
+        `${formatDateShort(weekStartDate)} – ${formatDateShort(weekEndDate)}`,
+      ],
+    ],
     ctaButton: submissionId
-      ? { label: "View this timesheet", url: buildLoginRedirectUrl(`/timesheet?submissionId=${submissionId}`) }
+      ? {
+          label: "View this timesheet",
+          url: buildLoginRedirectUrl(`/timesheet?submissionId=${submissionId}`),
+        }
       : null,
     footerNote: "Log in to Employee Portal to review it.",
   });
@@ -777,12 +856,21 @@ const sendTimesheetLoggedEmail = async ({
   });
 };
 
-const sendTimesheetReminderEmail = async ({ to, firstName, monthLabel, projectName, missingCount }) => {
+const sendTimesheetReminderEmail = async ({
+  to,
+  firstName,
+  monthLabel,
+  projectName,
+  missingCount,
+}) => {
   const weekWord = missingCount === 1 ? "week" : "weeks";
   const html = buildSimpleEmailHtml({
     heading: "Timesheet not submitted",
     intro: `Hi ${firstName || "there"}, it's the last week of ${monthLabel} and your ${projectName} timesheet is still missing for ${missingCount} earlier ${weekWord} this month. Please submit it before the month ends.`,
-    ctaButton: { label: "Fill in your timesheet", url: buildLoginRedirectUrl("/timesheet") },
+    ctaButton: {
+      label: "Fill in your timesheet",
+      url: buildLoginRedirectUrl("/timesheet"),
+    },
     footerNote: "Log in to Employee Portal to fill it in.",
   });
 
@@ -796,7 +884,12 @@ const sendTimesheetReminderEmail = async ({ to, firstName, monthLabel, projectNa
 
 // ---------- Salary structure / leave policy / project changes ----------
 
-const sendSalaryStructureUpdatedEmail = async ({ to, firstName, ctc, effectiveFrom }) => {
+const sendSalaryStructureUpdatedEmail = async ({
+  to,
+  firstName,
+  ctc,
+  effectiveFrom,
+}) => {
   const html = buildLeaveEmailHtml({
     heading: "Salary structure updated",
     intro: `Hi ${firstName || "there"}, your salary structure has been updated by the admin team.`,
@@ -804,8 +897,12 @@ const sendSalaryStructureUpdatedEmail = async ({ to, firstName, ctc, effectiveFr
       ["New CTC (annual)", `₹${Number(ctc || 0).toLocaleString("en-IN")}`],
       ["Effective from", formatDateShort(effectiveFrom)],
     ],
-    ctaButton: { label: "View your profile", url: buildLoginRedirectUrl("/profile") },
-    footerNote: "Log in to Employee Portal to see the full breakdown on your profile.",
+    ctaButton: {
+      label: "View your profile",
+      url: buildLoginRedirectUrl("/profile"),
+    },
+    footerNote:
+      "Log in to Employee Portal to see the full breakdown on your profile.",
   });
 
   return sendMail({
@@ -816,11 +913,16 @@ const sendSalaryStructureUpdatedEmail = async ({ to, firstName, ctc, effectiveFr
   });
 };
 
-const sendLeavePolicyChangedEmail = async ({ to, recipientFirstName, message }) => {
+const sendLeavePolicyChangedEmail = async ({
+  to,
+  recipientFirstName,
+  message,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: "Leave policy updated",
     intro: `Hi ${recipientFirstName || "there"}, ${message}`,
-    footerNote: "Log in to Employee Portal to review the current leave rules and holidays.",
+    footerNote:
+      "Log in to Employee Portal to review the current leave rules and holidays.",
   });
 
   return sendMail({
@@ -835,7 +937,8 @@ const sendProjectChangedEmail = async ({ to, recipientFirstName, message }) => {
   const html = buildSimpleEmailHtml({
     heading: "Project list updated",
     intro: `Hi ${recipientFirstName || "there"}, ${message}`,
-    footerNote: "Log in to Employee Portal to see the current projects and members.",
+    footerNote:
+      "Log in to Employee Portal to see the current projects and members.",
   });
 
   return sendMail({
@@ -848,11 +951,18 @@ const sendProjectChangedEmail = async ({ to, recipientFirstName, message }) => {
 
 // ---------- Profile change: employee confirmation + admin FYI ----------
 
-const sendProfileChangeEmployeeEmail = async ({ to, firstName, sectionLabel }) => {
+const sendProfileChangeEmployeeEmail = async ({
+  to,
+  firstName,
+  sectionLabel,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: `${sectionLabel} updated`,
     intro: `Hi ${firstName || "there"}, your ${sectionLabel} on Employee Portal was just updated.`,
-    ctaButton: { label: "View your profile", url: buildLoginRedirectUrl("/profile") },
+    ctaButton: {
+      label: "View your profile",
+      url: buildLoginRedirectUrl("/profile"),
+    },
     footerNote: "If this wasn't you, contact your admin straight away.",
   });
 
@@ -864,12 +974,21 @@ const sendProfileChangeEmployeeEmail = async ({ to, firstName, sectionLabel }) =
   });
 };
 
-const sendProfileChangeAdminEmail = async ({ to, recipientFirstName, employeeName, sectionLabel, employeeId }) => {
+const sendProfileChangeAdminEmail = async ({
+  to,
+  recipientFirstName,
+  employeeName,
+  sectionLabel,
+  employeeId,
+}) => {
   const html = buildSimpleEmailHtml({
     heading: "Profile updated",
     intro: `Hi ${recipientFirstName || "there"}, ${employeeName} updated their ${sectionLabel}.`,
     ctaButton: employeeId
-      ? { label: "View their details", url: buildLoginRedirectUrl(`/admin/users/${employeeId}/details`) }
+      ? {
+          label: "View their details",
+          url: buildLoginRedirectUrl(`/admin/users/${employeeId}/details`),
+        }
       : null,
   });
 
@@ -884,7 +1003,9 @@ const sendProfileChangeAdminEmail = async ({ to, recipientFirstName, employeeNam
 // ---------- Reimbursement notifications ----------
 
 const reimbursementPath = (viewerRole, claimId) =>
-  viewerRole === "MANAGER" ? `/manager/reimbursements?claimId=${claimId}` : `/admin/reimbursements?claimId=${claimId}`;
+  viewerRole === "MANAGER"
+    ? `/manager/reimbursements?claimId=${claimId}`
+    : `/admin/reimbursements?claimId=${claimId}`;
 
 const sendReimbursementSubmittedEmail = async ({
   to,
@@ -907,7 +1028,10 @@ const sendReimbursementSubmittedEmail = async ({
       ["Attachments", `${fileCount} file${fileCount === 1 ? "" : "s"}`],
     ],
     ctaButton: claimId
-      ? { label: "Review this claim", url: buildLoginRedirectUrl(reimbursementPath(viewerRole, claimId)) }
+      ? {
+          label: "Review this claim",
+          url: buildLoginRedirectUrl(reimbursementPath(viewerRole, claimId)),
+        }
       : null,
     footerNote: "Log in to Employee Portal to approve or reject this claim.",
   });
@@ -932,7 +1056,9 @@ const sendReimbursementDecisionEmail = async ({
 }) => {
   const isApproved = status === "APPROVED";
   const html = buildLeaveEmailHtml({
-    heading: isApproved ? "Reimbursement claim approved" : "Reimbursement claim rejected",
+    heading: isApproved
+      ? "Reimbursement claim approved"
+      : "Reimbursement claim rejected",
     intro: `Hi ${employeeFirstName || "there"}, your reimbursement claim has been ${
       isApproved ? "approved" : "rejected"
     } by ${decidedByName}.`,
@@ -942,7 +1068,10 @@ const sendReimbursementDecisionEmail = async ({
       ...(remarks ? [[isApproved ? "Note" : "Reason", remarks]] : []),
     ],
     ctaButton: claimId
-      ? { label: "View this claim", url: buildLoginRedirectUrl(`/reimbursements?claimId=${claimId}`) }
+      ? {
+          label: "View this claim",
+          url: buildLoginRedirectUrl(`/reimbursements?claimId=${claimId}`),
+        }
       : null,
   });
 
@@ -954,7 +1083,15 @@ const sendReimbursementDecisionEmail = async ({
   });
 };
 
-const sendReimbursementCancelledEmail = async ({ to, recipientFirstName, claimantName, subject, amount, claimId, viewerRole }) => {
+const sendReimbursementCancelledEmail = async ({
+  to,
+  recipientFirstName,
+  claimantName,
+  subject,
+  amount,
+  claimId,
+  viewerRole,
+}) => {
   const html = buildLeaveEmailHtml({
     heading: "Reimbursement claim cancelled",
     intro: `Hi ${recipientFirstName || "there"}, ${claimantName} has cancelled their pending reimbursement claim - no action needed.`,
@@ -963,7 +1100,10 @@ const sendReimbursementCancelledEmail = async ({ to, recipientFirstName, claiman
       ["Amount", amount],
     ],
     ctaButton: claimId
-      ? { label: "View in Employee Portal", url: buildLoginRedirectUrl(reimbursementPath(viewerRole, claimId)) }
+      ? {
+          label: "View in Employee Portal",
+          url: buildLoginRedirectUrl(reimbursementPath(viewerRole, claimId)),
+        }
       : null,
   });
 
@@ -975,7 +1115,14 @@ const sendReimbursementCancelledEmail = async ({ to, recipientFirstName, claiman
   });
 };
 
-const sendReimbursementLoggedEmail = async ({ to, employeeFirstName, actorName, subject, amount, claimId }) => {
+const sendReimbursementLoggedEmail = async ({
+  to,
+  employeeFirstName,
+  actorName,
+  subject,
+  amount,
+  claimId,
+}) => {
   const html = buildLeaveEmailHtml({
     heading: "Reimbursement claim logged for you",
     intro: `Hi ${employeeFirstName || "there"}, ${actorName} has logged and approved a reimbursement claim on your behalf.`,
@@ -984,7 +1131,10 @@ const sendReimbursementLoggedEmail = async ({ to, employeeFirstName, actorName, 
       ["Amount", amount],
     ],
     ctaButton: claimId
-      ? { label: "View this claim", url: buildLoginRedirectUrl(`/reimbursements?claimId=${claimId}`) }
+      ? {
+          label: "View this claim",
+          url: buildLoginRedirectUrl(`/reimbursements?claimId=${claimId}`),
+        }
       : null,
     footerNote: "Log in to Employee Portal to see it in your history.",
   });
@@ -1000,8 +1150,17 @@ const sendReimbursementLoggedEmail = async ({ to, employeeFirstName, actorName, 
 // Sends the employee a link to their generated payslip PDF (the file itself
 // lives on public S3 with an unguessable key). Our mail pipeline can't carry
 // attachments, so the payslip travels as a download button.
-const sendPayslipEmail = async ({ to, firstName, periodLabel, grossPay, grossDeductions, netPay, downloadUrl }) => {
-  const money = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const sendPayslipEmail = async ({
+  to,
+  firstName,
+  periodLabel,
+  grossPay,
+  grossDeductions,
+  netPay,
+  downloadUrl,
+}) => {
+  const money = (n) =>
+    `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const html = `
   <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #1f2937;">
     <h2 style="margin-bottom: 8px;">Your payslip for ${periodLabel}</h2>
