@@ -6,6 +6,7 @@ const payrollService = require("../services/payroll.service");
 const payrollRunService = require("../services/payrollRun.service");
 const { streamPayslipPdf } = require("../services/payslipPdf.service");
 const notificationService = require("../services/notification.service");
+const companySettingsService = require("../services/companySettings.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
 const { uploadToS3 } = require("../utils/s3.util");
@@ -245,13 +246,14 @@ const downloadPayslipPdf = asyncHandler(async (req, res) => {
   // Legacy payslip generated before PDFs were stored to S3 - render on demand.
   const employee = await prisma.user.findUnique({ where: { id: payslip.userId } });
   const ytd = await payrollService.getYtdTotals(payslip.userId, payslip.year, payslip.month);
+  const { fiscalYearStartMonth } = await companySettingsService.getSettings();
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
     `attachment; filename="payslip-${employee.firstName}-${payslip.year}-${String(payslip.month).padStart(2, "0")}.pdf"`
   );
-  streamPayslipPdf({ payslip, employee, ytd }, res);
+  streamPayslipPdf({ payslip, employee, ytd, fiscalYearStartMonth }, res);
 });
 
 // Emails the employee a link to this payslip's PDF. Generates + stores the
@@ -276,7 +278,8 @@ const emailPayslip = asyncHandler(async (req, res) => {
   let pdfUrl = payslip.pdfUrl;
   if (!pdfUrl) {
     const ytd = await payrollService.getYtdTotals(userId, payslip.year, payslip.month);
-    const buffer = await renderPdfToBuffer(streamPayslipPdf, { payslip, employee, ytd });
+    const { fiscalYearStartMonth } = await companySettingsService.getSettings();
+    const buffer = await renderPdfToBuffer(streamPayslipPdf, { payslip, employee, ytd, fiscalYearStartMonth });
     const uploaded = await uploadToS3(
       {
         buffer,

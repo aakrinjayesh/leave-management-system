@@ -3,6 +3,7 @@ const prisma = require("../config/prisma");
 const ApiError = require("../utils/ApiError");
 const payrollService = require("./payroll.service");
 const attendanceService = require("./attendance.service");
+const companySettingsService = require("./companySettings.service");
 const { streamPayslipPdf } = require("./payslipPdf.service");
 const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
 const { uploadToS3, deleteFromS3 } = require("../utils/s3.util");
@@ -105,8 +106,9 @@ const generateAndStorePayslip = async (userId, year, month, { tds, annualBonusPa
 
   const employee = await prisma.user.findUnique({ where: { id: userId } });
   const ytd = await payrollService.getYtdTotals(userId, year, month);
+  const { fiscalYearStartMonth } = await companySettingsService.getSettings();
 
-  const buffer = await renderPdfToBuffer(streamPayslipPdf, { payslip, employee, ytd });
+  const buffer = await renderPdfToBuffer(streamPayslipPdf, { payslip, employee, ytd, fiscalYearStartMonth });
   const { url } = await uploadToS3(
     {
       buffer,

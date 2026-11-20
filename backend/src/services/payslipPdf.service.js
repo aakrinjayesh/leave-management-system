@@ -1,11 +1,20 @@
 const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
+const { amountInWordsInr } = require("../utils/numberToWords.util");
 
 const COMPANY_NAME = "AAKRIN CONSULTING SERVICES PRIVATE LIMITED";
 const COMPANY_ADDRESS =
-  "SITE NO: 86, VSL SRINIDHI GREENAGE, NERIGA VILLAGE, SARJAPURA HOBLI, ANEKAL TALUK, BENGALURU, KARNATAKA 562125, INDIA.";
+  "Site No: 86, VSL Srinidhi Greenage, Neriga Village, Sarjapura Hobli, Anekal Taluk,\nBengaluru, Karnataka 562125, India";
 const LOGO_PATH = path.join(__dirname, "..", "..", "assets", "logo.png");
+
+// Brand palette from the payslip template.
+const PURPLE = "#9B45D6";
+const LAVENDER = "#F5EBFB";
+const ORANGE = "#EE8A1E";
+const RED = "#D9262A";
+const TEXT = "#222222";
+const MUTED = "#5F5F5F";
 
 const MONTH_NAMES = [
   "JANUARY",
@@ -21,217 +30,233 @@ const MONTH_NAMES = [
   "NOVEMBER",
   "DECEMBER",
 ];
-
-// Centered semi-transparent logo behind the content on every page - same
-// treatment as the offer letter / relieving letter PDFs.
-const drawWatermark = (doc) => {
-  if (!fs.existsSync(LOGO_PATH)) return;
-  const width = doc.page.width * 0.55;
-  const x = (doc.page.width - width) / 2;
-  const y = (doc.page.height - width) / 2;
-  doc.opacity(0.12);
-  doc.image(LOGO_PATH, x, y, { width });
-  doc.opacity(1);
-};
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const money = (value) => (value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const lineMoney = (value) => (value ? money(value) : "-");
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-");
 const dash = (value) => (value ? value : "-");
 const TAX_REGIME_LABELS = { OLD: "Old Tax Regime", NEW: "New Tax Regime" };
+const GENDER_LABELS = { MALE: "Male", FEMALE: "Female", OTHER: "Other" };
 
+// "01 Nov 2026 - 30 Nov 2026"
+const payPeriodLabel = (year, month) => {
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const m = MONTH_SHORT[month - 1];
+  return `01 ${m} ${year} - ${lastDay} ${m} ${year}`;
+};
+
+// "2026-27" for an April-start fiscal year; just "2026" when it starts in January.
+const financialYearLabel = (year, month, fiscalYearStartMonth) => {
+  const fy = month >= fiscalYearStartMonth ? year : year - 1;
+  return fiscalYearStartMonth === 1 ? String(fy) : `${fy}-${String(fy + 1).slice(-2)}`;
+};
+
+const amountInWords = (value) => (value < 0 ? `Minus ${amountInWordsInr(-value)}` : amountInWordsInr(value));
+
+// The template's first four earnings always show; the rest only when the
+// structure actually uses them (non-zero this month or YTD).
 const EARNING_ROWS = [
-  ["Basic", "basic"],
-  ["HRA", "hra"],
-  ["LTA", "lta"],
-  ["Conveyance", "conveyance"],
-  ["Special Allowance", "specialAllowance"],
-  ["Guaranteed Allowance", "guaranteedAllowance"],
-  ["Annual Bonus Pay", "annualBonusPay"],
+  { label: "Basic", field: "basic", always: true },
+  { label: "House Rent Allowance", field: "hra", always: true },
+  { label: "Conveyance Allowance", field: "conveyance", always: true },
+  { label: "Special Allowance", field: "specialAllowance", always: true },
+  { label: "Leave Travel Allowance", field: "lta" },
+  { label: "Guaranteed Allowance", field: "guaranteedAllowance" },
+  { label: "Annual Bonus Pay", field: "annualBonusPay" },
 ];
 
 const DEDUCTION_ROWS = [
-  ["Provident Fund", "pfEmployee"],
-  ["Professional Tax", "professionalTax"],
-  ["TDS", "tds"],
-  ["Loss of Pay", "lopAmount"],
+  { label: "Provident Fund", field: "pfEmployee" },
+  { label: "Professional Tax", field: "professionalTax" },
+  { label: "Income Tax (TDS)", field: "tds" },
+  { label: "Loss of Pay", field: "lopAmount" },
 ];
 
-// Draws a two-column table (Description | Amount | YTD) inside the given
-// bounds, returning the y position right after the last row.
-const drawColumnTable = (doc, { x, width, y, title, rows, payslip, ytd }) => {
-  const descW = width * 0.5;
-  const amtW = width * 0.25;
-  const ytdW = width - descW - amtW;
-  const rowH = 16;
-  let cursorY = y;
-
-  doc.font("Helvetica-Bold").fontSize(9);
-  doc.rect(x, cursorY, width, rowH).stroke();
-  doc.text(title, x + 4, cursorY + 4, { width: descW - 8 });
-  cursorY += rowH;
-
-  doc.rect(x, cursorY, descW, rowH).stroke();
-  doc.rect(x + descW, cursorY, amtW, rowH).stroke();
-  doc.rect(x + descW + amtW, cursorY, ytdW, rowH).stroke();
-  doc.text("Description", x + 4, cursorY + 4);
-  doc.text("Amount", x + descW + 4, cursorY + 4);
-  doc.text("YTD", x + descW + amtW + 4, cursorY + 4);
-  cursorY += rowH;
-
-  doc.font("Helvetica").fontSize(9);
-  let subtotal = 0;
-  let subtotalYtd = 0;
-  for (const [label, field] of rows) {
-    const amount = payslip[field] || 0;
-    const ytdAmount = ytd[field] || 0;
-    subtotal += amount;
-    subtotalYtd += ytdAmount;
-
-    doc.rect(x, cursorY, descW, rowH).stroke();
-    doc.rect(x + descW, cursorY, amtW, rowH).stroke();
-    doc.rect(x + descW + amtW, cursorY, ytdW, rowH).stroke();
-    doc.text(label, x + 4, cursorY + 4, { width: descW - 8 });
-    doc.text(amount ? money(amount) : "-", x + descW + 4, cursorY + 4, { width: amtW - 8, align: "right" });
-    doc.text(ytdAmount ? money(ytdAmount) : "-", x + descW + amtW + 4, cursorY + 4, { width: ytdW - 8, align: "right" });
-    cursorY += rowH;
-  }
-
-  return { bottomY: cursorY, subtotal, subtotalYtd };
+// Single-line text vertically centred in a cell, truncated with an ellipsis
+// if it's too wide.
+const cellText = (
+  doc,
+  text,
+  x,
+  y,
+  w,
+  h,
+  { font = "Helvetica", size = 9, color = TEXT, align = "left", padX = 10, padRight = padX } = {}
+) => {
+  doc.font(font).fontSize(size).fillColor(color);
+  const lineH = doc.currentLineHeight(true);
+  doc.text(String(text), x + padX, y + (h - lineH) / 2 + 1, {
+    width: w - padX - padRight,
+    height: lineH,
+    align,
+    ellipsis: true,
+  });
 };
 
-// Renders a payslip PDF matching the company's payslip layout and pipes it
-// to the given writable stream (typically an Express response).
-const streamPayslipPdf = ({ payslip, employee, ytd }, res) => {
+// Thin orange / red / purple band, as at the top and bottom of the template.
+const drawBrandStripe = (doc, y) => {
+  const third = doc.page.width / 3;
+  [ORANGE, RED, PURPLE].forEach((color, i) => {
+    doc.rect(third * i, y, third + 0.5, 4).fill(color);
+  });
+};
+
+// Renders a payslip PDF matching the company's payslip template and pipes it
+// to the given writable stream (an Express response or a PassThrough).
+// fiscalYearStartMonth (1-12, CompanySettings) drives the Financial Year label.
+const streamPayslipPdf = ({ payslip, employee, ytd, fiscalYearStartMonth = 4 }, res) => {
   const doc = new PDFDocument({ size: "A4", margin: 40 });
   doc.pipe(res);
 
-  doc.on("pageAdded", () => drawWatermark(doc));
-  drawWatermark(doc);
+  const left = doc.page.margins.left;
+  const pageWidth = doc.page.width - left - doc.page.margins.right;
+  const half = pageWidth / 2;
 
-  const headerTop = doc.y;
-  const hasLogo = fs.existsSync(LOGO_PATH);
-  if (hasLogo) {
-    doc.image(LOGO_PATH, doc.page.margins.left, headerTop, { width: 55 });
+  drawBrandStripe(doc, 0);
+  drawBrandStripe(doc, doc.page.height - 4);
+
+  // ---- Header: logo + company name / address ----------------------------
+  const headerTop = 36;
+  if (fs.existsSync(LOGO_PATH)) {
+    doc.image(LOGO_PATH, left + 6, headerTop, { fit: [52, 46], align: "center", valign: "center" });
   }
+  const textX = left + 68;
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(15)
+    .fillColor(PURPLE)
+    .text(COMPANY_NAME, textX, headerTop + 4, { width: pageWidth - 68, lineBreak: false });
+  doc
+    .font("Helvetica")
+    .fontSize(8)
+    .fillColor(MUTED)
+    .text(COMPANY_ADDRESS, textX, headerTop + 24, { width: pageWidth - 68, lineGap: 1 });
 
-  const headerPageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const textX = hasLogo ? doc.page.margins.left + 65 : doc.page.margins.left;
-  const textWidth = hasLogo ? headerPageWidth - 65 : headerPageWidth;
-
-  doc.font("Helvetica-Bold").fontSize(16).text(COMPANY_NAME, textX, headerTop + 6, { width: textWidth, align: "center" });
-  doc.font("Helvetica").fontSize(8.5).text(COMPANY_ADDRESS, textX, doc.y + 2, { width: textWidth, align: "center" });
-
-  doc.y = Math.max(doc.y, headerTop + 55) + 10;
-  doc.x = doc.page.margins.left;
-  doc.font("Helvetica-Bold").fontSize(11).text(`PAYSLIP FOR THE MONTH OF ${MONTH_NAMES[payslip.month - 1]} ${payslip.year}`, {
+  // ---- Purple title banner ----------------------------------------------
+  const bannerY = 92;
+  const bannerH = 26;
+  doc.rect(left, bannerY, pageWidth, bannerH).fill(PURPLE);
+  cellText(doc, `PAYSLIP FOR THE MONTH OF ${MONTH_NAMES[payslip.month - 1]} ${payslip.year}`, left, bannerY, pageWidth, bannerH, {
+    font: "Helvetica-Bold",
+    size: 11,
+    color: "#FFFFFF",
     align: "center",
   });
-  doc.moveDown(0.6);
 
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const infoX = doc.page.margins.left;
-  const infoY = doc.y;
-  const infoColW = pageWidth / 2;
-  const infoRowH = 14;
-
+  // ---- Employee details grid (lavender label | value, two sides) --------
   const leftRows = [
-    ["Emp No", dash(employee.employeeCode)],
-    ["Name", `${employee.firstName} ${employee.lastName}`],
+    ["Employee Name", [employee.firstName, employee.lastName].filter(Boolean).join(" ") || "-"],
+    ["Employee No", dash(employee.employeeCode)],
     ["Designation", dash(employee.designation)],
-    ["UAN", dash(employee.uan)],
-    ["PAN", dash(employee.pan)],
-    ["Standard Days", dash(payslip.standardDays)],
-    ["Bank", dash(employee.bankName)],
-    ["A/C No", dash(employee.bankAccountNumber)],
-  ];
-  const rightRows = [
-    ["PF No", dash(employee.pfNumber)],
     ["Date of Joining", formatDate(employee.joiningDate)],
     ["Location", dash(employee.location)],
-    ["Regime Type", TAX_REGIME_LABELS[employee.taxRegime] || "-"],
-    ["Gender", dash(employee.gender)],
+    ["Gender", GENDER_LABELS[employee.gender] || "-"],
+    ["Standard Days", dash(payslip.standardDays)],
     ["Days Worked", dash(payslip.daysWorked)],
-    ["", ""],
-    ["", ""],
+  ];
+  const rightRows = [
+    ["PAN", dash(employee.pan)],
+    ["UAN", dash(employee.uan)],
+    ["PF No", dash(employee.pfNumber)],
+    ["Bank", dash(employee.bankName)],
+    ["Bank A/c No", dash(employee.bankAccountNumber)],
+    ["Tax Regime", TAX_REGIME_LABELS[employee.taxRegime] || "-"],
+    ["Pay Period", payPeriodLabel(payslip.year, payslip.month)],
+    ["Financial Year", financialYearLabel(payslip.year, payslip.month, fiscalYearStartMonth)],
   ];
 
-  doc.rect(infoX, infoY, pageWidth, infoRowH * leftRows.length).stroke();
-  doc.moveTo(infoX + infoColW, infoY).lineTo(infoX + infoColW, infoY + infoRowH * leftRows.length).stroke();
+  const gridY = bannerY + bannerH + 10;
+  const gridRowH = 20;
+  const labelW = 92;
+  const gridH = gridRowH * leftRows.length;
+  doc.rect(left, gridY, labelW, gridH).fill(LAVENDER);
+  doc.rect(left + half, gridY, labelW, gridH).fill(LAVENDER);
 
-  doc.font("Helvetica").fontSize(9);
-  leftRows.forEach(([label, value], i) => {
-    const rowY = infoY + i * infoRowH + 3;
-    if (label) doc.text(`${label}: ${value}`, infoX + 6, rowY, { width: infoColW - 12 });
+  [
+    [leftRows, left],
+    [rightRows, left + half],
+  ].forEach(([rows, x]) => {
+    rows.forEach(([label, value], i) => {
+      const rowY = gridY + i * gridRowH;
+      cellText(doc, label, x, rowY, labelW, gridRowH, { color: MUTED });
+      cellText(doc, value, x + labelW, rowY, half - labelW, gridRowH);
+    });
   });
-  rightRows.forEach(([label, value], i) => {
-    const rowY = infoY + i * infoRowH + 3;
-    if (label) doc.text(`${label}: ${value}`, infoX + infoColW + 6, rowY, { width: infoColW - 12 });
-  });
 
-  let tableY = infoY + infoRowH * leftRows.length + 12;
-  const colWidth = pageWidth / 2 - 6;
+  // ---- Earnings / Deductions table --------------------------------------
+  const rowH = 20;
+  // Sized so the longest label ("Leave Travel Allowance") and a bold
+  // "12,34,567.00" YTD both fit without being cut off.
+  const descW = 106;
+  const amtW = (half - descW) / 2;
+  const ytdW = amtW;
+  let y = gridY + gridH + 12;
 
-  // Earnings: hide any line that's zero for both the month and YTD (e.g. LTA /
-  // Special Allowance / Guaranteed Allowance when the structure doesn't use
-  // them). Deductions still list every line.
-  const visibleEarningRows = EARNING_ROWS.filter(
-    ([, field]) => (payslip[field] || 0) !== 0 || (ytd[field] || 0) !== 0
+  const drawRow = (x, cells, opts) => {
+    cellText(doc, cells[0], x, y, descW, rowH, { ...opts, padRight: 2 });
+    cellText(doc, cells[1], x + descW, y, amtW, rowH, { ...opts, align: "right", padX: 2 });
+    cellText(doc, cells[2], x + descW + amtW, y, ytdW, rowH, { ...opts, align: "right", padX: 2, padRight: 10 });
+  };
+
+  doc.rect(left, y, pageWidth, rowH).fill(LAVENDER);
+  const headerOpts = { font: "Helvetica-Bold", size: 9.5, color: PURPLE };
+  drawRow(left, ["Earnings", "Amount", "YTD"], headerOpts);
+  drawRow(left + half, ["Deductions", "Amount", "YTD"], headerOpts);
+  y += rowH;
+
+  const earnings = EARNING_ROWS.filter(
+    ({ field, always }) => always || (payslip[field] || 0) !== 0 || (ytd[field] || 0) !== 0
   );
+  const lineCount = Math.max(earnings.length, DEDUCTION_ROWS.length);
+  for (let i = 0; i < lineCount; i += 1) {
+    const e = earnings[i];
+    const d = DEDUCTION_ROWS[i];
+    if (e) drawRow(left, [e.label, lineMoney(payslip[e.field]), lineMoney(ytd[e.field])]);
+    if (d) drawRow(left + half, [d.label, lineMoney(payslip[d.field]), lineMoney(ytd[d.field])]);
+    y += rowH;
+  }
 
-  const earnings = drawColumnTable(doc, {
-    x: infoX,
-    width: colWidth,
-    y: tableY,
-    title: "Earnings",
-    rows: visibleEarningRows,
-    payslip,
-    ytd,
-  });
-  const deductions = drawColumnTable(doc, {
-    x: infoX + colWidth + 12,
-    width: colWidth,
-    y: tableY,
-    title: "Deductions",
-    rows: DEDUCTION_ROWS,
-    payslip,
-    ytd,
-  });
+  // PF Employer is intentionally not shown - it's part of CTC, not take-home.
+  doc.rect(left, y, pageWidth, rowH).fill(LAVENDER);
+  const totalOpts = { font: "Helvetica-Bold", size: 9.5 };
+  drawRow(left, ["Gross Earnings", money(payslip.grossPay), money(ytd.grossPay)], totalOpts);
+  drawRow(left + half, ["Total Deductions", money(payslip.grossDeductions), money(ytd.grossDeductions)], totalOpts);
+  y += rowH;
 
-  // PF Employer row is intentionally not shown on the payslip PDF - it's part
-  // of CTC, not take-home, and the user asked to drop it from the Earnings side.
-  const rowH = 16;
-  const leftBottomY = earnings.bottomY;
+  // ---- Net pay + amount in words (lavender label | value) ---------------
+  y += 12;
+  const netRowH = 23;
+  const words = amountInWords(payslip.netPay);
+  const valueX = left + half;
+  const valueW = half;
+  doc.font("Helvetica").fontSize(9);
+  const wordsH = doc.heightOfString(words, { width: valueW - 20 });
+  const wordsRowH = Math.max(netRowH, wordsH + 12);
 
-  const bottomY = Math.max(leftBottomY, deductions.bottomY);
+  doc.rect(left, y, half, netRowH + wordsRowH).fill(LAVENDER);
+  const netLabelOpts = { font: "Helvetica-Bold", size: 9.5, color: PURPLE };
+  cellText(doc, "Net Pay (Gross Earnings - Total Deductions)", left, y, half, netRowH, netLabelOpts);
+  cellText(doc, money(payslip.netPay), valueX, y, valueW, netRowH, { font: "Helvetica-Bold", size: 11 });
+  y += netRowH;
 
-  doc.font("Helvetica-Bold").fontSize(9.5);
-  doc.rect(infoX, bottomY, colWidth * 0.75, rowH).stroke();
-  doc.rect(infoX + colWidth * 0.75, bottomY, colWidth * 0.25, rowH).stroke();
-  doc.text("GROSS PAY", infoX + 4, bottomY + 4);
-  doc.text(money(payslip.grossPay), infoX + colWidth * 0.75 + 4, bottomY + 4, { width: colWidth * 0.25 - 8, align: "right" });
+  cellText(doc, "Amount in Words", left, y, half, netRowH, netLabelOpts);
+  doc
+    .font("Helvetica")
+    .fontSize(9)
+    .fillColor(TEXT)
+    .text(words, valueX + 10, y + (wordsRowH - wordsH) / 2 + 1, { width: valueW - 20 });
+  y += wordsRowH;
 
-  doc.rect(infoX + colWidth + 12, bottomY, colWidth * 0.75, rowH).stroke();
-  doc.rect(infoX + colWidth + 12 + colWidth * 0.75, bottomY, colWidth * 0.25, rowH).stroke();
-  doc.text("GROSS DEDUCTIONS", infoX + colWidth + 16, bottomY + 4);
-  doc.text(money(payslip.grossDeductions), infoX + colWidth + 12 + colWidth * 0.75 + 4, bottomY + 4, {
-    width: colWidth * 0.25 - 8,
-    align: "right",
-  });
-
-  const netPayY = bottomY + rowH;
-  doc.font("Helvetica-Bold").fontSize(9.5);
-  doc.rect(infoX + colWidth + 12, netPayY, colWidth * 0.75, rowH).stroke();
-  doc.rect(infoX + colWidth + 12 + colWidth * 0.75, netPayY, colWidth * 0.25, rowH).stroke();
-  doc.text("NET PAY", infoX + colWidth + 16, netPayY + 4);
-  doc.text(money(payslip.netPay), infoX + colWidth + 12 + colWidth * 0.75 + 4, netPayY + 4, {
-    width: colWidth * 0.25 - 8,
-    align: "right",
-  });
-
-  doc.font("Helvetica-Oblique").fontSize(8).text("*** This is system generated document. No signature is required. ***", infoX, netPayY + 30, {
-    align: "center",
-    width: pageWidth,
-  });
+  // ---- Footer -----------------------------------------------------------
+  doc
+    .font("Helvetica-Oblique")
+    .fontSize(8)
+    .fillColor(MUTED)
+    .text("This is a system-generated payslip and does not require a signature.", left, y + 18, {
+      width: pageWidth,
+      align: "center",
+    });
 
   doc.end();
 };
