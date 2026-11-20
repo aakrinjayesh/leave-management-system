@@ -1,13 +1,21 @@
 import { useState } from "react";
 import Modal from "../common/Modal";
 import Alert from "../common/Alert";
+import Spinner from "../common/Spinner";
 import * as attendanceApi from "../../api/attendance.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+
+const OPTIONS = [
+  { status: "PRESENT", label: "Present", onCls: "is-present" },
+  { status: "HALF_DAY", label: "Half day", onCls: "is-half" },
+  { status: "ABSENT", label: "Absent", onCls: "is-absent" },
+];
 
 // Shown when marking one day's attendance - a single Present / Half day /
 // Absent / Clear control for the day, applied to every project the employee is on.
 // Shared by the Attendance page (click a day) and the dashboard "today's
-// attendance" widget.
+// attendance" widget. Clicking an option saves it and closes the popup; the
+// clicked button shows a spinner (and every button is locked) while it saves.
 export default function MarkAttendanceModal({ day, onClose, onSaved }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(null); // status being saved
@@ -18,63 +26,45 @@ export default function MarkAttendanceModal({ day, onClose, onSaved }) {
     month: "long",
   });
 
-  const isPresent = day.overall === "PRESENT";
-  const isHalf = day.overall === "HALF_DAY";
-  const isAbsent = day.overall === "ABSENT";
-  const marked = isPresent || isHalf || isAbsent;
+  const current = OPTIONS.find((o) => o.status === day.overall);
+  const marked = Boolean(current);
 
   const set = async (status) => {
+    if (busy) return;
     setError("");
     setBusy(status);
     try {
       await attendanceApi.markAttendance({ date: day.date, status });
       onSaved();
+      onClose();
     } catch (err) {
       setError(getErrorMessage(err, "Couldn't save your attendance."));
-    } finally {
       setBusy(null);
     }
   };
+
+  const renderButton = (status, label, className) => (
+    <button
+      key={status}
+      type="button"
+      className={`att-toggle-btn ${className}`}
+      disabled={Boolean(busy) || (status === "CLEAR" && !marked)}
+      onClick={() => set(status)}
+    >
+      {busy === status && <Spinner size={14} />}
+      {label}
+    </button>
+  );
 
   return (
     <Modal title={`Mark attendance — ${dateLabel}`} onClose={onClose}>
       <Alert type="error">{error}</Alert>
       <div className="att-modal-projects">
         <div className="att-modal-project">
-          <span className="att-modal-project-name">{isPresent ? "Present" : isHalf ? "Half day" : isAbsent ? "Absent" : "Not marked"}</span>
+          <span className="att-modal-project-name">{current ? current.label : "Not marked"}</span>
           <div className="att-toggle">
-            <button
-              type="button"
-              className={`att-toggle-btn ${isPresent ? "is-on is-present" : ""}`}
-              disabled={busy === "PRESENT"}
-              onClick={() => set("PRESENT")}
-            >
-              Present
-            </button>
-            <button
-              type="button"
-              className={`att-toggle-btn ${isHalf ? "is-on is-half" : ""}`}
-              disabled={busy === "HALF_DAY"}
-              onClick={() => set("HALF_DAY")}
-            >
-              Half day
-            </button>
-            <button
-              type="button"
-              className={`att-toggle-btn ${isAbsent ? "is-on is-absent" : ""}`}
-              disabled={busy === "ABSENT"}
-              onClick={() => set("ABSENT")}
-            >
-              Absent
-            </button>
-            <button
-              type="button"
-              className="att-toggle-btn"
-              disabled={!marked || busy === "CLEAR"}
-              onClick={() => set("CLEAR")}
-            >
-              Clear
-            </button>
+            {OPTIONS.map((o) => renderButton(o.status, o.label, current?.status === o.status ? `is-on ${o.onCls}` : ""))}
+            {renderButton("CLEAR", "Clear", "")}
           </div>
         </div>
       </div>
@@ -82,8 +72,8 @@ export default function MarkAttendanceModal({ day, onClose, onSaved }) {
         Weren&apos;t working this day? Mark it Absent rather than leaving it unmarked - unmarked days hold up payroll.
       </p>
       <div className="modal-actions">
-        <button type="button" className="btn btn-secondary page-header-btn" onClick={onClose}>
-          Done
+        <button type="button" className="btn btn-secondary page-header-btn" onClick={onClose} disabled={Boolean(busy)}>
+          Cancel
         </button>
       </div>
     </Modal>

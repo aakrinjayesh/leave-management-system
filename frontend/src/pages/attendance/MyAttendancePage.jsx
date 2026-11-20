@@ -137,7 +137,10 @@ export default function MyAttendancePage() {
       <div className="page-header">
         <div>
           <h1>Attendance</h1>
-          <p>Click a day in the calendar to mark yourself present, half day, or absent. Days you haven't marked show as "-".</p>
+          <p>
+            Click a day in the calendar to mark yourself present, half day, or absent. Days you haven&apos;t marked show as &quot;-&quot;.
+            {data?.pastMonthsLocked && " Previous months are locked - ask your admin to correct those."}
+          </p>
         </div>
         <button
           type="button"

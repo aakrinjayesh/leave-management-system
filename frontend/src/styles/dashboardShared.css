@@ -1429,6 +1429,9 @@
 
 .att-toggle { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .att-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 5px 14px;
   font-size: 0.82rem;
   font-weight: 600;

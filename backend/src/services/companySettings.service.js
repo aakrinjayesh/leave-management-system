@@ -8,6 +8,7 @@ const DEFAULTS = {
   allowPastLeave: false,
   allowFutureLeave: true,
   maxFutureDays: 90,
+  allowPastMonthAttendanceEdits: true,
 };
 
 const getSettings = async () => {

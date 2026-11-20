@@ -223,9 +223,13 @@ const generateContractPaymentSchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
 });
 
-const updateCompanySettingsSchema = z.object({
-  fiscalYearStartMonth: z.coerce.number().int().min(1).max(12),
-});
+// Partial update - each admin screen sends only the setting it owns.
+const updateCompanySettingsSchema = z
+  .object({
+    fiscalYearStartMonth: z.coerce.number().int().min(1).max(12).optional(),
+    allowPastMonthAttendanceEdits: z.boolean().optional(),
+  })
+  .refine((data) => Object.values(data).some((v) => v !== undefined), { message: "Nothing to update." });
 
 // Declared once per employee per financial year - only meaningful for Old
 // Regime employees (see incomeTax.service.js), but harmless to store for

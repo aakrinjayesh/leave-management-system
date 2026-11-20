@@ -865,6 +865,12 @@ model CompanySettings {
 
     maxFutureDays Int @default(90)
 
+    // Whether employees may still mark / change attendance for days in
+    // previous months. The admin flips this from All Attendance ("Stop" /
+    // "Allow"). When false, employees can only edit the current month; admins
+    // can always correct any month.
+    allowPastMonthAttendanceEdits Boolean @default(true)
+
     // "We're here to assist you" contact shown on every dashboard's welcome
     // banner. Admin-editable (Manage Accounts). Any field may be blank - the
     // banner just drops that row.

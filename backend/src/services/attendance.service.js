@@ -14,10 +14,11 @@ const leaveCalendarService = require("./leaveCalendar.service");
 // same as an explicit "Absent" mark. Run Payroll refuses to start while any
 // employee still has a not-marked day in that month (see findUnmarkedEmployees).
 //
-// The employee can mark or change any working day from the tracking start
-// (see TRACKING_START) or their joining date, whichever is later, right up to
-// today - useful when they forget. Days before that floor can only be touched
-// by an admin.
+// The employee can mark or change any working day up to today (never before
+// TRACKING_START or their joining date) - useful when they forget. The admin
+// can stop edits to previous months (CompanySettings.
+// allowPastMonthAttendanceEdits); then only the current month stays open to
+// the employee, and only an admin can change earlier months.
 //
 // Weekend / holiday / on-leave / WFH states are NEVER stored: they're derived
 // here from WeekendPolicy + Holiday + approved LeaveRequest / WfhRequest, so a
@@ -50,6 +51,8 @@ const trackingFloorKey = (joiningDate) => {
 };
 
 const toDateKey = (date) => new Date(date).toISOString().slice(0, 10);
+// "2026-11-20" -> "2026-11-01"
+const monthStartKey = (dateKey) => `${dateKey.slice(0, 7)}-01`;
 const dateFromKey = (key) => new Date(`${key}T00:00:00.000Z`);
 
 // Which calendar day it currently is in the company's timezone.
@@ -235,15 +238,21 @@ const markAttendance = async (userId, dateKey, status) => {
     throw ApiError.badRequest("You're not assigned to any project yet.");
   }
 
-  const { timezone } = await companySettingsService.getSettings();
+  const { timezone, allowPastMonthAttendanceEdits } = await companySettingsService.getSettings();
   const todayKey = todayKeyInCompanyTz(timezone);
   const targetKey = dateKey || todayKey;
 
   if (targetKey > todayKey) {
     throw ApiError.badRequest("You can't mark attendance for a future date.");
   }
-  // Self-marking is open from the tracking floor (max of TRACKING_START and
-  // the employee's joining date) up to today. Anything older is admin-only.
+  // Self-marking runs up to today and never before the tracking floor (max of
+  // TRACKING_START and the employee's joining date). Once the admin has
+  // stopped past-month edits, it's further limited to the current month.
+  if (!allowPastMonthAttendanceEdits && targetKey < monthStartKey(todayKey)) {
+    throw ApiError.badRequest(
+      "Editing previous months' attendance has been stopped by your admin. You can only change the current month."
+    );
+  }
   const floorKey = trackingFloorKey(me?.joiningDate);
   if (targetKey < floorKey) {
     if (me?.joiningDate && floorKey === toDateKey(me.joiningDate)) {
@@ -261,7 +270,7 @@ const markAttendance = async (userId, dateKey, status) => {
 // ------------------------- employee: my attendance -------------------------
 
 const getMyAttendance = async (userId, year, month) => {
-  const { timezone } = await companySettingsService.getSettings();
+  const { timezone, allowPastMonthAttendanceEdits } = await companySettingsService.getSettings();
   const todayKey = todayKeyInCompanyTz(timezone);
   const { start, end } = monthRange(year, month);
   const fetchStart = start;
@@ -279,9 +288,12 @@ const getMyAttendance = async (userId, year, month) => {
   ]);
 
   const floorKey = trackingFloorKey(me?.joiningDate); // display: NOT_TRACKED before this
-  // Employee can self-mark any working day from the tracking floor up to
-  // today - same floor that gates display and the ratio.
-  const earliestMarkableKey = floorKey;
+  // Employee can self-mark any working day up to today, never before the
+  // tracking floor (which also gates display and the ratio) - and only within
+  // the current month once the admin has stopped past-month edits.
+  const currentMonthKey = monthStartKey(todayKey);
+  const earliestMarkableKey =
+    !allowPastMonthAttendanceEdits && currentMonthKey > floorKey ? currentMonthKey : floorKey;
 
   const weekendSet = new Set(calendar.weekendDates);
   const holidaySet = new Set(calendar.holidays.map((h) => h.date));
@@ -351,6 +363,7 @@ const getMyAttendance = async (userId, year, month) => {
     timezone,
     todayKey,
     backfillStartKey: earliestMarkableKey,
+    pastMonthsLocked: !allowPastMonthAttendanceEdits,
     projects,
     month: { year, month, days },
     summary: {
