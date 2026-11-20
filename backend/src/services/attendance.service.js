@@ -4,14 +4,14 @@ const companySettingsService = require("./companySettings.service");
 const leaveCalendarService = require("./leaveCalendar.service");
 
 // ---------------------------------------------------------------------------
-// Attendance is a self-reported daily log: one "Present" / "Half day" mark per
-// day, no matter how many projects the employee is on. Rows are still stored
+// Attendance is a self-reported daily log: one "Present" / "Half day" /
+// "Absent" mark per day, no matter how many projects the employee is on. Rows are still stored
 // per (employee, project, day) - a mark is written to every project they're
 // assigned to, and reads merge them back into one status per day. There's no
 // approval step and no late/on-time judgement.
 //
-// A working day with no mark is "Not marked" (shown as "-"), never "Absent" -
-// a real absence is applied as leave. Run Payroll refuses to start while any
+// A working day with no mark at all is "Not marked" (shown as "-") - not the
+// same as an explicit "Absent" mark. Run Payroll refuses to start while any
 // employee still has a not-marked day in that month (see findUnmarkedEmployees).
 //
 // The employee can mark or change any working day from the tracking start
@@ -21,7 +21,7 @@ const leaveCalendarService = require("./leaveCalendar.service");
 //
 // Weekend / holiday / on-leave / WFH states are NEVER stored: they're derived
 // here from WeekendPolicy + Holiday + approved LeaveRequest / WfhRequest, so a
-// stored Attendance row always just means "present" (full or half day).
+// stored Attendance row is always one of present / half day / absent.
 // ---------------------------------------------------------------------------
 
 // Attendance tracking begins here. Days earlier than max(this, joiningDate)
@@ -37,6 +37,7 @@ const STATUS = {
   WFH: "WFH",
   PRESENT: "PRESENT",
   HALF_DAY: "HALF_DAY",
+  ABSENT: "ABSENT",
   NOT_MARKED: "NOT_MARKED",
   NOT_TRACKED: "NOT_TRACKED",
   FUTURE: "FUTURE",
@@ -95,7 +96,10 @@ const approvedDayMaps = async (userId, rangeStart, rangeEnd) => {
 // earliest day that counts for this employee.
 const resolveStatus = ({ dayKey, todayKey, floorKey, weekendSet, holidaySet, leaveDays, wfhDays, markRow }) => {
   // A mark always wins (e.g. an admin-backfilled day before the tracking floor).
-  if (markRow) return markRow.isHalfDay ? STATUS.HALF_DAY : STATUS.PRESENT;
+  if (markRow) {
+    if (markRow.isAbsent) return STATUS.ABSENT;
+    return markRow.isHalfDay ? STATUS.HALF_DAY : STATUS.PRESENT;
+  }
   // Weekend / holiday / approved leave / approved WFH still resolve normally
   // even before the tracking floor - they're never something to backfill, so
   // they must stay non-editable and correctly labelled.
@@ -110,20 +114,23 @@ const resolveStatus = ({ dayKey, todayKey, floorKey, weekendSet, holidaySet, lea
 };
 
 // Merges one day's per-project statuses into the single status shown for that
-// day - any project marked present wins, then half day. Unmarked statuses
+// day - any project marked present wins, then half day, then absent (a mark
+// is written to every project, so they normally all agree). Unmarked statuses
 // (weekend, leave, not marked, ...) don't depend on the project, so they're
 // all the same and any one of them stands for the day.
 const mergeProjectStatuses = (statuses) => {
   if (statuses.includes(STATUS.PRESENT)) return STATUS.PRESENT;
   if (statuses.includes(STATUS.HALF_DAY)) return STATUS.HALF_DAY;
+  if (statuses.includes(STATUS.ABSENT)) return STATUS.ABSENT;
   return statuses[0];
 };
 
 const tallyStatuses = (statuses) => {
-  const counts = { present: 0, halfDay: 0, notMarked: 0, leave: 0, wfh: 0 };
+  const counts = { present: 0, halfDay: 0, absent: 0, notMarked: 0, leave: 0, wfh: 0 };
   for (const s of statuses) {
     if (s === STATUS.PRESENT) counts.present += 1;
     else if (s === STATUS.HALF_DAY) counts.halfDay += 1;
+    else if (s === STATUS.ABSENT) counts.absent += 1;
     else if (s === STATUS.NOT_MARKED) counts.notMarked += 1;
     else if (s === STATUS.ON_LEAVE) counts.leave += 1;
     else if (s === STATUS.WFH) counts.wfh += 1;
@@ -173,10 +180,9 @@ const assertRecordableDay = async (userId, dateKey) => {
   if (leaveDays.has(dateKey)) throw ApiError.badRequest("The employee is on approved leave that day.");
 };
 
-// "CLEAR" (or the old "ABSENT", still accepted from not-yet-refreshed
-// browsers) removes the day's mark, putting it back to "Not marked".
-const MARK_STATUSES = ["PRESENT", "HALF_DAY", "CLEAR", "ABSENT"];
-const isClear = (status) => status === "CLEAR" || status === "ABSENT";
+// "CLEAR" removes the day's mark, putting it back to "Not marked".
+const MARK_STATUSES = ["PRESENT", "HALF_DAY", "ABSENT", "CLEAR"];
+const isClear = (status) => status === "CLEAR";
 
 // Every project the employee is assigned to - a day's mark is written to all
 // of them so attendance stays one-per-day.
@@ -185,7 +191,7 @@ const getMemberProjectIds = async (userId) => {
   return memberships.map((m) => m.projectId);
 };
 
-// Present / half-day -> upsert one row per assigned project; clear -> delete
+// Present / half-day / absent -> upsert one row per assigned project; clear -> delete
 // every row for that day (including any left on a project they've since
 // left).
 const writeDay = async ({ userId, projectIds, dateKey, status, isAdmin, adminId, note }) => {
@@ -197,6 +203,7 @@ const writeDay = async ({ userId, projectIds, dateKey, status, isAdmin, adminId,
   }
 
   const isHalfDay = status === "HALF_DAY";
+  const isAbsent = status === "ABSENT";
   const base = isAdmin
     ? { source: "ADMIN", note: note || null, correctedById: adminId, correctedAt: new Date() }
     : { source: "SELF" };
@@ -205,8 +212,8 @@ const writeDay = async ({ userId, projectIds, dateKey, status, isAdmin, adminId,
     projectIds.map((projectId) =>
       prisma.attendance.upsert({
         where: { userId_projectId_date: { userId, projectId, date } },
-        create: { userId, projectId, date, markedAt: new Date(), isHalfDay, ...base },
-        update: { isHalfDay, markedAt: new Date(), ...base },
+        create: { userId, projectId, date, markedAt: new Date(), isHalfDay, isAbsent, ...base },
+        update: { isHalfDay, isAbsent, markedAt: new Date(), ...base },
       })
     )
   );
@@ -290,6 +297,7 @@ const getMyAttendance = async (userId, year, month) => {
         projectName: project.name,
         status: resolveStatus({ dayKey, todayKey, floorKey, weekendSet, holidaySet, leaveDays, wfhDays, markRow }),
         isHalfDay: markRow?.isHalfDay || false,
+        isAbsent: markRow?.isAbsent || false,
         markedAt: markRow?.markedAt || null,
       };
     });
@@ -300,6 +308,7 @@ const getMyAttendance = async (userId, year, month) => {
     else if (holidaySet.has(dayKey)) overall = STATUS.HOLIDAY;
     else if (statuses.includes(STATUS.PRESENT)) overall = STATUS.PRESENT;
     else if (statuses.includes(STATUS.HALF_DAY)) overall = STATUS.HALF_DAY;
+    else if (statuses.includes(STATUS.ABSENT)) overall = STATUS.ABSENT;
     else if (leaveDays.has(dayKey)) overall = STATUS.ON_LEAVE;
     else if (wfhDays.has(dayKey)) overall = STATUS.WFH;
     else if (notTracked) overall = STATUS.NOT_TRACKED;
@@ -403,6 +412,7 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
     halfDay: 0,
     wfh: 0,
     onLeave: 0,
+    absent: 0,
     notMarked: 0,
   };
 
@@ -434,6 +444,7 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
     else if (todayStatus === STATUS.HALF_DAY) todaySummary.halfDay += 1;
     else if (todayStatus === STATUS.WFH) todaySummary.wfh += 1;
     else if (todayStatus === STATUS.ON_LEAVE) todaySummary.onLeave += 1;
+    else if (todayStatus === STATUS.ABSENT) todaySummary.absent += 1;
     else if (todayStatus === STATUS.NOT_MARKED) todaySummary.notMarked += 1;
 
     const upToToday = monthDays.filter((d) => d.date <= todayKey);

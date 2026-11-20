@@ -6,8 +6,8 @@ const unwrap = (promise) => promise.then((res) => res.data.data);
 export const getMyAttendance = (year, month) =>
   unwrap(axiosClient.get("/attendance/me", { params: { year, month } }));
 
-// status: "PRESENT" | "HALF_DAY" | "CLEAR" (CLEAR puts the day back to not
-// marked). One mark per day - it applies to every project the employee is on.
+// status: "PRESENT" | "HALF_DAY" | "ABSENT" | "CLEAR" (CLEAR puts the day
+// back to not marked). One mark per day - it applies to every project the employee is on.
 export const markAttendance = ({ date, status }) => unwrap(axiosClient.post("/attendance/mark", { date, status }));
 
 // Manager - direct reports

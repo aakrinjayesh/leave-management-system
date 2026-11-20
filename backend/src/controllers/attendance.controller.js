@@ -27,8 +27,8 @@ const markAttendance = asyncHandler(async (req, res) => {
   // 30s poll).
   notificationStreamService.broadcast("attendance");
 
-  const message =
-    status === "CLEAR" || status === "ABSENT" ? "Attendance cleared." : status === "HALF_DAY" ? "Marked half day." : "Marked present.";
+  const MESSAGES = { CLEAR: "Attendance cleared.", ABSENT: "Marked absent.", HALF_DAY: "Marked half day." };
+  const message = MESSAGES[status] || "Marked present.";
   new ApiResponse(200, message, result).send(res);
 });
 

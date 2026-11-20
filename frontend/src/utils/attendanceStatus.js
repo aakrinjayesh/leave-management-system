@@ -6,6 +6,7 @@ export const ATTENDANCE_STATUS = {
   HALF_DAY: { label: "Half day", short: "½", cls: "is-half" },
   WFH: { label: "WFH", short: "W", cls: "is-wfh" },
   ON_LEAVE: { label: "On leave", short: "LV", cls: "is-leave" },
+  ABSENT: { label: "Absent", short: "A", cls: "is-absent" },
   NOT_MARKED: { label: "Not marked", short: "-", cls: "is-notmarked" },
   HOLIDAY: { label: "Holiday", short: "H", cls: "is-holiday" },
   WEEKEND: { label: "Weekend", short: "", cls: "is-weekend" },

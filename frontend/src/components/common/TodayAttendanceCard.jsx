@@ -9,7 +9,7 @@ import "../../styles/dashboardShared.css";
 
 // Quick "mark me present today" widget for the dashboard - saves going to the
 // Attendance tab and finding today. Opens the same MarkAttendanceModal the
-// Attendance page uses (one Present / Half day mark for the day).
+// Attendance page uses (one Present / Half day / Absent mark for the day).
 export default function TodayAttendanceCard() {
   const now = new Date();
   const [data, setData] = useState(null);
@@ -36,7 +36,7 @@ export default function TodayAttendanceCard() {
   // them mark it, so don't show a button either.
   if (data && (!today || !today.markable)) return null;
 
-  const allMarked = today?.overall === "PRESENT" || today?.overall === "HALF_DAY";
+  const allMarked = ["PRESENT", "HALF_DAY", "ABSENT"].includes(today?.overall);
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>

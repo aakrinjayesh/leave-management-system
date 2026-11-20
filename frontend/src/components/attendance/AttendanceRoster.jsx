@@ -15,7 +15,7 @@ const LIVE_REFRESH_DEBOUNCE_MS = 2000;
 const MONTH_LABEL = (year, month) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-IN", { month: "long", year: "numeric" });
 
-const LEGEND = ["PRESENT", "HALF_DAY", "WFH", "ON_LEAVE", "NOT_MARKED", "HOLIDAY"];
+const LEGEND = ["PRESENT", "HALF_DAY", "WFH", "ON_LEAVE", "ABSENT", "NOT_MARKED", "HOLIDAY"];
 
 const isCurrentMonth = (year, month) => {
   const now = new Date();
@@ -74,6 +74,9 @@ function CorrectModal({ target, onClose, onDone, correctFn }) {
         </Button>
         <Button type="button" variant="secondary" onClick={() => submit("HALF_DAY")} isLoading={busyAction === "HALF_DAY"}>
           Half day
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => submit("ABSENT")} isLoading={busyAction === "ABSENT"}>
+          Absent
         </Button>
         <Button type="button" variant="secondary" onClick={() => submit("CLEAR")} isLoading={busyAction === "CLEAR"}>
           Clear (not marked)
@@ -208,6 +211,11 @@ export default function AttendanceRoster({
               <span>
                 <b>{s.notMarked}</b> not marked yet
               </span>
+              {s.absent > 0 && (
+                <span>
+                  <b>{s.absent}</b> absent
+                </span>
+              )}
               <span style={{ marginLeft: "auto", color: "var(--text-secondary)" }}>
                 {data.rows.length} employee{data.rows.length === 1 ? "" : "s"} · auto-refreshes
               </span>

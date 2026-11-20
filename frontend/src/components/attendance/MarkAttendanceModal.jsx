@@ -5,7 +5,7 @@ import * as attendanceApi from "../../api/attendance.api";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 
 // Shown when marking one day's attendance - a single Present / Half day /
-// Clear control for the day, applied to every project the employee is on.
+// Absent / Clear control for the day, applied to every project the employee is on.
 // Shared by the Attendance page (click a day) and the dashboard "today's
 // attendance" widget.
 export default function MarkAttendanceModal({ day, onClose, onSaved }) {
@@ -20,7 +20,8 @@ export default function MarkAttendanceModal({ day, onClose, onSaved }) {
 
   const isPresent = day.overall === "PRESENT";
   const isHalf = day.overall === "HALF_DAY";
-  const marked = isPresent || isHalf;
+  const isAbsent = day.overall === "ABSENT";
+  const marked = isPresent || isHalf || isAbsent;
 
   const set = async (status) => {
     setError("");
@@ -40,7 +41,7 @@ export default function MarkAttendanceModal({ day, onClose, onSaved }) {
       <Alert type="error">{error}</Alert>
       <div className="att-modal-projects">
         <div className="att-modal-project">
-          <span className="att-modal-project-name">{marked ? (isPresent ? "Present" : "Half day") : "Not marked"}</span>
+          <span className="att-modal-project-name">{isPresent ? "Present" : isHalf ? "Half day" : isAbsent ? "Absent" : "Not marked"}</span>
           <div className="att-toggle">
             <button
               type="button"
@@ -60,6 +61,14 @@ export default function MarkAttendanceModal({ day, onClose, onSaved }) {
             </button>
             <button
               type="button"
+              className={`att-toggle-btn ${isAbsent ? "is-on is-absent" : ""}`}
+              disabled={busy === "ABSENT"}
+              onClick={() => set("ABSENT")}
+            >
+              Absent
+            </button>
+            <button
+              type="button"
               className="att-toggle-btn"
               disabled={!marked || busy === "CLEAR"}
               onClick={() => set("CLEAR")}
@@ -70,7 +79,7 @@ export default function MarkAttendanceModal({ day, onClose, onSaved }) {
         </div>
       </div>
       <p className="card-section-subtitle" style={{ marginTop: 12, marginBottom: 0 }}>
-        Weren&apos;t working this day? Ask your manager or admin to record it as leave instead of leaving it unmarked.
+        Weren&apos;t working this day? Mark it Absent rather than leaving it unmarked - unmarked days hold up payroll.
       </p>
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary page-header-btn" onClick={onClose}>

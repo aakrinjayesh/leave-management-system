@@ -250,7 +250,7 @@ model User {
     contractPaymentStructures         ContractPaymentStructure[]
     recordedContractPaymentStructures ContractPaymentStructure[] @relation("ContractPaymentStructureRecordedBy")
     contractPayments                  ContractPayment[]
-    generatedContractPayments         ContractPayment[]         @relation("ContractPaymentsGenerated")
+    generatedContractPayments         ContractPayment[]          @relation("ContractPaymentsGenerated")
 
     exitRecords         ExitRecord[]
     recordedExitRecords ExitRecord[] @relation("ExitRecordsRecordedBy")
@@ -273,11 +273,11 @@ model User {
     profileChangeRequests        ProfileChangeRequest[]
     decidedProfileChangeRequests ProfileChangeRequest[] @relation("ProfileChangeRequestsDecidedBy")
 
-    attendances         Attendance[]
+    attendances          Attendance[]
     correctedAttendances Attendance[] @relation("AttendanceCorrectedBy")
 
-    reimbursements        Reimbursement[] @relation("EmployeeReimbursements")
-    routedReimbursements  Reimbursement[] @relation("RoutedReimbursements")
+    reimbursements         Reimbursement[] @relation("EmployeeReimbursements")
+    routedReimbursements   Reimbursement[] @relation("RoutedReimbursements")
     approvedReimbursements Reimbursement[] @relation("ReimbursementsApprovedBy")
 
     generatedInvoices Invoice[] @relation("InvoicesGenerated")
@@ -868,7 +868,7 @@ model CompanySettings {
     // "We're here to assist you" contact shown on every dashboard's welcome
     // banner. Admin-editable (Manage Accounts). Any field may be blank - the
     // banner just drops that row.
-    supportContactName String?
+    supportContactName  String?
     supportContactEmail String?
     supportContactPhone String?
 
@@ -1153,21 +1153,21 @@ model Project {
     // Edit). Same rule as clientName: admin-only, never in
     // EMPLOYEE_PROJECT_SELECT, so an employee's own timesheet never sees any
     // of this. Document fields are permanent public S3 URLs (see s3.util.js).
-    clientFullName String?
-    clientAddress  String? @db.Text
+    clientFullName       String?
+    clientAddress        String? @db.Text
     // State the client is registered/billed in - drives GST place-of-supply on
     // generated invoices (same state as the company = CGST+SGST, otherwise
     // IGST). Free text (not an enum) so an unlisted state/UT never blocks
     // saving, but the frontend offers a fixed dropdown of Indian states/UTs.
-    clientState    String?
-    gstNumber      String?
-    gstDocumentUrl String?
-    panNumber      String?
-    panDocumentUrl String?
-    msmeDocumentUrl String?
-    paymentTerms   String?
-    sowDocumentUrl String?
-    rateCard       String?
+    clientState          String?
+    gstNumber            String?
+    gstDocumentUrl       String?
+    panNumber            String?
+    panDocumentUrl       String?
+    msmeDocumentUrl      String?
+    paymentTerms         String?
+    sowDocumentUrl       String?
+    rateCard             String?
     agreementDocumentUrl String?
 
     isActive Boolean @default(true)
@@ -1246,14 +1246,15 @@ enum AttendanceSource {
     ADMIN // an admin created or edited the record on their behalf
 }
 
-// One row per (employee, project, day) - created when the employee marks
-// present / half-day for that project. Attendance is a self-reported log, not
+// One row per (employee, project, day) - created when the employee marks the
+// day present / half-day / absent (written to every project they're on, so
+// it reads back as one mark per day). Attendance is a self-reported log, not
 // a request: there's no approval step. The employee can mark or change any day
 // within the backfill window (today + a few days back); only an admin can
 // touch older days (source ADMIN). Weekend / holiday / on-leave / WFH states
 // are derived at read time from WeekendPolicy + Holiday + approved
-// LeaveRequest / WfhRequest, never stored, so a row always means "present"
-// (full or half day).
+// LeaveRequest / WfhRequest, never stored. A working day with no row at all
+// is "Not marked" - distinct from a row with isAbsent.
 model Attendance {
     id Int @id @default(autoincrement())
 
@@ -1268,6 +1269,11 @@ model Attendance {
 
     // A half day counts as 0.5 present in the summary tallies.
     isHalfDay Boolean @default(false)
+
+    // Explicitly marked absent (never true together with isHalfDay). Counts
+    // as a marked day, so it doesn't block Run Payroll the way "Not marked"
+    // does.
+    isAbsent Boolean @default(false)
 
     source AttendanceSource @default(SELF)
     note   String?
@@ -1321,9 +1327,9 @@ model Reimbursement {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    user        User @relation("EmployeeReimbursements", fields: [userId], references: [id], onDelete: Cascade)
-    routedTo    User? @relation("RoutedReimbursements", fields: [routedToId], references: [id])
-    approvedBy  User? @relation("ReimbursementsApprovedBy", fields: [approvedById], references: [id])
+    user        User                      @relation("EmployeeReimbursements", fields: [userId], references: [id], onDelete: Cascade)
+    routedTo    User?                     @relation("RoutedReimbursements", fields: [routedToId], references: [id])
+    approvedBy  User?                     @relation("ReimbursementsApprovedBy", fields: [approvedById], references: [id])
     attachments ReimbursementAttachment[]
 
     @@index([userId])
@@ -1373,29 +1379,29 @@ model Invoice {
 
     projectId Int?
 
-    clientFullName String
-    clientAddress  String? @db.Text
-    clientState    String?
+    clientFullName  String
+    clientAddress   String? @db.Text
+    clientState     String?
     clientGstNumber String?
 
-    hsnCode     String?
-    description String  @db.Text
+    hsnCode           String?
+    description       String  @db.Text
     paymentAdviceText String? @db.Text
 
     totalTaxableValue Float
 
-    taxType    InvoiceTaxType
-    igstAmount Float @default(0)
-    cgstAmount Float @default(0)
-    sgstAmount Float @default(0)
+    taxType           InvoiceTaxType
+    igstAmount        Float          @default(0)
+    cgstAmount        Float          @default(0)
+    sgstAmount        Float          @default(0)
     totalInvoiceValue Float
 
     amountInWords String?
 
-    bankAccountName String?
-    bankName      String?
+    bankAccountName   String?
+    bankName          String?
     bankAccountNumber String?
-    bankIfscCode  String?
+    bankIfscCode      String?
 
     declarationText String? @db.Text
 
@@ -1403,7 +1409,7 @@ model Invoice {
     // points at a rendered .pdf (PDFKit, watermarked) or a .docx (the `docx`
     // package - no watermark, see invoiceDocx.service.js). Preview always
     // renders a PDF regardless of this choice; only Save respects it.
-    format InvoiceFormat @default(PDF)
+    format      InvoiceFormat @default(PDF)
     documentUrl String?
 
     generatedById Int
