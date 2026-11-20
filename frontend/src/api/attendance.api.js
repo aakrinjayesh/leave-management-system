@@ -19,3 +19,8 @@ export const getCompanyAttendance = (year, month) =>
   unwrap(axiosClient.get("/attendance/company", { params: { year, month } }));
 
 export const correctAttendance = (payload) => unwrap(axiosClient.patch("/attendance/correct", payload));
+
+// Admin - lock / unlock a month so employees can't change its attendance.
+export const lockAttendanceMonth = (year, month) => unwrap(axiosClient.put("/attendance/month-lock", { year, month }));
+export const unlockAttendanceMonth = (year, month) =>
+  unwrap(axiosClient.delete("/attendance/month-lock", { params: { year, month } }));

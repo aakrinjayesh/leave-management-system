@@ -97,6 +97,7 @@ export default function RunPayrollModal({ onClose }) {
       <p className="helper-text">
         Generates the payslip of every salaried employee for the chosen month and downloads them all as one ZIP file.
         Payslips already generated for that month keep the TDS and bonus entered on them; everyone else gets ₹0 for both.
+        Once it&apos;s done, that month&apos;s attendance is locked for employees.
       </p>
 
       <div className="field">
@@ -151,6 +152,14 @@ export default function RunPayrollModal({ onClose }) {
           {check.missingSalary.length > 0 && (
             <Alert type="info">
               No salary/CTC set - will be skipped: {check.missingSalary.map((u) => u.employeeName).join(", ")}
+            </Alert>
+          )}
+
+          {!isBlocked && (
+            <Alert type="info">
+              {check.monthLock
+                ? `${monthLabel(monthValue)} attendance is already locked for employees and will stay locked.`
+                : `Running payroll will lock ${monthLabel(monthValue)} attendance - employees won't be able to change it afterwards. You can unlock it from All Attendance if needed.`}
             </Alert>
           )}
         </div>

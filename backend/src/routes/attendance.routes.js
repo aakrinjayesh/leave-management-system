@@ -17,5 +17,9 @@ router.get("/team", authorizeManager, controller.getTeamAttendance);
 // Admin - everyone, plus the ability to correct a day.
 router.get("/company", authorize(USER_TYPE.ADMIN), controller.getCompanyAttendance);
 router.patch("/correct", authorize(USER_TYPE.ADMIN), controller.correctAttendance);
+// Admin - lock a month so employees can't change it (Run Payroll also does
+// this automatically), or unlock it again.
+router.put("/month-lock", authorize(USER_TYPE.ADMIN), controller.lockMonth);
+router.delete("/month-lock", authorize(USER_TYPE.ADMIN), controller.unlockMonth);
 
 module.exports = router;

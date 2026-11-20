@@ -15,10 +15,10 @@ const leaveCalendarService = require("./leaveCalendar.service");
 // employee still has a not-marked day in that month (see findUnmarkedEmployees).
 //
 // The employee can mark or change any working day up to today (never before
-// TRACKING_START or their joining date) - useful when they forget. The admin
-// can stop edits to previous months (CompanySettings.
-// allowPastMonthAttendanceEdits); then only the current month stays open to
-// the employee, and only an admin can change earlier months.
+// TRACKING_START or their joining date) - useful when they forget - unless
+// that month is locked (AttendanceMonthLock). An admin locks a month by hand
+// from All Attendance, and a successful Run Payroll locks its month
+// automatically. Admins can still correct a locked month, and can unlock it.
 //
 // Weekend / holiday / on-leave / WFH states are NEVER stored: they're derived
 // here from WeekendPolicy + Holiday + approved LeaveRequest / WfhRequest, so a
@@ -51,8 +51,6 @@ const trackingFloorKey = (joiningDate) => {
 };
 
 const toDateKey = (date) => new Date(date).toISOString().slice(0, 10);
-// "2026-11-20" -> "2026-11-01"
-const monthStartKey = (dateKey) => `${dateKey.slice(0, 7)}-01`;
 const dateFromKey = (key) => new Date(`${key}T00:00:00.000Z`);
 
 // Which calendar day it currently is in the company's timezone.
@@ -166,6 +164,49 @@ const monthRange = (year, month) => ({
   end: new Date(Date.UTC(year, month, 0)),
 });
 
+// ------------------------------ month locks ------------------------------
+
+const MONTH_LABEL = (year, month) =>
+  new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
+
+// The lock for one month as the API returns it, or null when it's open.
+const getMonthLock = async (year, month) => {
+  const lock = await prisma.attendanceMonthLock.findUnique({
+    where: { year_month: { year, month } },
+    include: { lockedBy: { select: { firstName: true, lastName: true } } },
+  });
+  if (!lock) return null;
+  return {
+    year,
+    month,
+    source: lock.source,
+    lockedAt: lock.lockedAt,
+    lockedByName: lock.lockedBy ? [lock.lockedBy.firstName, lock.lockedBy.lastName].filter(Boolean).join(" ") : null,
+  };
+};
+
+// Locks a month for employees (idempotent - re-locking just refreshes who /
+// when / why). Future months can't be locked: nobody can mark them anyway.
+const lockMonth = async (year, month, lockedById, source = "MANUAL") => {
+  const { timezone } = await companySettingsService.getSettings();
+  const todayKey = todayKeyInCompanyTz(timezone);
+  const [ty, tm] = todayKey.split("-").map(Number);
+  if (year * 12 + month > ty * 12 + tm) {
+    throw ApiError.badRequest("You can't lock a future month.");
+  }
+  await prisma.attendanceMonthLock.upsert({
+    where: { year_month: { year, month } },
+    create: { year, month, lockedById, source },
+    update: { lockedById, source, lockedAt: new Date() },
+  });
+  return getMonthLock(year, month);
+};
+
+const unlockMonth = async (year, month) => {
+  await prisma.attendanceMonthLock.deleteMany({ where: { year, month } });
+  return null;
+};
+
 // ------------------------- shared: write one day -------------------------
 
 // A day only accepts an attendance record if it's an actual working day for
@@ -238,21 +279,22 @@ const markAttendance = async (userId, dateKey, status) => {
     throw ApiError.badRequest("You're not assigned to any project yet.");
   }
 
-  const { timezone, allowPastMonthAttendanceEdits } = await companySettingsService.getSettings();
+  const { timezone } = await companySettingsService.getSettings();
   const todayKey = todayKeyInCompanyTz(timezone);
   const targetKey = dateKey || todayKey;
 
   if (targetKey > todayKey) {
     throw ApiError.badRequest("You can't mark attendance for a future date.");
   }
-  // Self-marking runs up to today and never before the tracking floor (max of
-  // TRACKING_START and the employee's joining date). Once the admin has
-  // stopped past-month edits, it's further limited to the current month.
-  if (!allowPastMonthAttendanceEdits && targetKey < monthStartKey(todayKey)) {
+  // A locked month (manually, or by Run Payroll) is closed to employees.
+  const [targetYear, targetMonth] = targetKey.split("-").map(Number);
+  if (await getMonthLock(targetYear, targetMonth)) {
     throw ApiError.badRequest(
-      "Editing previous months' attendance has been stopped by your admin. You can only change the current month."
+      `Attendance for ${MONTH_LABEL(targetYear, targetMonth)} is locked by your admin. Contact your admin if something needs correcting.`
     );
   }
+  // Self-marking runs up to today and never before the tracking floor (max of
+  // TRACKING_START and the employee's joining date).
   const floorKey = trackingFloorKey(me?.joiningDate);
   if (targetKey < floorKey) {
     if (me?.joiningDate && floorKey === toDateKey(me.joiningDate)) {
@@ -270,7 +312,7 @@ const markAttendance = async (userId, dateKey, status) => {
 // ------------------------- employee: my attendance -------------------------
 
 const getMyAttendance = async (userId, year, month) => {
-  const { timezone, allowPastMonthAttendanceEdits } = await companySettingsService.getSettings();
+  const { timezone } = await companySettingsService.getSettings();
   const todayKey = todayKeyInCompanyTz(timezone);
   const { start, end } = monthRange(year, month);
   const fetchStart = start;
@@ -288,12 +330,11 @@ const getMyAttendance = async (userId, year, month) => {
   ]);
 
   const floorKey = trackingFloorKey(me?.joiningDate); // display: NOT_TRACKED before this
-  // Employee can self-mark any working day up to today, never before the
-  // tracking floor (which also gates display and the ratio) - and only within
-  // the current month once the admin has stopped past-month edits.
-  const currentMonthKey = monthStartKey(todayKey);
-  const earliestMarkableKey =
-    !allowPastMonthAttendanceEdits && currentMonthKey > floorKey ? currentMonthKey : floorKey;
+  // Employee can self-mark any working day from the tracking floor up to
+  // today - same floor that gates display and the ratio - unless the whole
+  // month is locked.
+  const earliestMarkableKey = floorKey;
+  const monthLock = await getMonthLock(year, month);
 
   const weekendSet = new Set(calendar.weekendDates);
   const holidaySet = new Set(calendar.holidays.map((h) => h.date));
@@ -335,8 +376,9 @@ const getMyAttendance = async (userId, year, month) => {
       onLeave: leaveDays.has(dayKey),
       onWfh: wfhDays.has(dayKey),
       // The employee can click this day to mark/change it: a working day,
-      // on/after their tracking floor, not in the future.
+      // on/after their tracking floor, not in the future, month not locked.
       markable:
+        !monthLock &&
         !weekendSet.has(dayKey) &&
         !holidaySet.has(dayKey) &&
         !leaveDays.has(dayKey) &&
@@ -363,7 +405,7 @@ const getMyAttendance = async (userId, year, month) => {
     timezone,
     todayKey,
     backfillStartKey: earliestMarkableKey,
-    pastMonthsLocked: !allowPastMonthAttendanceEdits,
+    monthLock,
     projects,
     month: { year, month, days },
     summary: {
@@ -497,6 +539,7 @@ const getRosterAttendance = async ({ userWhere, year, month }) => {
     holidays: calendar.holidays,
     todaySummary,
     rows,
+    monthLock: await getMonthLock(year, month),
   };
 };
 
@@ -557,4 +600,7 @@ module.exports = {
   getRosterAttendance,
   correctAttendance,
   findUnmarkedEmployees,
+  getMonthLock,
+  lockMonth,
+  unlockMonth,
 };

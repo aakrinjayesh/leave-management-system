@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Spinner from "../../components/common/Spinner";
 import Alert from "../../components/common/Alert";
@@ -139,7 +139,6 @@ export default function MyAttendancePage() {
           <h1>Attendance</h1>
           <p>
             Click a day in the calendar to mark yourself present, half day, or absent. Days you haven&apos;t marked show as &quot;-&quot;.
-            {data?.pastMonthsLocked && " Previous months are locked - ask your admin to correct those."}
           </p>
         </div>
         <button
@@ -161,6 +160,17 @@ export default function MyAttendancePage() {
         </div>
       ) : (
         <>
+          {data.monthLock && (
+            <div className="att-lock-bar is-locked" role="status">
+              <span className="att-lock-bar-text">
+                <Lock size={15} />
+                <span>
+                  <b>Attendance for {MONTH_LABEL(data.month.year, data.month.month)} is locked by your admin.</b> You can&apos;t
+                  change it anymore - if something needs correcting, contact your admin.
+                </span>
+              </span>
+            </div>
+          )}
           {data.summary && (
             <div className="att-summary">
               <div className="att-summary-tile">

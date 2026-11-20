@@ -7,6 +7,7 @@ const payrollRunService = require("../services/payrollRun.service");
 const { streamPayslipPdf } = require("../services/payslipPdf.service");
 const notificationService = require("../services/notification.service");
 const companySettingsService = require("../services/companySettings.service");
+const notificationStreamService = require("../services/notificationStream.service");
 const { formatDateShort } = require("../utils/formatDate.util");
 const { renderPdfToBuffer } = require("../utils/pdfBuffer.util");
 const { uploadToS3 } = require("../utils/s3.util");
@@ -69,6 +70,8 @@ const checkPayrollRun = asyncHandler(async (req, res) => {
 const runPayroll = asyncHandler(async (req, res) => {
   const { year, month } = parsePayrollMonth(req.body);
   const { buffer, fileName, generatedCount, skippedCount } = await payrollRunService.runPayroll(year, month, req.user.id);
+  // The run just locked this month's attendance - let open attendance pages refresh.
+  notificationStreamService.broadcast("attendance");
 
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);

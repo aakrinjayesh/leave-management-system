@@ -1,16 +1,16 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserType {
-    EMPLOYEE
-    MANAGER
-    ADMIN
+  EMPLOYEE
+  MANAGER
+  ADMIN
 }
 
 // How the person is engaged - purely a label (shown in the top-right corner
@@ -19,290 +19,291 @@ enum UserType {
 // EMPLOYEE userType accounts. Defaults to EMPLOYEE so every existing row is
 // unaffected.
 enum EmploymentType {
-    EMPLOYEE
-    INTERN
-    CONTRACT
+  EMPLOYEE
+  INTERN
+  CONTRACT
 }
 
 enum UserStatus {
-    PENDING
-    ACTIVE
-    INACTIVE
-    REJECTED
+  PENDING
+  ACTIVE
+  INACTIVE
+  REJECTED
 }
 
 enum OTPPurpose {
-    REGISTER
-    LOGIN
-    FORGOT_PASSWORD
+  REGISTER
+  LOGIN
+  FORGOT_PASSWORD
 }
 
 enum LeaveStatus {
-    PENDING
-    APPROVED
-    REJECTED
-    CANCELLED
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
 }
 
 enum ProjectAssignmentStatus {
-    ASSIGNED
-    NOT_ASSIGNED
+  ASSIGNED
+  NOT_ASSIGNED
 }
 
 enum SubmissionFrequency {
-    WEEKLY
-    MONTHLY
+  WEEKLY
+  MONTHLY
 }
 
 enum DayOfWeek {
-    MONDAY
-    TUESDAY
-    WEDNESDAY
-    THURSDAY
-    FRIDAY
-    SATURDAY
-    SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
 }
 
 enum WeekNumber {
-    ALL
-    FIRST
-    SECOND
-    THIRD
-    FOURTH
-    FIFTH
+  ALL
+  FIRST
+  SECOND
+  THIRD
+  FOURTH
+  FIFTH
 }
 
 enum Gender {
-    MALE
-    FEMALE
-    OTHER
+  MALE
+  FEMALE
+  OTHER
 }
 
 enum MaritalStatus {
-    SINGLE
-    MARRIED
-    OTHER
+  SINGLE
+  MARRIED
+  OTHER
 }
 
 enum TaxRegime {
-    OLD
-    NEW
+  OLD
+  NEW
 }
 
 enum ResidentialStatus {
-    RESIDENT
-    NON_RESIDENT
-    RESIDENT_NOT_ORDINARILY_RESIDENT
+  RESIDENT
+  NON_RESIDENT
+  RESIDENT_NOT_ORDINARILY_RESIDENT
 }
 
 enum IncomeTaxComputationMode {
-    PROJECTED
-    FINAL
+  PROJECTED
+  FINAL
 }
 
 enum ResignationStatus {
-    PENDING
-    ACCEPTED
-    REJECTED
-    WITHDRAWN
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
 }
 
 model User {
-    id           Int     @id @default(autoincrement())
-    employeeCode String? @unique
+  id           Int     @id @default(autoincrement())
+  employeeCode String? @unique
 
-    firstName String
-    lastName  String
+  firstName String
+  lastName  String
 
-    email    String  @unique
-    password String?
+  email    String  @unique
+  password String?
 
-    // Personal (non-work) email - contact info only, never a login identity,
-    // so it isn't unique. Admin can edit it; employee can self-edit it as part
-    // of their Personal Information section.
-    personalEmail String?
+  // Personal (non-work) email - contact info only, never a login identity,
+  // so it isn't unique. Admin can edit it; employee can self-edit it as part
+  // of their Personal Information section.
+  personalEmail String?
 
-    phone       String?
-    joiningDate DateTime?
-    birthDate   DateTime?
-    gender      Gender?
+  phone       String?
+  joiningDate DateTime?
+  birthDate   DateTime?
+  gender      Gender?
 
-    // The highest completed-years count this employee has already been shown
-    // an anniversary celebration for - lets it fire again at each new
-    // anniversary (1, then 2, then 3...) without repeating within the same year.
-    lastAnniversaryCelebratedYears Int?
+  // The highest completed-years count this employee has already been shown
+  // an anniversary celebration for - lets it fire again at each new
+  // anniversary (1, then 2, then 3...) without repeating within the same year.
+  lastAnniversaryCelebratedYears Int?
 
-    // Tracks the year the birthday email was last sent, so the daily job
-    // never double-sends if it happens to run more than once on the same day.
-    lastBirthdayEmailYear Int?
+  // Tracks the year the birthday email was last sent, so the daily job
+  // never double-sends if it happens to run more than once on the same day.
+  lastBirthdayEmailYear Int?
 
-    // Same idea as lastBirthdayEmailYear, but for the separate "tomorrow is
-    // X's birthday" advance reminder sent to admins + this person's manager.
-    lastBirthdayReminderYear Int?
+  // Same idea as lastBirthdayEmailYear, but for the separate "tomorrow is
+  // X's birthday" advance reminder sent to admins + this person's manager.
+  lastBirthdayReminderYear Int?
 
-    // The year the birthday dashboard celebration overlay was last shown, so
-    // it fires once per birthday instead of on every dashboard visit that day.
-    lastBirthdayCelebratedYear Int?
+  // The year the birthday dashboard celebration overlay was last shown, so
+  // it fires once per birthday instead of on every dashboard visit that day.
+  lastBirthdayCelebratedYear Int?
 
-    // HR/payroll fields - admin can always edit; employee can self-edit
-    // everything here except pfNumber and salaryCtc, up to statutoryInfoEditCount
-    // / bankInfoEditCount times each (see the counters below).
-    pan               String?
-    panHolderName     String?
-    uan               String?
-    aadharNumber      String?
-    aadharHolderName  String?
-    bankAccountNumber String?
-    bankName          String?
-    ifscCode          String?
-    pfNumber          String?
-    salaryCtc         Float?
+  // HR/payroll fields - admin can always edit; employee can self-edit
+  // everything here except pfNumber and salaryCtc, up to statutoryInfoEditCount
+  // / bankInfoEditCount times each (see the counters below).
+  pan               String?
+  panHolderName     String?
+  uan               String?
+  aadharNumber      String?
+  aadharHolderName  String?
+  bankAccountNumber String?
+  bankName          String?
+  ifscCode          String?
+  pfNumber          String?
+  salaryCtc         Float?
 
-    // Personal details - admin can always edit; employee can self-edit these
-    // up to personalInfoEditCount times (see below).
-    fatherName        String?
-    fatherMotherPhone String?
-    spouseName        String?
-    maritalStatus     MaritalStatus?
-    nationality       String?
-    qualification     String?
+  // Personal details - admin can always edit; employee can self-edit these
+  // up to personalInfoEditCount times (see below).
+  fatherName        String?
+  fatherMotherPhone String?
+  spouseName        String?
+  maritalStatus     MaritalStatus?
+  nationality       String?
+  qualification     String?
 
-    // How many times this employee has used their own self-service edit form
-    // for each profile section - each capped at 3 in the controller; once used
-    // up, only admin can change that section's fields. Admin edits never
-    // touch these counters and are never limited.
-    personalInfoEditCount  Int @default(0)
-    statutoryInfoEditCount Int @default(0)
-    bankInfoEditCount      Int @default(0)
+  // How many times this employee has used their own self-service edit form
+  // for each profile section - each capped at 3 in the controller; once used
+  // up, only admin can change that section's fields. Admin edits never
+  // touch these counters and are never limited.
+  personalInfoEditCount  Int @default(0)
+  statutoryInfoEditCount Int @default(0)
+  bankInfoEditCount      Int @default(0)
 
-    // Employment details shown on payslips.
-    designation String?
-    location    String?
-    taxRegime   TaxRegime?
+  // Employment details shown on payslips.
+  designation String?
+  location    String?
+  taxRegime   TaxRegime?
 
-    // Extra identity fields only needed for the annual Income Tax Computation
-    // Statement - admin-managed only, same as the other HR/payroll fields.
-    residentialAddress String?
-    pinCode            String?
-    residentialStatus  ResidentialStatus?
+  // Extra identity fields only needed for the annual Income Tax Computation
+  // Statement - admin-managed only, same as the other HR/payroll fields.
+  residentialAddress String?
+  pinCode            String?
+  residentialStatus  ResidentialStatus?
 
-    // Uploaded document filenames (stored on disk, same pattern as leave
-    // attachments) - admin-only to upload, view, and download.
-    panDocumentUrl    String?
-    aadharDocumentUrl String?
-    bankDocumentUrl   String?
-    photoUrl          String?
-    documentUrl       String?
+  // Uploaded document filenames (stored on disk, same pattern as leave
+  // attachments) - admin-only to upload, view, and download.
+  panDocumentUrl    String?
+  aadharDocumentUrl String?
+  bankDocumentUrl   String?
+  photoUrl          String?
+  documentUrl       String?
 
-    userType       UserType
-    employmentType EmploymentType @default(EMPLOYEE)
-    status         UserStatus     @default(ACTIVE)
+  userType       UserType
+  employmentType EmploymentType @default(EMPLOYEE)
+  status         UserStatus     @default(ACTIVE)
 
-    // Latest exit date, shown on the Accounts table - cleared on reactivate.
-    // Full history of every exit/rehire cycle lives in ExitRecord below.
-    exitDate DateTime?
+  // Latest exit date, shown on the Accounts table - cleared on reactivate.
+  // Full history of every exit/rehire cycle lives in ExitRecord below.
+  exitDate DateTime?
 
-    managerId Int?
+  managerId Int?
 
-    isPasswordSet Boolean @default(false)
+  isPasswordSet Boolean @default(false)
 
-    isRegistrationAllowed Boolean @default(true)
+  isRegistrationAllowed Boolean @default(true)
 
-    // Free-text answers to the fixed "Introduce yourself" prompts on the
-    // employee dashboard - a private self-description keyed by prompt id
-    // (see INTRO_PROMPT_KEYS). Only the employee themselves ever sees this.
-    intro Json?
+  // Free-text answers to the fixed "Introduce yourself" prompts on the
+  // employee dashboard - a private self-description keyed by prompt id
+  // (see INTRO_PROMPT_KEYS). Only the employee themselves ever sees this.
+  intro Json?
 
-    manager   User?  @relation("ManagerEmployees", fields: [managerId], references: [id])
-    employees User[] @relation("ManagerEmployees")
+  manager   User?  @relation("ManagerEmployees", fields: [managerId], references: [id])
+  employees User[] @relation("ManagerEmployees")
 
-    projectMemberships ProjectMembership[]
+  projectMemberships ProjectMembership[]
 
-    createdAt           DateTime       @default(now())
-    updatedAt           DateTime       @updatedAt
-    otps                OTP[]
-    refreshTokens       RefreshToken[]
-    leaveBalances       LeaveBalance[]
-    leaveRequests       LeaveRequest[] @relation("EmployeeLeaveRequests")
-    routedLeaveRequests LeaveRequest[] @relation("RoutedLeaveRequests")
-    approvedLeaves      LeaveRequest[] @relation("ManagerApprovedLeaves")
-    holidays            Holiday[]
-    notifications       Notification[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  otps                OTP[]
+  refreshTokens       RefreshToken[]
+  leaveBalances       LeaveBalance[]
+  leaveRequests       LeaveRequest[] @relation("EmployeeLeaveRequests")
+  routedLeaveRequests LeaveRequest[] @relation("RoutedLeaveRequests")
+  approvedLeaves      LeaveRequest[] @relation("ManagerApprovedLeaves")
+  holidays            Holiday[]
+  notifications       Notification[]
 
-    timesheetEntries             TimesheetEntry[]
-    timesheetSubmissions         TimesheetSubmission[] @relation("EmployeeTimesheetSubmissions")
-    routedTimesheetSubmissions   TimesheetSubmission[] @relation("RoutedTimesheetSubmissions")
-    approvedTimesheetSubmissions TimesheetSubmission[] @relation("ApprovedTimesheetSubmissions")
-    projects                     Project[]
+  timesheetEntries             TimesheetEntry[]
+  timesheetSubmissions         TimesheetSubmission[] @relation("EmployeeTimesheetSubmissions")
+  routedTimesheetSubmissions   TimesheetSubmission[] @relation("RoutedTimesheetSubmissions")
+  approvedTimesheetSubmissions TimesheetSubmission[] @relation("ApprovedTimesheetSubmissions")
+  projects                     Project[]
 
-    payslips          Payslip[]
-    generatedPayslips Payslip[] @relation("PayslipsGenerated")
+  payslips          Payslip[]
+  generatedPayslips Payslip[] @relation("PayslipsGenerated")
 
-    customFields EmployeeCustomField[]
+  customFields EmployeeCustomField[]
 
-    salaryStructureHistory         SalaryStructureHistory[]
-    recordedSalaryStructureEntries SalaryStructureHistory[] @relation("SalaryStructureHistoryRecordedBy")
+  salaryStructureHistory         SalaryStructureHistory[]
+  recordedSalaryStructureEntries SalaryStructureHistory[] @relation("SalaryStructureHistoryRecordedBy")
 
-    // Contract-hire (employmentType = CONTRACT) only - a completely separate
-    // payment model (Gross - TDS = Net), never mixed with the employee
-    // salary structure / payslip above.
-    contractPaymentStructures         ContractPaymentStructure[]
-    recordedContractPaymentStructures ContractPaymentStructure[] @relation("ContractPaymentStructureRecordedBy")
-    contractPayments                  ContractPayment[]
-    generatedContractPayments         ContractPayment[]          @relation("ContractPaymentsGenerated")
+  // Contract-hire (employmentType = CONTRACT) only - a completely separate
+  // payment model (Gross - TDS = Net), never mixed with the employee
+  // salary structure / payslip above.
+  contractPaymentStructures         ContractPaymentStructure[]
+  recordedContractPaymentStructures ContractPaymentStructure[] @relation("ContractPaymentStructureRecordedBy")
+  contractPayments                  ContractPayment[]
+  generatedContractPayments         ContractPayment[]          @relation("ContractPaymentsGenerated")
 
-    exitRecords         ExitRecord[]
-    recordedExitRecords ExitRecord[] @relation("ExitRecordsRecordedBy")
+  exitRecords         ExitRecord[]
+  recordedExitRecords ExitRecord[] @relation("ExitRecordsRecordedBy")
 
-    offerLetters          OfferLetter[]
-    generatedOfferLetters OfferLetter[] @relation("OfferLettersGeneratedBy")
+  offerLetters          OfferLetter[]
+  generatedOfferLetters OfferLetter[] @relation("OfferLettersGeneratedBy")
 
-    taxDeclarations         TaxDeclaration[]
-    recordedTaxDeclarations TaxDeclaration[] @relation("TaxDeclarationRecordedBy")
+  taxDeclarations         TaxDeclaration[]
+  recordedTaxDeclarations TaxDeclaration[] @relation("TaxDeclarationRecordedBy")
 
-    incomeTaxComputationGenerations          IncomeTaxComputationGeneration[]
-    generatedIncomeTaxComputationGenerations IncomeTaxComputationGeneration[] @relation("IncomeTaxComputationGenerationsGeneratedBy")
+  incomeTaxComputationGenerations          IncomeTaxComputationGeneration[]
+  generatedIncomeTaxComputationGenerations IncomeTaxComputationGeneration[] @relation("IncomeTaxComputationGenerationsGeneratedBy")
 
-    resignations        Resignation[]
-    decidedResignations Resignation[] @relation("ResignationsDecidedBy")
+  resignations        Resignation[]
+  decidedResignations Resignation[] @relation("ResignationsDecidedBy")
 
-    wfhRequests        WfhRequest[]
-    decidedWfhRequests WfhRequest[] @relation("WfhRequestsDecidedBy")
+  wfhRequests        WfhRequest[]
+  decidedWfhRequests WfhRequest[] @relation("WfhRequestsDecidedBy")
 
-    profileChangeRequests        ProfileChangeRequest[]
-    decidedProfileChangeRequests ProfileChangeRequest[] @relation("ProfileChangeRequestsDecidedBy")
+  profileChangeRequests        ProfileChangeRequest[]
+  decidedProfileChangeRequests ProfileChangeRequest[] @relation("ProfileChangeRequestsDecidedBy")
 
-    attendances          Attendance[]
-    correctedAttendances Attendance[] @relation("AttendanceCorrectedBy")
+  attendances            Attendance[]
+  correctedAttendances   Attendance[]          @relation("AttendanceCorrectedBy")
+  lockedAttendanceMonths AttendanceMonthLock[] @relation("AttendanceMonthLockedBy")
 
-    reimbursements         Reimbursement[] @relation("EmployeeReimbursements")
-    routedReimbursements   Reimbursement[] @relation("RoutedReimbursements")
-    approvedReimbursements Reimbursement[] @relation("ReimbursementsApprovedBy")
+  reimbursements         Reimbursement[] @relation("EmployeeReimbursements")
+  routedReimbursements   Reimbursement[] @relation("RoutedReimbursements")
+  approvedReimbursements Reimbursement[] @relation("ReimbursementsApprovedBy")
 
-    generatedInvoices Invoice[] @relation("InvoicesGenerated")
+  generatedInvoices Invoice[] @relation("InvoicesGenerated")
 }
 
 // One row per exit event - kept permanently even across reactivate/rehire
 // cycles, so the full history (and each exit's relieving letter text) is
 // never lost, unlike User.exitDate which only reflects the latest one.
 model ExitRecord {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    exitDate            DateTime
-    relievingLetterText String   @db.Text
-    pdfUrl              String?
+  exitDate            DateTime
+  relievingLetterText String   @db.Text
+  pdfUrl              String?
 
-    recordedById Int
+  recordedById Int
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
-    recordedBy User @relation("ExitRecordsRecordedBy", fields: [recordedById], references: [id])
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordedBy User @relation("ExitRecordsRecordedBy", fields: [recordedById], references: [id])
 
-    @@index([userId])
+  @@index([userId])
 }
 
 // One row per resignation request, employee-initiated from their own
@@ -315,28 +316,28 @@ model ExitRecord {
 // resignation/notice date, not their literal final day, so a full notice
 // period is added on top of it once accepted.
 model Resignation {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    reason String @db.Text
+  reason String @db.Text
 
-    status                  ResignationStatus @default(PENDING)
-    noticePeriodDays        Int               @default(90)
-    proposedLastWorkingDate DateTime
-    lastWorkingDate         DateTime?
+  status                  ResignationStatus @default(PENDING)
+  noticePeriodDays        Int               @default(90)
+  proposedLastWorkingDate DateTime
+  lastWorkingDate         DateTime?
 
-    decidedById Int?
-    decidedAt   DateTime?
+  decidedById Int?
+  decidedAt   DateTime?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-    decidedBy User? @relation("ResignationsDecidedBy", fields: [decidedById], references: [id])
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy User? @relation("ResignationsDecidedBy", fields: [decidedById], references: [id])
 
-    @@index([userId])
-    @@index([status])
+  @@index([userId])
+  @@index([status])
 }
 
 // Employee-submitted request to work from home for a date range - routed to
@@ -351,42 +352,42 @@ model Resignation {
 // and manager review tables) just reads the user's CURRENT
 // projectMemberships live rather than freezing a choice at submission time.
 model WfhRequest {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    startDate DateTime
-    endDate   DateTime
+  startDate DateTime
+  endDate   DateTime
 
-    reason String @db.Text
+  reason String @db.Text
 
-    status LeaveStatus @default(PENDING)
+  status LeaveStatus @default(PENDING)
 
-    adminRemarks String?
+  adminRemarks String?
 
-    decidedById Int?
-    decidedAt   DateTime?
+  decidedById Int?
+  decidedAt   DateTime?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-    decidedBy User? @relation("WfhRequestsDecidedBy", fields: [decidedById], references: [id])
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy User? @relation("WfhRequestsDecidedBy", fields: [decidedById], references: [id])
 
-    @@index([userId])
-    @@index([status])
+  @@index([userId])
+  @@index([status])
 }
 
 enum ProfileChangeSection {
-    PERSONAL
-    STATUTORY
-    BANK
+  PERSONAL
+  STATUTORY
+  BANK
 }
 
 enum ProfileChangeStatus {
-    PENDING
-    ACCEPTED
-    REJECTED
+  PENDING
+  ACCEPTED
+  REJECTED
 }
 
 // An employee's self-service edit to one of the three approval-gated profile
@@ -396,27 +397,27 @@ enum ProfileChangeStatus {
 // rejects. One PENDING request per section at a time; the section's
 // {section}InfoEditCount on User still caps total submissions at 3.
 model ProfileChangeRequest {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId  Int
-    section ProfileChangeSection
+  userId  Int
+  section ProfileChangeSection
 
-    changes Json
+  changes Json
 
-    status       ProfileChangeStatus @default(PENDING)
-    adminRemarks String?
+  status       ProfileChangeStatus @default(PENDING)
+  adminRemarks String?
 
-    decidedById Int?
-    decidedAt   DateTime?
+  decidedById Int?
+  decidedAt   DateTime?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-    decidedBy User? @relation("ProfileChangeRequestsDecidedBy", fields: [decidedById], references: [id])
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy User? @relation("ProfileChangeRequestsDecidedBy", fields: [decidedById], references: [id])
 
-    @@index([userId])
-    @@index([status])
+  @@index([userId])
+  @@index([status])
 }
 
 // One row per generated offer letter - never overwritten, so admin can
@@ -424,22 +425,22 @@ model ProfileChangeRequest {
 // version. The PDF itself isn't stored - it's re-rendered from letterText on
 // download, same pattern as ExitRecord.relievingLetterText.
 model OfferLetter {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    offerDate  DateTime
-    letterText String   @db.Text
-    pdfUrl     String?
+  offerDate  DateTime
+  letterText String   @db.Text
+  pdfUrl     String?
 
-    generatedById Int
+  generatedById Int
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
-    generatedBy User @relation("OfferLettersGeneratedBy", fields: [generatedById], references: [id])
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generatedBy User @relation("OfferLettersGeneratedBy", fields: [generatedById], references: [id])
 
-    @@index([userId])
+  @@index([userId])
 }
 
 // One row per CTC + salary-structure change, so payslips generated for a
@@ -451,32 +452,32 @@ model OfferLetter {
 // getEffectiveSalaryConfig), so this only needs to be populated when a raise
 // or structure change actually happens, or retroactively for corrections.
 model SalaryStructureHistory {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    ctc           Float
-    effectiveFrom DateTime
+  ctc           Float
+  effectiveFrom DateTime
 
-    // Same fields the old company-wide SalaryStructureConfig used to hold,
-    // now captured per employee per effective period instead of one global
-    // value shared by everyone.
-    basicPercentOfCtc                 Float
-    hraPercentOfBasic                 Float
-    ltaPercentOfBasic                 Float
-    guaranteedAllowancePercentOfBasic Float
-    conveyanceMonthly                 Float
-    pfMonthlyAmount                   Float
-    professionalTax                   Float
-    professionalTaxThreshold          Float
+  // Same fields the old company-wide SalaryStructureConfig used to hold,
+  // now captured per employee per effective period instead of one global
+  // value shared by everyone.
+  basicPercentOfCtc                 Float
+  hraPercentOfBasic                 Float
+  ltaPercentOfBasic                 Float
+  guaranteedAllowancePercentOfBasic Float
+  conveyanceMonthly                 Float
+  pfMonthlyAmount                   Float
+  professionalTax                   Float
+  professionalTaxThreshold          Float
 
-    createdAt    DateTime @default(now())
-    recordedById Int?
+  createdAt    DateTime @default(now())
+  recordedById Int?
 
-    user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-    recordedBy User? @relation("SalaryStructureHistoryRecordedBy", fields: [recordedById], references: [id])
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordedBy User? @relation("SalaryStructureHistoryRecordedBy", fields: [recordedById], references: [id])
 
-    @@index([userId, effectiveFrom])
+  @@index([userId, effectiveFrom])
 }
 
 // ── Contract-hire payment model (employmentType = CONTRACT only) ──────────
@@ -489,49 +490,49 @@ model SalaryStructureHistory {
 // SalaryStructureHistory works so the admin UI ("Update" adds a dated row,
 // "Edit" fixes the latest) behaves identically.
 model ContractPaymentStructure {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    grossPayment   Float
-    tdsRatePercent Float // 2 or 10
-    effectiveFrom  DateTime
+  grossPayment   Float
+  tdsRatePercent Float // 2 or 10
+  effectiveFrom  DateTime
 
-    createdAt    DateTime @default(now())
-    recordedById Int?
+  createdAt    DateTime @default(now())
+  recordedById Int?
 
-    user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-    recordedBy User? @relation("ContractPaymentStructureRecordedBy", fields: [recordedById], references: [id])
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordedBy User? @relation("ContractPaymentStructureRecordedBy", fields: [recordedById], references: [id])
 
-    @@index([userId, effectiveFrom])
+  @@index([userId, effectiveFrom])
 }
 
 // One immutable slip per contract hire per month - the contract-hire
 // equivalent of Payslip.
 model ContractPayment {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    month Int
-    year  Int
+  month Int
+  year  Int
 
-    grossPayment   Float
-    tdsRatePercent Float
-    tdsAmount      Float
-    netPayment     Float
+  grossPayment   Float
+  tdsRatePercent Float
+  tdsAmount      Float
+  netPayment     Float
 
-    pdfUrl String?
+  pdfUrl String?
 
-    generatedById Int
-    generatedAt   DateTime @default(now())
-    updatedAt     DateTime @updatedAt
+  generatedById Int
+  generatedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
-    generatedBy User @relation("ContractPaymentsGenerated", fields: [generatedById], references: [id])
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generatedBy User @relation("ContractPaymentsGenerated", fields: [generatedById], references: [id])
 
-    @@unique([userId, month, year])
-    @@index([userId])
+  @@unique([userId, month, year])
+  @@index([userId])
 }
 
 // One row per employee per financial year - only meaningful for employees on
@@ -541,32 +542,32 @@ model ContractPayment {
 // computation only needs Gross Salary + the flat Standard Deduction).
 // `financialYear` is stored as the starting year (e.g. 2025 means FY 2025-26).
 model TaxDeclaration {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    financialYear Int
+  financialYear Int
 
-    rentPaidAnnual Float   @default(0)
-    isMetroCity    Boolean @default(false)
+  rentPaidAnnual Float   @default(0)
+  isMetroCity    Boolean @default(false)
 
-    section80C       Float @default(0)
-    section80D       Float @default(0)
-    homeLoanInterest Float @default(0)
+  section80C       Float @default(0)
+  section80D       Float @default(0)
+  homeLoanInterest Float @default(0)
 
-    otherIncomeSavingsInterest Float @default(0)
-    otherIncomeFDInterest      Float @default(0)
+  otherIncomeSavingsInterest Float @default(0)
+  otherIncomeFDInterest      Float @default(0)
 
-    recordedById Int?
+  recordedById Int?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-    recordedBy User? @relation("TaxDeclarationRecordedBy", fields: [recordedById], references: [id])
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordedBy User? @relation("TaxDeclarationRecordedBy", fields: [recordedById], references: [id])
 
-    @@unique([userId, financialYear])
-    @@index([userId])
+  @@unique([userId, financialYear])
+  @@index([userId])
 }
 
 // One row per "Generate" click - a frozen snapshot of the Income Tax
@@ -579,314 +580,308 @@ model TaxDeclaration {
 // read live from the employee's profile at PDF render time, since they
 // rarely change and don't need point-in-time freezing the way these figures do.
 model IncomeTaxComputationGeneration {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    financialYear Int
+  financialYear Int
 
-    generatedAt   DateTime @default(now())
-    generatedById Int
+  generatedAt   DateTime @default(now())
+  generatedById Int
 
-    regime TaxRegime
+  regime TaxRegime
 
-    // Whether this generation was a running estimate or the confirmed final
-    // figure, at the moment it was generated.
-    mode          IncomeTaxComputationMode
-    monthsElapsed Int
+  // Whether this generation was a running estimate or the confirmed final
+  // figure, at the moment it was generated.
+  mode          IncomeTaxComputationMode
+  monthsElapsed Int
 
-    grossSalary       Float
-    standardDeduction Float
-    hraExemption      Float @default(0)
-    section80C        Float @default(0)
-    section80D        Float @default(0)
-    homeLoanInterest  Float @default(0)
-    taxableSalary     Float
+  grossSalary       Float
+  standardDeduction Float
+  hraExemption      Float @default(0)
+  section80C        Float @default(0)
+  section80D        Float @default(0)
+  homeLoanInterest  Float @default(0)
+  taxableSalary     Float
 
-    otherIncomeSavingsInterest Float @default(0)
-    otherIncomeFDInterest      Float @default(0)
+  otherIncomeSavingsInterest Float @default(0)
+  otherIncomeFDInterest      Float @default(0)
 
-    totalIncome        Float
-    totalIncomeRounded Float
+  totalIncome        Float
+  totalIncomeRounded Float
 
-    slabTax           Float
-    rebate87A         Float @default(0)
-    cess              Float
-    totalTaxLiability Float
+  slabTax           Float
+  rebate87A         Float @default(0)
+  cess              Float
+  totalTaxLiability Float
 
-    tdsDeductedSoFar Float
-    taxPayable       Float @default(0)
-    taxRefundable    Float @default(0)
+  tdsDeductedSoFar Float
+  taxPayable       Float @default(0)
+  taxRefundable    Float @default(0)
 
-    pdfUrl String?
+  pdfUrl String?
 
-    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
-    generatedBy User @relation("IncomeTaxComputationGenerationsGeneratedBy", fields: [generatedById], references: [id])
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generatedBy User @relation("IncomeTaxComputationGenerationsGeneratedBy", fields: [generatedById], references: [id])
 
-    @@index([userId, financialYear])
+  @@index([userId, financialYear])
 }
 
 // Admin-defined ad-hoc fields per employee (label + text value and/or an
 // uploaded document) - lets admin capture something new without a code change.
 model EmployeeCustomField {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    label String
+  label String
 
-    value String?
+  value String?
 
-    documentUrl String?
+  documentUrl String?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
+  @@index([userId])
 }
 
 model OTP {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    otp String
+  otp String
 
-    purpose OTPPurpose
+  purpose OTPPurpose
 
-    expiresAt DateTime
+  expiresAt DateTime
 
-    isVerified Boolean @default(false)
+  isVerified Boolean @default(false)
 
-    attempts Int @default(0)
+  attempts Int @default(0)
 
-    usedAt DateTime?
+  usedAt DateTime?
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
+  @@index([userId])
 }
 
 model RefreshToken {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    token String @unique
+  token String @unique
 
-    expiresAt DateTime
+  expiresAt DateTime
 
-    isRevoked Boolean @default(false)
+  isRevoked Boolean @default(false)
 
-    deviceInfo String?
+  deviceInfo String?
 
-    ipAddress String?
+  ipAddress String?
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
+  @@index([userId])
 }
 
 model LeavePolicy {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    leaveName String @unique
+  leaveName String @unique
 
-    allocatedLeaves Int
+  allocatedLeaves Int
 
-    // Set only for leave types that accrue monthly (e.g. 1.0 = one day
-    // credited on the 1st of every month) instead of being granted as a
-    // lump sum at the start of the fiscal year. Null means the old
-    // lump-sum-upfront behavior (e.g. Unpaid Leave, which is unlimited
-    // anyway). See leaveBalance.service.js's getOrCreateBalance.
-    monthlyAccrualDays Float?
+  // Set only for leave types that accrue monthly (e.g. 1.0 = one day
+  // credited on the 1st of every month) instead of being granted as a
+  // lump sum at the start of the fiscal year. Null means the old
+  // lump-sum-upfront behavior (e.g. Unpaid Leave, which is unlimited
+  // anyway). See leaveBalance.service.js's getOrCreateBalance.
+  monthlyAccrualDays Float?
 
-    isUnlimited Boolean @default(false)
+  isUnlimited Boolean @default(false)
 
-    // Marks this as the Loss-of-Pay / unpaid leave type - approved requests
-    // under this policy deduct salary in payroll instead of being paid time off.
-    isUnpaid Boolean @default(false)
+  // Marks this as the Loss-of-Pay / unpaid leave type - approved requests
+  // under this policy deduct salary in payroll instead of being paid time off.
+  isUnpaid Boolean @default(false)
 
-    allowHalfDay Boolean @default(true)
+  allowHalfDay Boolean @default(true)
 
-    maxLeavesPerRequest Int
+  maxLeavesPerRequest Int
 
-    // How many days ahead of today this leave type can be booked (0 = today
-    // only, 1 = today or tomorrow, etc). Null means no policy-specific limit -
-    // falls back to the company-wide future-leave settings.
-    maxAdvanceBookingDays Int?
+  // How many days ahead of today this leave type can be booked (0 = today
+  // only, 1 = today or tomorrow, etc). Null means no policy-specific limit -
+  // falls back to the company-wide future-leave settings.
+  maxAdvanceBookingDays Int?
 
-    // Minimum-notice rule for long requests: if a request's totalDays exceeds
-    // longRequestThresholdDays, its start date must be at least
-    // longRequestMinNoticeDays days after today. Both null means no such rule.
-    longRequestThresholdDays Int?
-    longRequestMinNoticeDays Int?
+  // Minimum-notice rule for long requests: if a request's totalDays exceeds
+  // longRequestThresholdDays, its start date must be at least
+  // longRequestMinNoticeDays days after today. Both null means no such rule.
+  longRequestThresholdDays Int?
+  longRequestMinNoticeDays Int?
 
-    // Attachment override: once totalDays exceeds attachmentRequiredAboveDays,
-    // a supporting document becomes mandatory to submit at all. Providing one
-    // raises the per-request cap to maxLeavesPerRequestWithAttachment and lifts
-    // the maxAdvanceBookingDays window for that request. Null means no such rule.
-    attachmentRequiredAboveDays       Int?
-    maxLeavesPerRequestWithAttachment Int?
+  // Attachment override: once totalDays exceeds attachmentRequiredAboveDays,
+  // a supporting document becomes mandatory to submit at all. Providing one
+  // raises the per-request cap to maxLeavesPerRequestWithAttachment and lifts
+  // the maxAdvanceBookingDays window for that request. Null means no such rule.
+  attachmentRequiredAboveDays       Int?
+  maxLeavesPerRequestWithAttachment Int?
 
-    description String?
+  description String?
 
-    isActive Boolean @default(true)
+  isActive Boolean @default(true)
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-    leaveBalances LeaveBalance[]
+  leaveBalances LeaveBalance[]
 
-    leaveRequests LeaveRequest[]
+  leaveRequests LeaveRequest[]
 }
 
 model LeaveBalance {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    leavePolicyId Int
+  leavePolicyId Int
 
-    // Float, not Int - accrual policies credit fractional days (e.g. half
-    // days, or an overage split that leaves a fractional remainder) and
-    // need to track those precisely rather than rounding to whole days.
-    allocatedLeaves Float
+  // Float, not Int - accrual policies credit fractional days (e.g. half
+  // days, or an overage split that leaves a fractional remainder) and
+  // need to track those precisely rather than rounding to whole days.
+  allocatedLeaves Float
 
-    usedLeaves Float @default(0)
+  usedLeaves Float @default(0)
 
-    remainingLeaves Float
+  remainingLeaves Float
 
-    year Int
+  year Int
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    leavePolicy LeavePolicy @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
+  leavePolicy LeavePolicy @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
 
-    @@unique([userId, leavePolicyId, year])
-    @@index([userId])
-    @@index([leavePolicyId])
+  @@unique([userId, leavePolicyId, year])
+  @@index([userId])
+  @@index([leavePolicyId])
 }
 
 model LeaveRequest {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    leavePolicyId Int
+  leavePolicyId Int
 
-    routedToId Int?
+  routedToId Int?
 
-    approvedById Int?
+  approvedById Int?
 
-    startDate DateTime
+  startDate DateTime
 
-    endDate DateTime
+  endDate DateTime
 
-    totalDays Float
+  totalDays Float
 
-    // True only for a request created under the sandwich rule (Casual Leave
-    // spanning a weekend between two leave-covered working days) - payroll's
-    // LOP day count reads this instead of blindly excluding every weekend,
-    // since a plain re-walk of the date range can't tell a sandwiched
-    // weekend apart from a normal one once this is a standalone row (see
-    // payroll.service.js's countLopDaysInMonth).
-    weekendsCountAsLeave Boolean @default(false)
+  // True only for a request created under the sandwich rule (Casual Leave
+  // spanning a weekend between two leave-covered working days) - payroll's
+  // LOP day count reads this instead of blindly excluding every weekend,
+  // since a plain re-walk of the date range can't tell a sandwiched
+  // weekend apart from a normal one once this is a standalone row (see
+  // payroll.service.js's countLopDaysInMonth).
+  weekendsCountAsLeave Boolean @default(false)
 
-    reason String
+  reason String
 
-    status LeaveStatus @default(PENDING)
+  status LeaveStatus @default(PENDING)
 
-    managerRemarks String?
+  managerRemarks String?
 
-    approvedAt DateTime?
+  approvedAt DateTime?
 
-    rejectedAt DateTime?
+  rejectedAt DateTime?
 
-    cancelledAt DateTime?
+  cancelledAt DateTime?
 
-    attachmentUrl String?
+  attachmentUrl String?
 
-    // True when a manager logged this leave directly on the employee's behalf
-    // (auto-approved at creation) rather than the employee submitting it
-    // themselves for approval.
-    createdByManager Boolean @default(false)
+  // True when a manager logged this leave directly on the employee's behalf
+  // (auto-approved at creation) rather than the employee submitting it
+  // themselves for approval.
+  createdByManager Boolean @default(false)
 
-    // Set alongside createdByManager when it was an admin (not the employee's
-    // manager) who logged it - drives the "Logged by admin" vs "Logged by
-    // manager" tag in the UI.
-    createdByAdmin Boolean @default(false)
+  // Set alongside createdByManager when it was an admin (not the employee's
+  // manager) who logged it - drives the "Logged by admin" vs "Logged by
+  // manager" tag in the UI.
+  createdByAdmin Boolean @default(false)
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-    user User @relation("EmployeeLeaveRequests", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("EmployeeLeaveRequests", fields: [userId], references: [id], onDelete: Cascade)
 
-    routedTo User? @relation("RoutedLeaveRequests", fields: [routedToId], references: [id])
+  routedTo User? @relation("RoutedLeaveRequests", fields: [routedToId], references: [id])
 
-    approvedBy User? @relation("ManagerApprovedLeaves", fields: [approvedById], references: [id])
+  approvedBy User? @relation("ManagerApprovedLeaves", fields: [approvedById], references: [id])
 
-    leavePolicy LeavePolicy @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
+  leavePolicy LeavePolicy @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
-    @@index([leavePolicyId])
-    @@index([routedToId])
-    @@index([approvedById])
-    @@index([status])
+  @@index([userId])
+  @@index([leavePolicyId])
+  @@index([routedToId])
+  @@index([approvedById])
+  @@index([status])
 }
 
 model CompanySettings {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    companyName String
+  companyName String
 
-    // Which calendar month the leave/fiscal year starts in (1 = January, 4 =
-    // April, etc). Leave-balance year buckets and payroll YTD both reset on
-    // the 1st of this month, instead of a fixed manually-tracked year number.
-    fiscalYearStartMonth Int @default(4)
+  // Which calendar month the leave/fiscal year starts in (1 = January, 4 =
+  // April, etc). Leave-balance year buckets and payroll YTD both reset on
+  // the 1st of this month, instead of a fixed manually-tracked year number.
+  fiscalYearStartMonth Int @default(4)
 
-    timezone String @default("Asia/Kolkata")
+  timezone String @default("Asia/Kolkata")
 
-    allowPastLeave Boolean @default(false)
+  allowPastLeave Boolean @default(false)
 
-    allowFutureLeave Boolean @default(true)
+  allowFutureLeave Boolean @default(true)
 
-    maxFutureDays Int @default(90)
+  maxFutureDays Int @default(90)
 
-    // Whether employees may still mark / change attendance for days in
-    // previous months. The admin flips this from All Attendance ("Stop" /
-    // "Allow"). When false, employees can only edit the current month; admins
-    // can always correct any month.
-    allowPastMonthAttendanceEdits Boolean @default(true)
+  // "We're here to assist you" contact shown on every dashboard's welcome
+  // banner. Admin-editable (Manage Accounts). Any field may be blank - the
+  // banner just drops that row.
+  supportContactName  String?
+  supportContactEmail String?
+  supportContactPhone String?
 
-    // "We're here to assist you" contact shown on every dashboard's welcome
-    // banner. Admin-editable (Manage Accounts). Any field may be blank - the
-    // banner just drops that row.
-    supportContactName  String?
-    supportContactEmail String?
-    supportContactPhone String?
+  // Authorized-signatory signature image, reused on every generated Invoice
+  // PDF - a single company-wide asset (like the logo), not per-invoice.
+  // Replacing it (re-upload) affects every invoice generated from then on;
+  // past invoices already rendered/saved to S3 are unaffected.
+  signatureUrl String?
 
-    // Authorized-signatory signature image, reused on every generated Invoice
-    // PDF - a single company-wide asset (like the logo), not per-invoice.
-    // Replacing it (re-upload) affects every invoice generated from then on;
-    // past invoices already rendered/saved to S3 are unaffected.
-    signatureUrl String?
+  createdAt DateTime @default(now())
 
-    createdAt DateTime @default(now())
-
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 // Company-wide payroll formula, admin-configurable - a single row (like
@@ -897,118 +892,118 @@ model CompanySettings {
 // historical record - admin can regenerate (overwrite) it if a correction is
 // needed, but nothing recalculates it automatically after the fact.
 model Payslip {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    month Int
-    year  Int
+  month Int
+  year  Int
 
-    basic               Float
-    hra                 Float
-    lta                 Float
-    conveyance          Float
-    guaranteedAllowance Float
-    specialAllowance    Float
-    annualBonusPay      Float @default(0)
+  basic               Float
+  hra                 Float
+  lta                 Float
+  conveyance          Float
+  guaranteedAllowance Float
+  specialAllowance    Float
+  annualBonusPay      Float @default(0)
 
-    pfEmployee      Float
-    pfEmployer      Float
-    professionalTax Float
-    tds             Float @default(0)
+  pfEmployee      Float
+  pfEmployer      Float
+  professionalTax Float
+  tds             Float @default(0)
 
-    lopDays   Float @default(0)
-    lopAmount Float @default(0)
+  lopDays   Float @default(0)
+  lopAmount Float @default(0)
 
-    standardDays Float @default(0)
-    daysWorked   Float @default(0)
+  standardDays Float @default(0)
+  daysWorked   Float @default(0)
 
-    grossPay        Float
-    grossDeductions Float
-    netPay          Float
+  grossPay        Float
+  grossDeductions Float
+  netPay          Float
 
-    pdfUrl String?
+  pdfUrl String?
 
-    generatedById Int
+  generatedById Int
 
-    generatedAt DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-    user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
-    generatedBy User @relation("PayslipsGenerated", fields: [generatedById], references: [id])
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generatedBy User @relation("PayslipsGenerated", fields: [generatedById], references: [id])
 
-    @@unique([userId, month, year])
-    @@index([userId])
+  @@unique([userId, month, year])
+  @@index([userId])
 }
 
 model WeekendPolicy {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    dayOfWeek DayOfWeek
+  dayOfWeek DayOfWeek
 
-    weekNumber WeekNumber @default(ALL)
+  weekNumber WeekNumber @default(ALL)
 
-    isHoliday Boolean @default(true)
+  isHoliday Boolean @default(true)
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-    @@unique([dayOfWeek, weekNumber])
+  @@unique([dayOfWeek, weekNumber])
 }
 
 model Holiday {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    holidayName String
+  holidayName String
 
-    holidayDate DateTime
+  holidayDate DateTime
 
-    description String?
+  description String?
 
-    isOptional Boolean @default(false)
+  isOptional Boolean @default(false)
 
-    isActive Boolean @default(true)
+  isActive Boolean @default(true)
 
-    createdById Int
+  createdById Int
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-    createdBy User @relation(fields: [createdById], references: [id])
+  createdBy User @relation(fields: [createdById], references: [id])
 
-    @@unique([holidayDate])
-    @@index([holidayDate])
-    @@index([createdById])
+  @@unique([holidayDate])
+  @@index([holidayDate])
+  @@index([createdById])
 }
 
 model Notification {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    title String
+  title String
 
-    message String
+  message String
 
-    type String
+  type String
 
-    // Optional in-app route to open when the notification is clicked (e.g.
-    // "/admin/users/3/details"). Falls back to a type+role lookup on the
-    // frontend when not set - see notificationLinks.js.
-    link String?
+  // Optional in-app route to open when the notification is clicked (e.g.
+  // "/admin/users/3/details"). Falls back to a type+role lookup on the
+  // frontend when not set - see notificationLinks.js.
+  link String?
 
-    isRead Boolean @default(false)
+  isRead Boolean @default(false)
 
-    readAt DateTime?
+  readAt DateTime?
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
-    @@index([isRead])
+  @@index([userId])
+  @@index([isRead])
 }
 
 // One task-level record. Multiple entries can share the same date (different
@@ -1016,127 +1011,127 @@ model Notification {
 // (timesheetSubmissionId is null); once the week is submitted, entries are
 // locked to that submission and become read-only history.
 model TimesheetEntry {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    date DateTime
+  date DateTime
 
-    hoursWorked Float
+  hoursWorked Float
 
-    description String?
+  description String?
 
-    // Monday of the week `date` falls in - stamped at creation, used to group
-    // entries together when the employee submits the week.
-    weekStartDate DateTime
+  // Monday of the week `date` falls in - stamped at creation, used to group
+  // entries together when the employee submits the week.
+  weekStartDate DateTime
 
-    timesheetSubmissionId Int?
+  timesheetSubmissionId Int?
 
-    // Which project this entry's hours are logged against - each project an
-    // employee is assigned to has its own independent day-by-day grid, so
-    // the same calendar date can hold one entry per project. Nullable only
-    // for entries that predate per-project timesheets (every entry created
-    // from here on always has one).
-    projectId Int?
+  // Which project this entry's hours are logged against - each project an
+  // employee is assigned to has its own independent day-by-day grid, so
+  // the same calendar date can hold one entry per project. Nullable only
+  // for entries that predate per-project timesheets (every entry created
+  // from here on always has one).
+  projectId Int?
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    timesheetSubmission TimesheetSubmission? @relation(fields: [timesheetSubmissionId], references: [id], onDelete: SetNull)
+  timesheetSubmission TimesheetSubmission? @relation(fields: [timesheetSubmissionId], references: [id], onDelete: SetNull)
 
-    project Project? @relation(fields: [projectId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
 
-    // At most one entry per user per calendar day per project - the weekly
-    // grid UI edits a day's entry in place rather than allowing several per
-    // day within the SAME project's grid.
-    @@unique([userId, date, projectId])
-    @@index([userId])
-    @@index([weekStartDate])
-    @@index([timesheetSubmissionId])
-    @@index([projectId])
+  // At most one entry per user per calendar day per project - the weekly
+  // grid UI edits a day's entry in place rather than allowing several per
+  // day within the SAME project's grid.
+  @@unique([userId, date, projectId])
+  @@index([userId])
+  @@index([weekStartDate])
+  @@index([timesheetSubmissionId])
+  @@index([projectId])
 }
 
 // The weekly bundle an employee submits for their manager's approval - same
 // shape as LeaveRequest (routedTo/approvedBy/status/remarks) so it reuses a
 // pattern already trusted elsewhere in this app.
 model TimesheetSubmission {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId Int
+  userId Int
 
-    weekStartDate DateTime
+  weekStartDate DateTime
 
-    weekEndDate DateTime
+  weekEndDate DateTime
 
-    totalHours Float
+  totalHours Float
 
-    routedToId Int?
+  routedToId Int?
 
-    approvedById Int?
+  approvedById Int?
 
-    status LeaveStatus @default(PENDING)
+  status LeaveStatus @default(PENDING)
 
-    managerRemarks String?
+  managerRemarks String?
 
-    // The Excel sheet the employee attaches when submitting this week -
-    // mandatory alongside the day-by-day entries. Stored name is the random
-    // on-disk filename; original name is kept so managers/admins download it
-    // under a recognizable name instead of a UUID.
-    attachmentOriginalName String?
+  // The Excel sheet the employee attaches when submitting this week -
+  // mandatory alongside the day-by-day entries. Stored name is the random
+  // on-disk filename; original name is kept so managers/admins download it
+  // under a recognizable name instead of a UUID.
+  attachmentOriginalName String?
 
-    attachmentStoredName String?
+  attachmentStoredName String?
 
-    // Whether the employee has a project assigned this week - mandatory to
-    // submit, but "sticky": the frontend pre-fills each new week with the
-    // employee's last choice so they only need to change it when it changes.
-    projectAssigned ProjectAssignmentStatus?
+  // Whether the employee has a project assigned this week - mandatory to
+  // submit, but "sticky": the frontend pre-fills each new week with the
+  // employee's last choice so they only need to change it when it changes.
+  projectAssigned ProjectAssignmentStatus?
 
-    // Which project this week's submission is for - an employee assigned to
-    // several projects submits one of these per project per week, not one
-    // combined submission (see the unique constraint below). Nullable only
-    // for submissions that predate per-project timesheets.
-    projectId Int?
+  // Which project this week's submission is for - an employee assigned to
+  // several projects submits one of these per project per week, not one
+  // combined submission (see the unique constraint below). Nullable only
+  // for submissions that predate per-project timesheets.
+  projectId Int?
 
-    submittedAt DateTime @default(now())
+  submittedAt DateTime @default(now())
 
-    approvedAt DateTime?
+  approvedAt DateTime?
 
-    rejectedAt DateTime?
+  rejectedAt DateTime?
 
-    // Set when a manager or admin logged this timesheet directly on the
-    // employee's behalf (auto-approved at creation) rather than the employee
-    // submitting it themselves. createdByAdmin narrows it to an admin who
-    // isn't the employee's manager - drives the "Logged by admin" vs "Logged
-    // by manager" tag, same pattern as LeaveRequest.
-    createdByManager Boolean @default(false)
+  // Set when a manager or admin logged this timesheet directly on the
+  // employee's behalf (auto-approved at creation) rather than the employee
+  // submitting it themselves. createdByAdmin narrows it to an admin who
+  // isn't the employee's manager - drives the "Logged by admin" vs "Logged
+  // by manager" tag, same pattern as LeaveRequest.
+  createdByManager Boolean @default(false)
 
-    createdByAdmin Boolean @default(false)
+  createdByAdmin Boolean @default(false)
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-    user User @relation("EmployeeTimesheetSubmissions", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("EmployeeTimesheetSubmissions", fields: [userId], references: [id], onDelete: Cascade)
 
-    routedTo User? @relation("RoutedTimesheetSubmissions", fields: [routedToId], references: [id])
+  routedTo User? @relation("RoutedTimesheetSubmissions", fields: [routedToId], references: [id])
 
-    approvedBy User? @relation("ApprovedTimesheetSubmissions", fields: [approvedById], references: [id])
+  approvedBy User? @relation("ApprovedTimesheetSubmissions", fields: [approvedById], references: [id])
 
-    project Project? @relation(fields: [projectId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
 
-    entries TimesheetEntry[]
+  entries TimesheetEntry[]
 
-    // One submission per employee per week per project - not just per week -
-    // so an employee on 2 projects can have 2 independent submissions for
-    // the same week, each with its own approval.
-    @@unique([userId, weekStartDate, projectId])
-    @@index([userId])
-    @@index([routedToId])
-    @@index([status])
-    @@index([projectId])
+  // One submission per employee per week per project - not just per week -
+  // so an employee on 2 projects can have 2 independent submissions for
+  // the same week, each with its own approval.
+  @@unique([userId, weekStartDate, projectId])
+  @@index([userId])
+  @@index([routedToId])
+  @@index([status])
+  @@index([projectId])
 }
 
 // Admin-managed master list of projects employees pick from when filling
@@ -1145,79 +1140,79 @@ model TimesheetSubmission {
 // deactivates it (isActive = false) rather than removing the row, so past
 // timesheets that already referenced it keep showing its name correctly.
 model Project {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    name String @unique
+  name String @unique
 
-    // Admin-only. The client this project is for - shown in the admin Projects
-    // table and editable there, but deliberately NOT sent to employees on
-    // their own timesheet (see listProjectsForEmployee).
-    clientName String?
+  // Admin-only. The client this project is for - shown in the admin Projects
+  // table and editable there, but deliberately NOT sent to employees on
+  // their own timesheet (see listProjectsForEmployee).
+  clientName String?
 
-    // Client / company details - all optional, filled in whenever admin gets
-    // to it (a project created before this feature just shows these empty in
-    // Edit). Same rule as clientName: admin-only, never in
-    // EMPLOYEE_PROJECT_SELECT, so an employee's own timesheet never sees any
-    // of this. Document fields are permanent public S3 URLs (see s3.util.js).
-    clientFullName       String?
-    clientAddress        String? @db.Text
-    // State the client is registered/billed in - drives GST place-of-supply on
-    // generated invoices (same state as the company = CGST+SGST, otherwise
-    // IGST). Free text (not an enum) so an unlisted state/UT never blocks
-    // saving, but the frontend offers a fixed dropdown of Indian states/UTs.
-    clientState          String?
-    gstNumber            String?
-    gstDocumentUrl       String?
-    panNumber            String?
-    panDocumentUrl       String?
-    msmeDocumentUrl      String?
-    paymentTerms         String?
-    sowDocumentUrl       String?
-    rateCard             String?
-    agreementDocumentUrl String?
+  // Client / company details - all optional, filled in whenever admin gets
+  // to it (a project created before this feature just shows these empty in
+  // Edit). Same rule as clientName: admin-only, never in
+  // EMPLOYEE_PROJECT_SELECT, so an employee's own timesheet never sees any
+  // of this. Document fields are permanent public S3 URLs (see s3.util.js).
+  clientFullName       String?
+  clientAddress        String? @db.Text
+  // State the client is registered/billed in - drives GST place-of-supply on
+  // generated invoices (same state as the company = CGST+SGST, otherwise
+  // IGST). Free text (not an enum) so an unlisted state/UT never blocks
+  // saving, but the frontend offers a fixed dropdown of Indian states/UTs.
+  clientState          String?
+  gstNumber            String?
+  gstDocumentUrl       String?
+  panNumber            String?
+  panDocumentUrl       String?
+  msmeDocumentUrl      String?
+  paymentTerms         String?
+  sowDocumentUrl       String?
+  rateCard             String?
+  agreementDocumentUrl String?
 
-    isActive Boolean @default(true)
+  isActive Boolean @default(true)
 
-    // Client vs internal, and the working-hours window employees on this
-    // project should expect - set once by admin, then just displayed to the
-    // employee once they pick the project on their timesheet (see
-    // ProjectAssignmentStatus reuse: TimesheetSubmission.projectAssigned is
-    // copied straight from here at submit time, not chosen by the employee).
-    // Free text rather than an enum - admin can pick one of the common
-    // suggestions on the frontend or type any other timezone label directly.
-    projectType   ProjectAssignmentStatus @default(NOT_ASSIGNED)
-    timezone      String                  @default("IST")
-    workStartTime String                  @default("09:00")
-    workEndTime   String                  @default("18:00")
+  // Client vs internal, and the working-hours window employees on this
+  // project should expect - set once by admin, then just displayed to the
+  // employee once they pick the project on their timesheet (see
+  // ProjectAssignmentStatus reuse: TimesheetSubmission.projectAssigned is
+  // copied straight from here at submit time, not chosen by the employee).
+  // Free text rather than an enum - admin can pick one of the common
+  // suggestions on the frontend or type any other timezone label directly.
+  projectType   ProjectAssignmentStatus @default(NOT_ASSIGNED)
+  timezone      String                  @default("IST")
+  workStartTime String                  @default("09:00")
+  workEndTime   String                  @default("18:00")
 
-    // Set by admin on create, editable later - shown automatically on the
-    // employee's own timesheet alongside project type/working hours.
-    // endDate is nullable - a project may still be ongoing with no planned
-    // end date yet.
-    startDate DateTime
-    endDate   DateTime?
+  // Set by admin on create, editable later - shown automatically on the
+  // employee's own timesheet alongside project type/working hours.
+  // endDate is nullable - a project may still be ongoing with no planned
+  // end date yet.
+  startDate DateTime
+  endDate   DateTime?
 
-    // Whether employees on this project fill in and submit one timesheet per
-    // week or per calendar month - drives both the grid on their own
-    // timesheet page and how TimesheetEntry/TimesheetSubmission group days
-    // together (see timesheetService.getPeriodStart/getPeriodEnd). Defaults
-    // to WEEKLY so every project created before this field existed keeps
-    // behaving exactly as it always has.
-    submissionFrequency SubmissionFrequency @default(WEEKLY)
+  // Whether employees on this project fill in and submit one timesheet per
+  // week or per calendar month - drives both the grid on their own
+  // timesheet page and how TimesheetEntry/TimesheetSubmission group days
+  // together (see timesheetService.getPeriodStart/getPeriodEnd). Defaults
+  // to WEEKLY so every project created before this field existed keeps
+  // behaving exactly as it always has.
+  submissionFrequency SubmissionFrequency @default(WEEKLY)
 
-    createdById Int
+  createdById Int
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
-    createdBy User @relation(fields: [createdById], references: [id])
+  createdBy User @relation(fields: [createdById], references: [id])
 
-    timesheetSubmissions TimesheetSubmission[]
-    timesheetEntries     TimesheetEntry[]
-    memberships          ProjectMembership[]
-    attendances          Attendance[]
-    invoices             Invoice[]
+  timesheetSubmissions TimesheetSubmission[]
+  timesheetEntries     TimesheetEntry[]
+  memberships          ProjectMembership[]
+  attendances          Attendance[]
+  invoices             Invoice[]
 }
 
 // One row per (employee, project) they're currently assigned to - an
@@ -1226,30 +1221,30 @@ model Project {
 // assignedAt is what the admin Project report's "Since" column reads per
 // employee-project pairing, now that there can be more than one per employee.
 model ProjectMembership {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId    Int
-    projectId Int
+  userId    Int
+  projectId Int
 
-    // The employee's actual start date on this project - defaults to "now"
-    // when admin just checks a box, but admin can override it to backdate
-    // someone who was already working on the project before being formally
-    // added here. endDate is a purely historical note (e.g. they've since
-    // moved off it) - it doesn't automatically remove the membership.
-    assignedAt DateTime  @default(now())
-    endDate    DateTime?
+  // The employee's actual start date on this project - defaults to "now"
+  // when admin just checks a box, but admin can override it to backdate
+  // someone who was already working on the project before being formally
+  // added here. endDate is a purely historical note (e.g. they've since
+  // moved off it) - it doesn't automatically remove the membership.
+  assignedAt DateTime  @default(now())
+  endDate    DateTime?
 
-    user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-    project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-    @@unique([userId, projectId])
-    @@index([userId])
-    @@index([projectId])
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
 }
 
 enum AttendanceSource {
-    SELF // the employee tapped "Mark me present"
-    ADMIN // an admin created or edited the record on their behalf
+  SELF // the employee tapped "Mark me present"
+  ADMIN // an admin created or edited the record on their behalf
 }
 
 // One row per (employee, project, day) - created when the employee marks the
@@ -1262,42 +1257,66 @@ enum AttendanceSource {
 // LeaveRequest / WfhRequest, never stored. A working day with no row at all
 // is "Not marked" - distinct from a row with isAbsent.
 model Attendance {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId    Int
-    projectId Int
+  userId    Int
+  projectId Int
 
-    // Calendar day this attendance is for, at UTC midnight.
-    date DateTime @db.Date
+  // Calendar day this attendance is for, at UTC midnight.
+  date DateTime @db.Date
 
-    // When the employee actually marked (or when admin recorded it).
-    markedAt DateTime @default(now())
+  // When the employee actually marked (or when admin recorded it).
+  markedAt DateTime @default(now())
 
-    // A half day counts as 0.5 present in the summary tallies.
-    isHalfDay Boolean @default(false)
+  // A half day counts as 0.5 present in the summary tallies.
+  isHalfDay Boolean @default(false)
 
-    // Explicitly marked absent (never true together with isHalfDay). Counts
-    // as a marked day, so it doesn't block Run Payroll the way "Not marked"
-    // does.
-    isAbsent Boolean @default(false)
+  // Explicitly marked absent (never true together with isHalfDay). Counts
+  // as a marked day, so it doesn't block Run Payroll the way "Not marked"
+  // does.
+  isAbsent Boolean @default(false)
 
-    source AttendanceSource @default(SELF)
-    note   String?
+  source AttendanceSource @default(SELF)
+  note   String?
 
-    correctedById Int?
-    correctedAt   DateTime?
+  correctedById Int?
+  correctedAt   DateTime?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-    project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-    correctedBy User?   @relation("AttendanceCorrectedBy", fields: [correctedById], references: [id])
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  correctedBy User?   @relation("AttendanceCorrectedBy", fields: [correctedById], references: [id])
 
-    @@unique([userId, projectId, date])
-    @@index([userId])
-    @@index([projectId])
-    @@index([date])
+  @@unique([userId, projectId, date])
+  @@index([userId])
+  @@index([projectId])
+  @@index([date])
+}
+
+enum AttendanceLockSource {
+  MANUAL // admin clicked "Lock <month>" on All Attendance
+  PAYROLL // locked automatically by a successful Run Payroll
+}
+
+// One row per locked month. While a month is locked, employees can't mark or
+// change any day in it (admins still can, via correct). Unlocking deletes the
+// row. A successful Run Payroll locks its month automatically.
+model AttendanceMonthLock {
+  id Int @id @default(autoincrement())
+
+  year  Int
+  month Int
+
+  source AttendanceLockSource @default(MANUAL)
+
+  lockedById Int?
+  lockedAt   DateTime @default(now())
+
+  lockedBy User? @relation("AttendanceMonthLockedBy", fields: [lockedById], references: [id], onDelete: SetNull)
+
+  @@unique([year, month])
 }
 
 // An expense-reimbursement claim. Handled the same way as a leave request:
@@ -1307,67 +1326,67 @@ model Attendance {
 // balance/policy - just a subject, description, amount and one or more
 // supporting files (at least one is mandatory).
 model Reimbursement {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    userId       Int
-    routedToId   Int?
-    approvedById Int?
+  userId       Int
+  routedToId   Int?
+  approvedById Int?
 
-    subject     String
-    description String @db.Text
-    amount      Float
+  subject     String
+  description String @db.Text
+  amount      Float
 
-    status         LeaveStatus @default(PENDING)
-    managerRemarks String?
+  status         LeaveStatus @default(PENDING)
+  managerRemarks String?
 
-    approvedAt  DateTime?
-    rejectedAt  DateTime?
-    cancelledAt DateTime?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  cancelledAt DateTime?
 
-    // True when a manager/admin logged this claim directly on the employee's
-    // behalf (auto-approved at creation). createdByAdmin narrows it to an
-    // admin who isn't the claimant's manager - same tag pattern as leave.
-    createdByManager Boolean @default(false)
-    createdByAdmin   Boolean @default(false)
+  // True when a manager/admin logged this claim directly on the employee's
+  // behalf (auto-approved at creation). createdByAdmin narrows it to an
+  // admin who isn't the claimant's manager - same tag pattern as leave.
+  createdByManager Boolean @default(false)
+  createdByAdmin   Boolean @default(false)
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    user        User                      @relation("EmployeeReimbursements", fields: [userId], references: [id], onDelete: Cascade)
-    routedTo    User?                     @relation("RoutedReimbursements", fields: [routedToId], references: [id])
-    approvedBy  User?                     @relation("ReimbursementsApprovedBy", fields: [approvedById], references: [id])
-    attachments ReimbursementAttachment[]
+  user        User                      @relation("EmployeeReimbursements", fields: [userId], references: [id], onDelete: Cascade)
+  routedTo    User?                     @relation("RoutedReimbursements", fields: [routedToId], references: [id])
+  approvedBy  User?                     @relation("ReimbursementsApprovedBy", fields: [approvedById], references: [id])
+  attachments ReimbursementAttachment[]
 
-    @@index([userId])
-    @@index([routedToId])
-    @@index([approvedById])
-    @@index([status])
+  @@index([userId])
+  @@index([routedToId])
+  @@index([approvedById])
+  @@index([status])
 }
 
 model ReimbursementAttachment {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    reimbursementId Int
+  reimbursementId Int
 
-    // Permanent public S3 URL of the uploaded receipt/invoice.
-    fileUrl  String
-    fileName String
+  // Permanent public S3 URL of the uploaded receipt/invoice.
+  fileUrl  String
+  fileName String
 
-    createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-    reimbursement Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+  reimbursement Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
 
-    @@index([reimbursementId])
+  @@index([reimbursementId])
 }
 
 enum InvoiceTaxType {
-    IGST
-    CGST_SGST
+  IGST
+  CGST_SGST
 }
 
 enum InvoiceFormat {
-    PDF
-    WORD
+  PDF
+  WORD
 }
 
 // One row per generated Tax Invoice PDF - a permanent, immutable record (like
@@ -1378,54 +1397,54 @@ enum InvoiceFormat {
 // change afterward. Tax type/amounts are derived once from clientState vs
 // the company's home state (Karnataka) and frozen here the same way.
 model Invoice {
-    id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-    invoiceNo   String
-    invoiceDate DateTime
+  invoiceNo   String
+  invoiceDate DateTime
 
-    projectId Int?
+  projectId Int?
 
-    clientFullName  String
-    clientAddress   String? @db.Text
-    clientState     String?
-    clientGstNumber String?
+  clientFullName  String
+  clientAddress   String? @db.Text
+  clientState     String?
+  clientGstNumber String?
 
-    hsnCode           String?
-    description       String  @db.Text
-    paymentAdviceText String? @db.Text
+  hsnCode           String?
+  description       String  @db.Text
+  paymentAdviceText String? @db.Text
 
-    totalTaxableValue Float
+  totalTaxableValue Float
 
-    taxType           InvoiceTaxType
-    igstAmount        Float          @default(0)
-    cgstAmount        Float          @default(0)
-    sgstAmount        Float          @default(0)
-    totalInvoiceValue Float
+  taxType           InvoiceTaxType
+  igstAmount        Float          @default(0)
+  cgstAmount        Float          @default(0)
+  sgstAmount        Float          @default(0)
+  totalInvoiceValue Float
 
-    amountInWords String?
+  amountInWords String?
 
-    bankAccountName   String?
-    bankName          String?
-    bankAccountNumber String?
-    bankIfscCode      String?
+  bankAccountName   String?
+  bankName          String?
+  bankAccountNumber String?
+  bankIfscCode      String?
 
-    declarationText String? @db.Text
+  declarationText String? @db.Text
 
-    // Admin's chosen output format at Save time - decides whether documentUrl
-    // points at a rendered .pdf (PDFKit, watermarked) or a .docx (the `docx`
-    // package - no watermark, see invoiceDocx.service.js). Preview always
-    // renders a PDF regardless of this choice; only Save respects it.
-    format      InvoiceFormat @default(PDF)
-    documentUrl String?
+  // Admin's chosen output format at Save time - decides whether documentUrl
+  // points at a rendered .pdf (PDFKit, watermarked) or a .docx (the `docx`
+  // package - no watermark, see invoiceDocx.service.js). Preview always
+  // renders a PDF regardless of this choice; only Save respects it.
+  format      InvoiceFormat @default(PDF)
+  documentUrl String?
 
-    generatedById Int
+  generatedById Int
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    project     Project? @relation(fields: [projectId], references: [id])
-    generatedBy User     @relation("InvoicesGenerated", fields: [generatedById], references: [id])
+  project     Project? @relation(fields: [projectId], references: [id])
+  generatedBy User     @relation("InvoicesGenerated", fields: [generatedById], references: [id])
 
-    @@index([projectId])
-    @@index([invoiceNo])
+  @@index([projectId])
+  @@index([invoiceNo])
 }

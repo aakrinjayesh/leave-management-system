@@ -78,7 +78,7 @@ const toSummary = (user) => ({ userId: user.id, employeeName: fullName(user), em
 // (skipped).
 const checkRun = async (year, month) => {
   const users = await getRunScope(year, month);
-  const [unmarkedAttendance, missingSalary, existing] = await Promise.all([
+  const [unmarkedAttendance, missingSalary, existing, monthLock] = await Promise.all([
     attendanceService.findUnmarkedEmployees(
       users.map((u) => u.id),
       year,
@@ -86,6 +86,7 @@ const checkRun = async (year, month) => {
     ),
     findMissingSalary(users, year, month),
     prisma.payslip.count({ where: { year, month, userId: { in: users.map((u) => u.id) } } }),
+    attendanceService.getMonthLock(year, month),
   ]);
 
   return {
@@ -95,6 +96,9 @@ const checkRun = async (year, month) => {
     alreadyGeneratedCount: existing,
     unmarkedAttendance,
     missingSalary: missingSalary.map(toSummary),
+    // Whether the month's attendance is already locked - a successful run
+    // locks it either way.
+    monthLock,
   };
 };
 
@@ -192,6 +196,11 @@ const runPayroll = async (year, month, generatedById) => {
   }
 
   const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+
+  // Payslips are out, so freeze the month's attendance for employees - the
+  // admin can still correct it, or unlock it from All Attendance.
+  await attendanceService.lockMonth(year, month, generatedById, "PAYROLL");
+
   return { buffer, fileName: zipFileName(year, month), generatedCount: users.length - skipped.length, skippedCount: skipped.length };
 };
 

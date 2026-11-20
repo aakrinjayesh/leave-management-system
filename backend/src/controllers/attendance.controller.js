@@ -80,10 +80,37 @@ const correctAttendance = asyncHandler(async (req, res) => {
   new ApiResponse(200, "Attendance updated.", result).send(res);
 });
 
+// Admin - lock / unlock one month for employees. Body (lock) or query
+// (unlock): { year, month }.
+const parseLockMonth = (source) => {
+  const year = Number(source.year);
+  const month = Number(source.month);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw ApiError.badRequest("A valid year and month are required.");
+  }
+  return { year, month };
+};
+
+const lockMonth = asyncHandler(async (req, res) => {
+  const { year, month } = parseLockMonth(req.body);
+  const monthLock = await attendanceService.lockMonth(year, month, req.user.id, "MANUAL");
+  notificationStreamService.broadcast("attendance");
+  new ApiResponse(200, "Month locked. Employees can no longer change its attendance.", { monthLock }).send(res);
+});
+
+const unlockMonth = asyncHandler(async (req, res) => {
+  const { year, month } = parseLockMonth(req.query);
+  await attendanceService.unlockMonth(year, month);
+  notificationStreamService.broadcast("attendance");
+  new ApiResponse(200, "Month unlocked. Employees can change its attendance again.", { monthLock: null }).send(res);
+});
+
 module.exports = {
   markAttendance,
   getMyAttendance,
   getTeamAttendance,
   getCompanyAttendance,
   correctAttendance,
+  lockMonth,
+  unlockMonth,
 };

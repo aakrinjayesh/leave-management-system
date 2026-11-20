@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Search, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, LockOpen, Search, Users } from "lucide-react";
 import Spinner from "../common/Spinner";
 import Alert from "../common/Alert";
 import Modal from "../common/Modal";
@@ -21,6 +21,73 @@ const isCurrentMonth = (year, month) => {
   const now = new Date();
   return now.getFullYear() === year && now.getMonth() + 1 === month;
 };
+
+const isFutureMonth = (year, month) => {
+  const now = new Date();
+  return year * 12 + month > now.getFullYear() * 12 + now.getMonth() + 1;
+};
+
+const formatLockDate = (value) =>
+  new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
+// Whether employees can still change this month's attendance, plus (for
+// admins) the Lock / Unlock button. A successful Run Payroll locks the month
+// automatically.
+function MonthLockBar({ year, month, monthLock, lockFn, unlockFn, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const canToggle = Boolean(lockFn && unlockFn);
+  const label = MONTH_LABEL(year, month);
+
+  const toggle = async () => {
+    if (
+      monthLock?.source === "PAYROLL" &&
+      !window.confirm(
+        `Payroll for ${label} has already been run. Unlock it anyway? Employees will be able to change ${label} attendance again - re-run payroll afterwards if anything changes.`
+      )
+    ) {
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      if (monthLock) await unlockFn(year, month);
+      else await lockFn(year, month);
+      await onChanged();
+    } catch (err) {
+      setError(getErrorMessage(err, "Couldn't update the month lock."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <div className={`att-lock-bar ${monthLock ? "is-locked" : ""}`}>
+        <span className="att-lock-bar-text">
+          {monthLock ? <Lock size={15} /> : <LockOpen size={15} />}
+          {monthLock ? (
+            <span>
+              <b>Locked</b> - employees can&apos;t change {label} attendance. Locked {formatLockDate(monthLock.lockedAt)}
+              {monthLock.lockedByName ? ` by ${monthLock.lockedByName}` : ""}
+              {monthLock.source === "PAYROLL" ? " (Run Payroll)" : ""}.
+            </span>
+          ) : (
+            <span>
+              <b>Open</b> - employees can still mark or change {label} attendance.
+            </span>
+          )}
+        </span>
+        {canToggle && (
+          <Button variant="secondary" className="page-header-btn" isLoading={busy} onClick={toggle}>
+            {monthLock ? `Unlock ${label}` : `Lock ${label}`}
+          </Button>
+        )}
+      </div>
+      <Alert type="error">{error}</Alert>
+    </>
+  );
+}
 
 function CorrectModal({ target, onClose, onDone, correctFn }) {
   const [note, setNote] = useState("");
@@ -97,6 +164,9 @@ export default function AttendanceRoster({
   canCorrect = false,
   correctFn,
   headerAction = null,
+  // Admin only - pass both to show the Lock / Unlock month button.
+  lockFn = null,
+  unlockFn = null,
 }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -235,6 +305,17 @@ export default function AttendanceRoster({
                   Next <ChevronRight size={14} style={{ verticalAlign: "-2px" }} />
                 </button>
               </div>
+
+              {!isFutureMonth(year, month) && (
+                <MonthLockBar
+                  year={year}
+                  month={month}
+                  monthLock={data.monthLock}
+                  lockFn={lockFn}
+                  unlockFn={unlockFn}
+                  onChanged={() => refresh({ quiet: true })}
+                />
+              )}
 
               <div className="acct-search" style={{ marginTop: 12 }}>
                 <TextInput
